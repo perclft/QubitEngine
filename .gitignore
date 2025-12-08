@@ -1,0 +1,19 @@
+# C++ Build Artifacts
+backend/build/
+backend/vcpkg_installed/
+backend/src/generated/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+
+# Go Build Artifacts
+cli/bin/
+cli/qctl
+
+# IDE/Editor Junk
+.vscode/
+.idea/
+*.swp
+.DS_Store

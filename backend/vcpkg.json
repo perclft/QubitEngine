@@ -1,0 +1,11 @@
+{
+  "name": "qubit-engine",
+  "version-string": "0.1.0",
+  "dependencies": [
+    "grpc",
+    "protobuf",
+    "abseil", 
+    "gtest"
+  ],
+  "builtin-baseline": "ab2977be50c702126336e5088f4836060733c899" 
+}
