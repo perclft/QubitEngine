@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qubit-engine
+  namespace: qubit-system
+  labels:
+    app: qubit-engine
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: qubit-engine
+  template:
+    metadata:
+      labels:
+        app: qubit-engine
+    spec:
+      containers:
+        - name: engine
+          image: qubit-engine:latest
+          imagePullPolicy: IfNotPresent # Uses your local build
+          ports:
+            - containerPort: 50051
+              name: grpc
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi" # Crash if we exceed this (Simulating OOM killer)
+              cpu: "1000m"
+          readinessProbe:
+            tcpSocket:
+              port: 50051
+            initialDelaySeconds: 1
+            periodSeconds: 5
