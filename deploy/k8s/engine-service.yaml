@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: qubit-service
+  namespace: qubit-system
+spec:
+  selector:
+    app: qubit-engine
+  ports:
+    - port: 50051
+      targetPort: 50051
+      protocol: TCP
+      name: grpc
+  type: ClusterIP
