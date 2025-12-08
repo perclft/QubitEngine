@@ -1,0 +1,17 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: qubit-smoke-test
+  namespace: qubit-system
+spec:
+  template:
+    spec:
+      containers:
+        - name: qctl
+          image: qctl:latest
+          imagePullPolicy: IfNotPresent
+          # We point the client to the Kubernetes Service DNS name
+          command: ["/bin/qctl"]
+          args: ["-server", "qubit-service.qubit-system.svc.cluster.local:50051"]
+      restartPolicy: Never
+  backoffLimit: 2
