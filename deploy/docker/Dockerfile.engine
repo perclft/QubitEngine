@@ -1,0 +1,45 @@
+# STAGE 1: BUILDER
+FROM alpine:latest AS builder
+
+# Install Build Tools
+# grpc-dev and protobuf-dev are in the community repo
+RUN apk add --no-cache \
+    build-base \
+    cmake \
+    git \
+    linux-headers \
+    grpc-dev \
+    protobuf-dev \
+    openssl-dev
+
+WORKDIR /src
+
+# Copy source code
+COPY . .
+
+# Build
+# We disable vcpkg here and rely on system (apk) libraries for speed
+RUN mkdir -p backend/build && cd backend/build && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-O3" && \
+    make -j$(nproc)
+
+# STAGE 2: RUNTIME
+FROM alpine:latest
+
+# Install Runtime Shared Libraries (libstdc++, libgomp for OpenMP)
+# We do NOT need the compilers (g++) here, just the libraries.
+RUN apk add --no-cache \
+    libstdc++ \
+    libgomp \
+    grpc \
+    protobuf
+
+WORKDIR /app
+
+# Copy the binary from Stage 1
+COPY --from=builder /src/backend/build/qubit_engine .
+
+# Expose the gRPC port
+EXPOSE 50051
+
+CMD ["./qubit_engine"]
