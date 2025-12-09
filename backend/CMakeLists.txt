@@ -1,44 +1,35 @@
 cmake_minimum_required(VERSION 3.20)
-
-# Project Name
 project(QubitEngine CXX)
 
-# Standard: C++17 or C++20 for modern features (std::filesystem, etc.)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 1. FIND DEPENDENCIES (via vcpkg or system)
+# 1. Find Dependencies
 find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
-find_package(absl CONFIG REQUIRED) 
+find_package(absl CONFIG REQUIRED)
+find_package(OpenMP REQUIRED) # FIX: Standard OpenMP detection
 
-# 2. INCLUDE DIRECTORIES
-# We need to look in:
-# - src/ (for your .hpp files)
-# - include/ (for public headers)
-# - src/generated/ (for the protoc output)
+# 2. Include Directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src/generated
 )
 
-# 3. DEFINE SOURCES
-# Explicitly listing files gives you more control than file(GLOB)
+# 3. Define Sources (Explicitly separate Implementation and Header)
 set(SOURCES
     src/main.cpp
     src/QuantumRegister.cpp
     src/ServiceImpl.cpp
-    # Include the Generated Protobuf/gRPC implementation files
     src/generated/quantum.pb.cc
     src/generated/quantum.grpc.pb.cc
 )
 
-# 4. EXECUTABLE TARGET
+# 4. Target
 add_executable(qubit_engine ${SOURCES})
 
-# 5. LINK LIBRARIES
-# Link against the specific gRPC and Protobuf targets
+# 5. Link Libraries
 target_link_libraries(qubit_engine
     PRIVATE
     protobuf::libprotobuf
@@ -47,11 +38,10 @@ target_link_libraries(qubit_engine
     absl::base
     absl::synchronization
     absl::strings
+    OpenMP::OpenMP_CXX # FIX: Portable OpenMP link
 )
 
-# 6. COMPILER FLAGS (Optimization)
+# 6. Compiler Options (Release Mode)
 if(CMAKE_BUILD_TYPE MATCHES Release)
-    # AVX2 instructions for faster Matrix Multiplication
-    target_compile_options(qubit_engine PRIVATE -O3 -march=native -fopenmp)
-    target_link_libraries(qubit_engine PRIVATE gomp) # Link OpenMP
+    target_compile_options(qubit_engine PRIVATE -O3 -march=native)
 endif()
