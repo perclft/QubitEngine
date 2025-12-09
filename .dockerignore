@@ -1,0 +1,18 @@
+# Ignore C++ build artifacts
+backend/build
+backend/vcpkg_installed
+*.o
+*.a
+*.so
+
+# Ignore Go build artifacts
+bin/
+cli/bin/
+
+# Ignore Git history (saves massive space)
+.git/
+.gitignore
+
+# Ignore IDE settings
+.vscode/
+.idea/

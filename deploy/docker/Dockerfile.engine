@@ -1,8 +1,7 @@
-# STAGE 1: BUILDER
-FROM alpine:latest AS builder
+# Single Stage Build (The "Fat" Strategy)
+FROM alpine:latest
 
-# Install Build Tools
-# grpc-dev and protobuf-dev are in the community repo
+# Install EVERYTHING needed to build AND run
 RUN apk add --no-cache \
     build-base \
     cmake \
@@ -10,36 +9,24 @@ RUN apk add --no-cache \
     linux-headers \
     grpc-dev \
     protobuf-dev \
-    openssl-dev
+    abseil-cpp-dev \
+    gtest-dev \
+    libstdc++ \
+    libgomp
 
 WORKDIR /src
-
-# Copy source code
 COPY . .
 
 # Build
-# We disable vcpkg here and rely on system (apk) libraries for speed
 RUN mkdir -p backend/build && cd backend/build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-O3" && \
     make -j$(nproc)
 
-# STAGE 2: RUNTIME
-FROM alpine:latest
+# Move binary to a clean spot (optional, but keeps it tidy)
+RUN cp backend/build/qubit_engine /usr/local/bin/qubit_engine
 
-# Install Runtime Shared Libraries (libstdc++, libgomp for OpenMP)
-# We do NOT need the compilers (g++) here, just the libraries.
-RUN apk add --no-cache \
-    libstdc++ \
-    libgomp \
-    grpc \
-    protobuf
-
-WORKDIR /app
-
-# Copy the binary from Stage 1
-COPY --from=builder /src/backend/build/qubit_engine .
-
-# Expose the gRPC port
+# Expose Port
 EXPOSE 50051
 
-CMD ["./qubit_engine"]
+# Run directly
+CMD ["qubit_engine"]
