@@ -17,8 +17,10 @@ all: proto build-cpp build-go
 proto:
 	@echo "Generating Protobufs..."
 	@mkdir -p $(GO_OUT_DIR)
-	$(PROTOC) -I $(PROTO_DIR) --go_out=$(GO_OUT_DIR) --go-grpc_out=$(GO_OUT_DIR) \
-		$(PROTO_DIR)/quantum.proto
+	$(PROTOC) -I $(PROTO_DIR) \
+    --go_out=$(GO_OUT_DIR) --go_opt=paths=source_relative \
+    --go-grpc_out=$(GO_OUT_DIR) --go-grpc_opt=paths=source_relative \
+    $(PROTO_DIR)/quantum.proto
 
 build-cpp:
 	@echo "Building C++ Engine..."

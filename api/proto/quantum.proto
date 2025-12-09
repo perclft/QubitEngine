@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package qubit_engine;
 
-option go_package = "./pkg/api;api";
+option go_package = "github.com/perclft/QubitEngine/cli/internal/generated";
 
 service QuantumCompute {
   rpc RunCircuit (CircuitRequest) returns (StateResponse) {}
