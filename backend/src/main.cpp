@@ -4,6 +4,11 @@
 #include <grpcpp/grpcpp.h>
 #include "ServiceImpl.hpp" // FIX: Include header, not cpp
 
+// WARNING: InsecureServerCredentials is for development only. 
+// In production, use SslServerCredentials or run behind a mTLS proxy/Mesh.
+builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+
+
 void RunServer() {
     std::string server_address("0.0.0.0:50051");
     QubitEngineServiceImpl service; // Now correctly linked
