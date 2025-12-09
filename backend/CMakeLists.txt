@@ -4,12 +4,22 @@ project(QubitEngine CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 1. Find Dependencies (vcpkg)
-find_package(Protobuf CONFIG REQUIRED)
-find_package(gRPC CONFIG REQUIRED)
-find_package(absl CONFIG REQUIRED)
+# 1. Find Dependencies (System or vcpkg)
+find_package(Protobuf REQUIRED)
+find_package(absl CONFIG)
 find_package(OpenMP REQUIRED)
-find_package(GTest CONFIG REQUIRED) # Added for Testing
+find_package(GTest REQUIRED) # Added for Testing
+
+# Find gRPC libraries
+find_library(GRPC_LIBRARY NAMES grpc REQUIRED)
+find_library(GRPCPP_LIBRARY NAMES grpc++ REQUIRED)
+find_library(GRPC_REFLECTION_LIBRARY NAMES grpc++_reflection REQUIRED)
+find_library(GPR_LIBRARY NAMES gpr REQUIRED)
+
+# Find Abseil libraries (required by gRPC)
+find_library(ABSL_SYNC_LIBRARY NAMES absl_synchronization REQUIRED)
+find_library(ABSL_BASE_LIBRARY NAMES absl_base REQUIRED)
+find_library(ABSL_STRINGS_LIBRARY NAMES absl_strings REQUIRED)
 
 # 2. Locate gRPC Plugin
 find_program(GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
@@ -29,7 +39,7 @@ set(GENERATED_PB_SRCS
 
 add_custom_command(
     OUTPUT ${GENERATED_PB_SRCS}
-    COMMAND protobuf::protoc
+    COMMAND ${Protobuf_PROTOC_EXECUTABLE}
       --proto_path=${PROTO_SRC_DIR}
       --cpp_out=${PROTO_GEN_DIR}
       --grpc_out=${PROTO_GEN_DIR}
@@ -56,12 +66,14 @@ add_executable(qubit_engine
 
 target_link_libraries(qubit_engine
     PRIVATE
-    protobuf::libprotobuf
-    gRPC::grpc++
-    gRPC::grpc++_reflection
-    absl::base
-    absl::synchronization
-    absl::strings
+    ${Protobuf_LIBRARIES}
+    ${GRPCPP_LIBRARY}
+    ${GRPC_REFLECTION_LIBRARY}
+    ${GRPC_LIBRARY}
+    ${GPR_LIBRARY}
+    ${ABSL_SYNC_LIBRARY}
+    ${ABSL_BASE_LIBRARY}
+    ${ABSL_STRINGS_LIBRARY}
     OpenMP::OpenMP_CXX
 )
 
@@ -75,8 +87,8 @@ add_executable(qubit_tests
 
 target_link_libraries(qubit_tests 
     PRIVATE 
-    GTest::gtest 
-    GTest::gtest_main
+    GTest::GTest
+    GTest::Main
     OpenMP::OpenMP_CXX
 )
 
