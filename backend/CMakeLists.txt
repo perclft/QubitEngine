@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 1. Find Dependencies (System or vcpkg)
 find_package(Protobuf REQUIRED)
-find_package(absl CONFIG)
 find_package(OpenMP REQUIRED)
 find_package(GTest REQUIRED) # Added for Testing
 
@@ -87,8 +86,8 @@ add_executable(qubit_tests
 
 target_link_libraries(qubit_tests 
     PRIVATE 
-    GTest::GTest
-    GTest::Main
+    GTest::gtest
+    GTest::gtest_main
     OpenMP::OpenMP_CXX
 )
 
