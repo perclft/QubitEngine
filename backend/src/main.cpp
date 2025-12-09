@@ -2,19 +2,20 @@
 #include <memory>
 #include <string>
 #include <grpcpp/grpcpp.h>
-#include "ServiceImpl.hpp" // FIX: Include header, not cpp
-
-// WARNING: InsecureServerCredentials is for development only. 
-// In production, use SslServerCredentials or run behind a mTLS proxy/Mesh.
-builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-
+#include "ServiceImpl.hpp"
 
 void RunServer() {
     std::string server_address("0.0.0.0:50051");
-    QubitEngineServiceImpl service; // Now correctly linked
+    QubitEngineServiceImpl service;
 
     grpc::ServerBuilder builder;
+    
+    // SECURITY NOTE: InsecureServerCredentials is used here for 
+    // internal Kubernetes simulation only. In a production FinTech environment,
+    // this would be replaced with SslServerCredentials (mTLS) or 
+    // handled by a Service Mesh (Linkerd/Istio) sidecar.
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    
     builder.RegisterService(&service);
     
     std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
