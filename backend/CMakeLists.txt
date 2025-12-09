@@ -72,3 +72,28 @@ target_link_libraries(qubit_engine
 if(CMAKE_BUILD_TYPE MATCHES Release)
     target_compile_options(qubit_engine PRIVATE -O3 -march=native)
 endif()
+
+# ... existing content ...
+
+# ==========================================
+# TESTING SECTION
+# ==========================================
+enable_testing()
+find_package(GTest CONFIG REQUIRED)
+
+add_executable(qubit_tests 
+    tests/QuantumTests.cpp 
+    src/QuantumRegister.cpp # Link the implementation directly
+)
+
+# Link GTest and OpenMP (since QuantumRegister uses it)
+target_link_libraries(qubit_tests 
+    PRIVATE 
+    GTest::gtest 
+    GTest::gtest_main
+    OpenMP::OpenMP_CXX
+)
+
+# Allow running "ctest" from command line
+include(GoogleTest)
+gtest_discover_tests(qubit_tests)
