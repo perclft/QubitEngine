@@ -8,6 +8,52 @@ using qubit_engine::CircuitRequest;
 using qubit_engine::StateResponse;
 using qubit_engine::GateOperation;
 
+#include "ServiceImpl.hpp"
+#include "QuantumRegister.hpp"
+#include <iostream>
+#include <sys/sysinfo.h> // Linux system headers
+#include <cmath>
+
+// HELPER: Check if we have enough RAM
+bool hasEnoughMemory(int num_qubits) {
+    struct sysinfo memInfo;
+    sysinfo(&memInfo);
+    
+    long long available_ram = memInfo.freeram * memInfo.mem_unit;
+    
+    // Size = 2^N * sizeof(complex<double>)
+    // complex<double> is usually 16 bytes
+    size_t required_elements = 1ULL << num_qubits;
+    size_t required_bytes = required_elements * sizeof(std::complex<double>);
+
+    // Add 100MB buffer for overhead
+    size_t overhead = 100 * 1024 * 1024; 
+
+    return available_ram > (required_bytes + overhead);
+}
+
+// ... inside RunCircuit ...
+
+Status QubitEngineServiceImpl::RunCircuit(ServerContext* context, 
+                                        const CircuitRequest* request,
+                                        StateResponse* response) {
+    int n = request->num_qubits();
+    
+    // 1. HARD LIMIT CHECK (Validation)
+    if (n <= 0 || n > 28) { // 28 qubits ~4GB, strict upper bound
+         return Status(grpc::StatusCode::INVALID_ARGUMENT, "Qubits must be between 1 and 28");
+    }
+
+    // 2. DYNAMIC MEMORY CHECK (Systems Engineering)
+    if (!hasEnoughMemory(n)) {
+        std::string err = "Insufficient Server Memory for " + std::to_string(n) + " qubits.";
+        return Status(grpc::StatusCode::RESOURCE_EXHAUSTED, err);
+    }
+
+    // ... continue with try/catch block ...
+}
+
+
 Status QubitEngineServiceImpl::RunCircuit(ServerContext* context, 
                                         const CircuitRequest* request,
                                         StateResponse* response) {
