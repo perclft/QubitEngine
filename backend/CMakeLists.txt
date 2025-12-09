@@ -9,8 +9,9 @@ find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(absl CONFIG REQUIRED)
 find_package(OpenMP REQUIRED)
+find_package(GTest CONFIG REQUIRED) # Added for Testing
 
-# 2. Locate the gRPC Plugin for Protoc
+# 2. Locate gRPC Plugin
 find_program(GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
 
 # 3. Auto-Generate Protobuf/gRPC Sources
@@ -42,21 +43,17 @@ add_custom_command(
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${PROTO_GEN_DIR} # Include generated headers
+    ${PROTO_GEN_DIR}
 )
 
-# 5. Define Sources
-set(SOURCES
+# 5. Build The Main Engine
+add_executable(qubit_engine 
     src/main.cpp
     src/QuantumRegister.cpp
     src/ServiceImpl.cpp
-    ${GENERATED_PB_SRCS} # Add generated files to target
+    ${GENERATED_PB_SRCS}
 )
 
-# 6. Build Target
-add_executable(qubit_engine ${SOURCES})
-
-# 7. Link Libraries
 target_link_libraries(qubit_engine
     PRIVATE
     protobuf::libprotobuf
@@ -68,25 +65,14 @@ target_link_libraries(qubit_engine
     OpenMP::OpenMP_CXX
 )
 
-# 8. Optimization Flags
-if(CMAKE_BUILD_TYPE MATCHES Release)
-    target_compile_options(qubit_engine PRIVATE -O3 -march=native)
-endif()
-
-# ... existing content ...
-
-# ==========================================
-# TESTING SECTION
-# ==========================================
+# 6. Build The Unit Tests
 enable_testing()
-find_package(GTest CONFIG REQUIRED)
 
 add_executable(qubit_tests 
     tests/QuantumTests.cpp 
-    src/QuantumRegister.cpp # Link the implementation directly
+    src/QuantumRegister.cpp # Link implementation (but NOT main.cpp)
 )
 
-# Link GTest and OpenMP (since QuantumRegister uses it)
 target_link_libraries(qubit_tests 
     PRIVATE 
     GTest::gtest 
@@ -94,6 +80,12 @@ target_link_libraries(qubit_tests
     OpenMP::OpenMP_CXX
 )
 
-# Allow running "ctest" from command line
+# Register with CTest
 include(GoogleTest)
 gtest_discover_tests(qubit_tests)
+
+# 7. Optimization
+if(CMAKE_BUILD_TYPE MATCHES Release)
+    target_compile_options(qubit_engine PRIVATE -O3 -march=native)
+    target_compile_options(qubit_tests PRIVATE -O3 -march=native)
+endif()
