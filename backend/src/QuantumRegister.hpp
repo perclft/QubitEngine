@@ -1,24 +1,28 @@
 #pragma once
 #include <vector>
 #include <complex>
-#include <iostream>
+#include <stdexcept> // For std::out_of_range
 
 using Complex = std::complex<double>;
 
 class QuantumRegister {
 private:
     std::vector<Complex> state;
-    int num_qubits;
+    size_t num_qubits; // Changed to size_t
+
+    // Helper to validate indices
+    void validateIndex(size_t index) const {
+        if (index >= num_qubits) {
+            throw std::out_of_range("Qubit index out of bounds");
+        }
+    }
 
 public:
-    explicit QuantumRegister(int n);
+    explicit QuantumRegister(size_t n);
     
-    // Core Gates
-    void applyHadamard(int target_qubit);
-    void applyX(int target_qubit);
-    void applyCNOT(int control_qubit, int target_qubit);
+    void applyHadamard(size_t target_qubit);
+    void applyX(size_t target_qubit);
+    void applyCNOT(size_t control_qubit, size_t target_qubit);
     
-    // Utilities
     const std::vector<Complex>& getStateVector() const;
-    void printState() const;
 };
