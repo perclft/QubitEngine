@@ -2,16 +2,14 @@ syntax = "proto3";
 
 package qubit_engine;
 
-// The Service Definition
+option go_package = "./pkg/api;api";
+
 service QuantumCompute {
-  // Unary RPC: Send a circuit, get the final state
   rpc RunCircuit (CircuitRequest) returns (StateResponse) {}
-  
-  // Streaming RPC: Stream gates in real-time, get updates (Advanced)
+  // Streaming RPC
   rpc StreamGates (stream GateOperation) returns (stream Measurement) {}
 }
 
-// Data Structures
 message CircuitRequest {
   int32 num_qubits = 1;
   repeated GateOperation operations = 2;
@@ -25,15 +23,20 @@ message GateOperation {
   }
   GateType type = 1;
   uint32 target_qubit = 2;
-  uint32 control_qubit = 3; // Optional, used for CNOT
+  uint32 control_qubit = 3; 
 }
 
 message StateResponse {
-  // Representing complex numbers as two doubles [real, imag]
   message ComplexNumber {
     double real = 1;
     double imag = 2;
   }
   repeated ComplexNumber state_vector = 1;
-  map<string, double> probabilities = 2; // e.g., "001" -> 0.5
+}
+
+// FIX: Defined the Missing Message
+message Measurement {
+  uint32 qubit_index = 1;
+  bool result = 2;        // true = 1, false = 0
+  double probability = 3; // The probability of this outcome
 }
