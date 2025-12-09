@@ -2,11 +2,11 @@
 #include <memory>
 #include <string>
 #include <grpcpp/grpcpp.h>
-#include "ServiceImpl.cpp" // Include the implementation class
+#include "ServiceImpl.hpp" // FIX: Include header, not cpp
 
 void RunServer() {
     std::string server_address("0.0.0.0:50051");
-    QubitEngineServiceImpl service;
+    QubitEngineServiceImpl service; // Now correctly linked
 
     grpc::ServerBuilder builder;
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
