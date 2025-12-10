@@ -23,6 +23,7 @@ public:
     void applyHadamard(size_t target_qubit);
     void applyX(size_t target_qubit);
     void applyCNOT(size_t control_qubit, size_t target_qubit);
+    bool measure(size_t target_qubit);
     
     const std::vector<Complex>& getStateVector() const;
 };

@@ -1,26 +1,41 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <csignal>
+#include <thread>
+#include <atomic>
 #include <grpcpp/grpcpp.h>
 #include "ServiceImpl.hpp"
+
+std::atomic<bool> shutdown_requested(false);
+
+void signalHandler(int signal) {
+    std::cout << "\nShutdown signal received (" << signal << ")..." << std::endl;
+    shutdown_requested = true;
+}
 
 void RunServer() {
     std::string server_address("0.0.0.0:50051");
     QubitEngineServiceImpl service;
 
     grpc::ServerBuilder builder;
-    
-    // SECURITY NOTE: InsecureServerCredentials is used here for 
-    // internal Kubernetes simulation only. In a production FinTech environment,
-    // this would be replaced with SslServerCredentials (mTLS) or 
-    // handled by a Service Mesh (Linkerd/Istio) sidecar.
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-    
     builder.RegisterService(&service);
     
     std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
     std::cout << "QubitEngine (C++) listening on " << server_address << std::endl;
-    server->Wait();
+
+    // Register signals
+    std::signal(SIGINT, signalHandler);
+    std::signal(SIGTERM, signalHandler);
+
+    // Wait loop
+    while (!shutdown_requested) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+
+    std::cout << "Stopping gRPC server..." << std::endl;
+    server->Shutdown();
 }
 
 int main() {

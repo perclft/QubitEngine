@@ -6,7 +6,6 @@ option go_package = "github.com/perclft/QubitEngine/cli/internal/generated";
 
 service QuantumCompute {
   rpc RunCircuit (CircuitRequest) returns (StateResponse) {}
-  // Streaming RPC
   rpc StreamGates (stream GateOperation) returns (stream Measurement) {}
 }
 
@@ -20,10 +19,13 @@ message GateOperation {
     HADAMARD = 0;
     PAULI_X = 1;
     CNOT = 2;
+    MEASURE = 3; // New Operation
   }
   GateType type = 1;
   uint32 target_qubit = 2;
-  uint32 control_qubit = 3; 
+  uint32 control_qubit = 3;
+  // Optional: Register to store the classical result (useful for complex circuits)
+  uint32 classical_register = 4; 
 }
 
 message StateResponse {
@@ -32,11 +34,13 @@ message StateResponse {
     double imag = 2;
   }
   repeated ComplexNumber state_vector = 1;
+  
+  // New: Return measured classical bits (e.g., Qubit 0 -> 1)
+  map<uint32, bool> classical_results = 2; 
 }
 
-// FIX: Defined the Missing Message
 message Measurement {
   uint32 qubit_index = 1;
-  bool result = 2;        // true = 1, false = 0
-  double probability = 3; // The probability of this outcome
+  bool result = 2;
+  double probability = 3;
 }

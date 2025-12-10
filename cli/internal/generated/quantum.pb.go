@@ -27,6 +27,7 @@ const (
 	GateOperation_HADAMARD GateOperation_GateType = 0
 	GateOperation_PAULI_X  GateOperation_GateType = 1
 	GateOperation_CNOT     GateOperation_GateType = 2
+	GateOperation_MEASURE  GateOperation_GateType = 3 // New Operation
 )
 
 // Enum value maps for GateOperation_GateType.
@@ -35,11 +36,13 @@ var (
 		0: "HADAMARD",
 		1: "PAULI_X",
 		2: "CNOT",
+		3: "MEASURE",
 	}
 	GateOperation_GateType_value = map[string]int32{
 		"HADAMARD": 0,
 		"PAULI_X":  1,
 		"CNOT":     2,
+		"MEASURE":  3,
 	}
 )
 
@@ -123,12 +126,14 @@ func (x *CircuitRequest) GetOperations() []*GateOperation {
 }
 
 type GateOperation struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Type          GateOperation_GateType `protobuf:"varint,1,opt,name=type,proto3,enum=qubit_engine.GateOperation_GateType" json:"type,omitempty"`
-	TargetQubit   uint32                 `protobuf:"varint,2,opt,name=target_qubit,json=targetQubit,proto3" json:"target_qubit,omitempty"`
-	ControlQubit  uint32                 `protobuf:"varint,3,opt,name=control_qubit,json=controlQubit,proto3" json:"control_qubit,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Type         GateOperation_GateType `protobuf:"varint,1,opt,name=type,proto3,enum=qubit_engine.GateOperation_GateType" json:"type,omitempty"`
+	TargetQubit  uint32                 `protobuf:"varint,2,opt,name=target_qubit,json=targetQubit,proto3" json:"target_qubit,omitempty"`
+	ControlQubit uint32                 `protobuf:"varint,3,opt,name=control_qubit,json=controlQubit,proto3" json:"control_qubit,omitempty"`
+	// Optional: Register to store the classical result (useful for complex circuits)
+	ClassicalRegister uint32 `protobuf:"varint,4,opt,name=classical_register,json=classicalRegister,proto3" json:"classical_register,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *GateOperation) Reset() {
@@ -182,11 +187,20 @@ func (x *GateOperation) GetControlQubit() uint32 {
 	return 0
 }
 
+func (x *GateOperation) GetClassicalRegister() uint32 {
+	if x != nil {
+		return x.ClassicalRegister
+	}
+	return 0
+}
+
 type StateResponse struct {
-	state         protoimpl.MessageState         `protogen:"open.v1"`
-	StateVector   []*StateResponse_ComplexNumber `protobuf:"bytes,1,rep,name=state_vector,json=stateVector,proto3" json:"state_vector,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state       protoimpl.MessageState         `protogen:"open.v1"`
+	StateVector []*StateResponse_ComplexNumber `protobuf:"bytes,1,rep,name=state_vector,json=stateVector,proto3" json:"state_vector,omitempty"`
+	// New: Return measured classical bits (e.g., Qubit 0 -> 1)
+	ClassicalResults map[uint32]bool `protobuf:"bytes,2,rep,name=classical_results,json=classicalResults,proto3" json:"classical_results,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *StateResponse) Reset() {
@@ -226,12 +240,18 @@ func (x *StateResponse) GetStateVector() []*StateResponse_ComplexNumber {
 	return nil
 }
 
-// FIX: Defined the Missing Message
+func (x *StateResponse) GetClassicalResults() map[uint32]bool {
+	if x != nil {
+		return x.ClassicalResults
+	}
+	return nil
+}
+
 type Measurement struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	QubitIndex    uint32                 `protobuf:"varint,1,opt,name=qubit_index,json=qubitIndex,proto3" json:"qubit_index,omitempty"`
-	Result        bool                   `protobuf:"varint,2,opt,name=result,proto3" json:"result,omitempty"`            // true = 1, false = 0
-	Probability   float64                `protobuf:"fixed64,3,opt,name=probability,proto3" json:"probability,omitempty"` // The probability of this outcome
+	Result        bool                   `protobuf:"varint,2,opt,name=result,proto3" json:"result,omitempty"`
+	Probability   float64                `protobuf:"fixed64,3,opt,name=probability,proto3" json:"probability,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -349,20 +369,26 @@ const file_quantum_proto_rawDesc = "" +
 	"num_qubits\x18\x01 \x01(\x05R\tnumQubits\x12;\n" +
 	"\n" +
 	"operations\x18\x02 \x03(\v2\x1b.qubit_engine.GateOperationR\n" +
-	"operations\"\xc2\x01\n" +
+	"operations\"\xfe\x01\n" +
 	"\rGateOperation\x128\n" +
 	"\x04type\x18\x01 \x01(\x0e2$.qubit_engine.GateOperation.GateTypeR\x04type\x12!\n" +
 	"\ftarget_qubit\x18\x02 \x01(\rR\vtargetQubit\x12#\n" +
-	"\rcontrol_qubit\x18\x03 \x01(\rR\fcontrolQubit\"/\n" +
+	"\rcontrol_qubit\x18\x03 \x01(\rR\fcontrolQubit\x12-\n" +
+	"\x12classical_register\x18\x04 \x01(\rR\x11classicalRegister\"<\n" +
 	"\bGateType\x12\f\n" +
 	"\bHADAMARD\x10\x00\x12\v\n" +
 	"\aPAULI_X\x10\x01\x12\b\n" +
-	"\x04CNOT\x10\x02\"\x96\x01\n" +
+	"\x04CNOT\x10\x02\x12\v\n" +
+	"\aMEASURE\x10\x03\"\xbb\x02\n" +
 	"\rStateResponse\x12L\n" +
-	"\fstate_vector\x18\x01 \x03(\v2).qubit_engine.StateResponse.ComplexNumberR\vstateVector\x1a7\n" +
+	"\fstate_vector\x18\x01 \x03(\v2).qubit_engine.StateResponse.ComplexNumberR\vstateVector\x12^\n" +
+	"\x11classical_results\x18\x02 \x03(\v21.qubit_engine.StateResponse.ClassicalResultsEntryR\x10classicalResults\x1a7\n" +
 	"\rComplexNumber\x12\x12\n" +
 	"\x04real\x18\x01 \x01(\x01R\x04real\x12\x12\n" +
-	"\x04imag\x18\x02 \x01(\x01R\x04imag\"h\n" +
+	"\x04imag\x18\x02 \x01(\x01R\x04imag\x1aC\n" +
+	"\x15ClassicalResultsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\"h\n" +
 	"\vMeasurement\x12\x1f\n" +
 	"\vqubit_index\x18\x01 \x01(\rR\n" +
 	"qubitIndex\x12\x16\n" +
@@ -386,7 +412,7 @@ func file_quantum_proto_rawDescGZIP() []byte {
 }
 
 var file_quantum_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_quantum_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_quantum_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_quantum_proto_goTypes = []any{
 	(GateOperation_GateType)(0),         // 0: qubit_engine.GateOperation.GateType
 	(*CircuitRequest)(nil),              // 1: qubit_engine.CircuitRequest
@@ -394,20 +420,22 @@ var file_quantum_proto_goTypes = []any{
 	(*StateResponse)(nil),               // 3: qubit_engine.StateResponse
 	(*Measurement)(nil),                 // 4: qubit_engine.Measurement
 	(*StateResponse_ComplexNumber)(nil), // 5: qubit_engine.StateResponse.ComplexNumber
+	nil,                                 // 6: qubit_engine.StateResponse.ClassicalResultsEntry
 }
 var file_quantum_proto_depIdxs = []int32{
 	2, // 0: qubit_engine.CircuitRequest.operations:type_name -> qubit_engine.GateOperation
 	0, // 1: qubit_engine.GateOperation.type:type_name -> qubit_engine.GateOperation.GateType
 	5, // 2: qubit_engine.StateResponse.state_vector:type_name -> qubit_engine.StateResponse.ComplexNumber
-	1, // 3: qubit_engine.QuantumCompute.RunCircuit:input_type -> qubit_engine.CircuitRequest
-	2, // 4: qubit_engine.QuantumCompute.StreamGates:input_type -> qubit_engine.GateOperation
-	3, // 5: qubit_engine.QuantumCompute.RunCircuit:output_type -> qubit_engine.StateResponse
-	4, // 6: qubit_engine.QuantumCompute.StreamGates:output_type -> qubit_engine.Measurement
-	5, // [5:7] is the sub-list for method output_type
-	3, // [3:5] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	6, // 3: qubit_engine.StateResponse.classical_results:type_name -> qubit_engine.StateResponse.ClassicalResultsEntry
+	1, // 4: qubit_engine.QuantumCompute.RunCircuit:input_type -> qubit_engine.CircuitRequest
+	2, // 5: qubit_engine.QuantumCompute.StreamGates:input_type -> qubit_engine.GateOperation
+	3, // 6: qubit_engine.QuantumCompute.RunCircuit:output_type -> qubit_engine.StateResponse
+	4, // 7: qubit_engine.QuantumCompute.StreamGates:output_type -> qubit_engine.Measurement
+	6, // [6:8] is the sub-list for method output_type
+	4, // [4:6] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_quantum_proto_init() }
@@ -421,7 +449,7 @@ func file_quantum_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_quantum_proto_rawDesc), len(file_quantum_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

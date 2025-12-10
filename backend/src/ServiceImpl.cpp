@@ -2,7 +2,8 @@
 #include "QuantumRegister.hpp"
 #include <iostream>
 #include <cmath>
-#include <sys/sysinfo.h> // Linux system headers for memory check
+#include <sys/sysinfo.h>
+#include <cstdint> // FIX: Added for uint32_t
 
 using grpc::ServerContext;
 using grpc::Status;
@@ -22,8 +23,8 @@ bool hasEnoughMemory(int num_qubits) {
     size_t required_elements = 1ULL << num_qubits;
     size_t required_bytes = required_elements * sizeof(std::complex<double>);
 
-    // Add 100MB buffer for OS/Process overhead
-    size_t overhead = 100 * 1024 * 1024; 
+    // Add 5% buffer for OS/Process overhead
+    size_t overhead = required_bytes / 20; 
 
     return available_ram > (required_bytes + overhead);
 }
@@ -35,13 +36,11 @@ Status QubitEngineServiceImpl::RunCircuit(ServerContext* context,
     int n = request->num_qubits();
 
     // 1. HARD LIMIT CHECK
-    // 28 qubits is ~4GB of RAM. A safe upper bound for a single node.
-    if (n <= 0 || n > 28) {
-        return Status(grpc::StatusCode::INVALID_ARGUMENT, "Qubits must be between 1 and 28");
+    if (n <= 0 || n > 30) {
+        return Status(grpc::StatusCode::INVALID_ARGUMENT, "Qubits must be between 1 and 30");
     }
 
     // 2. DYNAMIC MEMORY CHECK
-    // Prevents the OOM Killer from killing the pod
     if (!hasEnoughMemory(n)) {
         std::string err = "Insufficient Server Memory for " + std::to_string(n) + " qubits.";
         std::cerr << "ResourceExhausted: " << err << std::endl;
@@ -72,6 +71,16 @@ Status QubitEngineServiceImpl::RunCircuit(ServerContext* context,
                 case GateOperation::CNOT:
                     qreg.applyCNOT(op.control_qubit(), op.target_qubit());
                     break;
+                case GateOperation::MEASURE: {
+                    // 1. Perform Physics Collapse
+                    bool result = qreg.measure(op.target_qubit());
+                    
+                    // 2. Store Result in Response
+                    // FIX: Changed uint32 to uint32_t
+                    uint32_t reg_id = (op.classical_register() > 0) ? op.classical_register() : op.target_qubit();
+                    (*response->mutable_classical_results())[reg_id] = result;
+                    break;
+                }
                 default:
                     return Status(grpc::StatusCode::INVALID_ARGUMENT, "Unknown Gate Type");
             }

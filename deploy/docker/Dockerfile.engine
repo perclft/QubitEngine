@@ -1,7 +1,7 @@
-# Single Stage Build (The "Fat" Strategy)
-FROM alpine:latest
+# Stage 1: Builder
+# We pin to alpine:3.21 to ensure we get gRPC 1.62+ consistently
+FROM alpine:3.21 AS builder
 
-# Install EVERYTHING needed to build AND run
 RUN apk add --no-cache \
     build-base \
     cmake \
@@ -17,16 +17,28 @@ RUN apk add --no-cache \
 WORKDIR /src
 COPY . .
 
+# CRITICAL: Clean any host-generated artifacts to prevent poisoning
+RUN rm -rf backend/build backend/src/generated
+
 # Build
 RUN mkdir -p backend/build && cd backend/build && \
-    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-O3" && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-O3 -fopenmp" && \
     make -j$(nproc)
 
-# Move binary to a clean spot (optional, but keeps it tidy)
-RUN cp backend/build/qubit_engine /usr/local/bin/qubit_engine
+# Stage 2: Runtime
+FROM alpine:3.21
 
-# Expose Port
+# FIX: Added 'grpc-cpp' to get libgrpc++.so
+RUN apk add --no-cache \
+    libstdc++ \
+    libgomp \
+    grpc-cpp \
+    protobuf \
+    abseil-cpp
+
+# Copy binary from builder
+COPY --from=builder /src/backend/build/qubit_engine /usr/local/bin/qubit_engine
+
 EXPOSE 50051
 
-# Run directly
 CMD ["qubit_engine"]

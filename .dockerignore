@@ -1,18 +1,24 @@
-# Ignore C++ build artifacts
-backend/build
-backend/vcpkg_installed
-*.o
-*.a
-*.so
-
-# Ignore Go build artifacts
-bin/
-cli/bin/
-
-# Ignore Git history (saves massive space)
-.git/
+# Version Control
+.git
 .gitignore
 
-# Ignore IDE settings
-.vscode/
-.idea/
+# IDE Settings
+.vscode
+.idea
+.DS_Store
+
+# -----------------------------------------------------------
+# C++ Build Artifacts (MUST BE IGNORED)
+# -----------------------------------------------------------
+backend/build
+backend/src/generated
+backend/vcpkg_installed
+
+# -----------------------------------------------------------
+# Go Binaries (Ignore, but KEEP generated source)
+# -----------------------------------------------------------
+bin
+cli/bin
+
+# CRITICAL: Do NOT ignore cli/internal/generated 
+# (The Dockerfile needs these files to build the CLI)

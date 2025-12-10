@@ -52,3 +52,27 @@ TEST(QuantumTest, BellState) {
     EXPECT_NEAR(std::abs(state[2]), 0.0, 1e-9);     // |10>
     EXPECT_NEAR(state[3].real(), inv_sqrt_2, 1e-9); // |11>
 }
+TEST(QuantumTest, ReverseCNOT) {
+    // Test Control(1) -> Target(0) (Control > Target)
+    // This often breaks in stride-based implementations
+    QuantumRegister q(2); 
+    
+    // Set input to |10> (Qubit 1 = 1, Qubit 0 = 0)
+    q.applyX(1); 
+    
+    // Apply CNOT(1, 0). Since Q1 is 1, Q0 should flip to 1.
+    // Result should be |11>
+    q.applyCNOT(1, 0);
+
+    auto state = q.getStateVector();
+    
+    // Index 2 is |10>, Index 3 is |11>
+    EXPECT_NEAR(std::abs(state[2]), 0.0, 1e-9);     // Old state empty
+    EXPECT_NEAR(state[3].real(), 1.0, 1e-9);        // New state occupied
+}
+
+TEST(QuantumTest, LogicValidation) {
+    // Test Self-Control Error
+    QuantumRegister q(2);
+    EXPECT_THROW(q.applyCNOT(0, 0), std::invalid_argument);
+}

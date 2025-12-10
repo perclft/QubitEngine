@@ -28,7 +28,6 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type QuantumComputeClient interface {
 	RunCircuit(ctx context.Context, in *CircuitRequest, opts ...grpc.CallOption) (*StateResponse, error)
-	// Streaming RPC
 	StreamGates(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[GateOperation, Measurement], error)
 }
 
@@ -68,7 +67,6 @@ type QuantumCompute_StreamGatesClient = grpc.BidiStreamingClient[GateOperation, 
 // for forward compatibility.
 type QuantumComputeServer interface {
 	RunCircuit(context.Context, *CircuitRequest) (*StateResponse, error)
-	// Streaming RPC
 	StreamGates(grpc.BidiStreamingServer[GateOperation, Measurement]) error
 	mustEmbedUnimplementedQuantumComputeServer()
 }

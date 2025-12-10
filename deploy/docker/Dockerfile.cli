@@ -1,0 +1,19 @@
+# STAGE 1: BUILDER
+FROM golang:1.23-alpine AS builder
+
+WORKDIR /src/cli
+
+# Copy all source code directly (bypassing the separate go.mod copy step)
+# This allows us to run 'go mod tidy' to fix the dependencies
+COPY cli/ .
+
+# Force a clean dependency resolution
+RUN go mod tidy
+
+# Build the binary
+RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/qctl ./cmd/qctl
+
+# STAGE 2: RUNTIME
+FROM scratch
+COPY --from=builder /bin/qctl /bin/qctl
+ENTRYPOINT ["/bin/qctl"]
