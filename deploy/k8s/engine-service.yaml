@@ -7,8 +7,8 @@ spec:
   selector:
     app: qubit-engine
   ports:
-    - port: 50051
-      targetPort: 50051
-      protocol: TCP
+    - protocol: TCP
+      port: 50051       # Port exposed to the world
+      targetPort: 50051 # Port container is listening on
       name: grpc
-  type: ClusterIP
+  type: LoadBalancer    # EXPOSE EXTERNALLY (Allows direct access from qctl)

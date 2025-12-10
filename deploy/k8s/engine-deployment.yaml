@@ -6,7 +6,7 @@ metadata:
   labels:
     app: qubit-engine
 spec:
-  replicas: 2
+  replicas: 3 # SCALED UP: Run 3 copies for High Availability
   selector:
     matchLabels:
       app: qubit-engine
@@ -18,19 +18,31 @@ spec:
       containers:
         - name: engine
           image: qubit-engine:latest
-          imagePullPolicy: IfNotPresent # Uses your local build
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 50051
               name: grpc
+          
+          # HARDWARE LIMITS (Critical for preventing OOM kills on host)
           resources:
             requests:
-              memory: "64Mi"
-              cpu: "250m"
+              memory: "128Mi"
+              cpu: "100m"
             limits:
-              memory: "512Mi" # Crash if we exceed this (Simulating OOM killer)
+              memory: "512Mi"
               cpu: "1000m"
+
+          # HEALTH CHECKS
+          # Liveness: Kills the pod if it hangs (Deadlock protection)
+          livenessProbe:
+            tcpSocket:
+              port: 50051
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          
+          # Readiness: Don't send traffic until the socket is open
           readinessProbe:
             tcpSocket:
               port: 50051
-            initialDelaySeconds: 1
+            initialDelaySeconds: 2
             periodSeconds: 5
