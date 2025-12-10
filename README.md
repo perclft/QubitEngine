@@ -1,16 +1,23 @@
-QubitEngineQubitEngine is a high-performance, distributed quantum circuit simulator designed for state vector evolution on classical hardware. It implements a decoupled microservices architecture, separating the compute-intensive physics kernel (C++20) from the control plane (Go) via a strict gRPC contract.
+# QubitEngine
 
+Infrastructure for the Quantum-Ready Future. I built it to solve the deployment, scaling, and memory-management challenges that will exist when real quantum hardware becomes accessible via API.
+
+is a high-performance, distributed quantum circuit simulator designed for state vector evolution on classical hardware. It implements a decoupled microservices architecture, separating the compute-intensive physics kernel (C++20) from the control plane (Go) via a strict gRPC contract.
 This system is engineered for horizontal scalability, utilizing OpenMP for shared-memory parallelization within nodes and Kubernetes for distributed load balancing across nodes.
 
 # System Architecture
 The project follows a cloud-native design pattern:
-# Compute Engine (Backend): A C++20 application that manages the Hilbert space state vector. It handles unitary gate applications (Hadamard, Pauli-X, CNOT) and non-unitary measurement operations (wavefunction collapse).
+# Compute Engine (Backend):
+A C++20 application that manages the Hilbert space state vector. It handles unitary gate applications (Hadamard, Pauli-X, CNOT) and non-unitary measurement operations (wavefunction collapse).
 
-# Control Plane (CLI): A Go-based command-line interface (qctl) that serializes user intent into Protocol Buffers and transmits them to the engine.
+# Control Plane (CLI):
+A Go-based command-line interface (qctl) that serializes user intent into Protocol Buffers and transmits them to the engine.
 
-# Communication: gRPC (HTTP/2) is used for low-latency, strongly typed communication between components.
+# Communication:
+gRPC (HTTP/2) is used for low-latency, strongly typed communication between components.
 
-# Infrastructure: The system is containerized (Docker) and designed to run as a stateless ReplicaSet on Kubernetes.
+# Infrastructure:
+The system is containerized (Docker) and designed to run as a stateless ReplicaSet on Kubernetes.
 
 # Key Features
 
