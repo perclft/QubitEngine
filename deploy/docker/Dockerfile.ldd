@@ -1,0 +1,46 @@
+# Dockerfile.ldd - Temporary file to extract LDD dependencies
+FROM debian:bookworm-slim AS builder
+
+# Minimal install to get the binary built (same as your current builder)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake git libprotobuf-dev libgrpc-dev libgrpc++-dev \
+    protobuf-compiler-grpc libssl-dev zlib1g-dev libc-ares-dev \
+    libgflags-dev libgoogle-glog-dev wget \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /build
+
+# Copy source and config (Assuming these paths are correct from previous build)
+COPY api/ api/
+COPY backend/ backend/
+COPY CMakeLists.txt .
+
+# CMake and Linker Fix (Copy your exact patch here)
+RUN echo 'target_link_libraries(qubit_engine PUBLIC \
+    grpc++ \
+    protobuf \
+    gflags \
+    glog \
+    gpr \
+    re2 \
+    z \
+    m \
+    dl \
+    rt \
+    pthread \
+    )' >> CMakeLists.txt
+
+# Protobuf compilation
+RUN mkdir -p backend/src/generated
+RUN /usr/bin/protoc -I . \
+    --cpp_out=backend/src/generated \
+    --grpc_out=backend/src/generated \
+    --plugin=protoc-gen-grpc=/usr/bin/grpc_cpp_plugin \
+    api/proto/quantum.proto
+RUN mkdir -p /usr/local/include/generated
+RUN cp backend/src/generated/api/proto/*pb.h /usr/local/include/generated/
+# C++ Compilation
+RUN cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-I/usr/local/include/generated" . && \
+    cmake --build build --config Release
+
+# CRITICAL DIAGNOSTIC: Run LDD as the final command.
+RUN ldd /build/build/qubit_engine
