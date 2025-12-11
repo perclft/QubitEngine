@@ -1,42 +1,118 @@
-# --- Stage 1: Builder (Alpine for Musl Static Linking) ---
-FROM alpine:latest AS builder
+# --- Stage 1: Builder (Glibc/Debian C++ Compilation) ---
+FROM debian:bookworm-slim AS builder
 
-# Install build tools and static libraries
-# grpc-dev and protobuf-dev in Alpine usually include static (.a) libs
-RUN apk add --no-cache \
-    build-base \
+# Install build tools and dynamic libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     cmake \
     git \
-    linux-headers \
-    protobuf-dev \
-    grpc-dev \
-    openssl-dev \
-    openssl-libs-static \
-    zlib-static
+    libprotobuf-dev \
+    libgrpc-dev \
+    libgrpc++-dev \
+    protobuf-compiler-grpc \
+    libssl-dev \
+    zlib1g-dev \
+    libc-ares-dev \
+    libgflags-dev \
+    libgoogle-glog-dev \
+    ca-certificates \
+    wget \
+    libstdc++6 \
+    zlib1g \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
 
+# Install Go
+RUN GO_VERSION=1.23.1 && \
+    wget https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz && \
+    rm -rf /usr/local/go && \
+    tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && \
+    rm go${GO_VERSION}.linux-amd64.tar.gz
+ENV PATH="/usr/local/go/bin:${PATH}"
 WORKDIR /build
 
 # Copy source
-COPY . .
+COPY api/ api/
+COPY backend/ backend/
+COPY CMakeLists.txt .
 
-# Compile
-# We define -DCMAKE_FIND_LIBRARY_SUFFIXES=".a" to prefer static libs
+# CRITICAL FIX (Glibc): Append the necessary Abseil/Gflags/Glog linker targets (by name).
+RUN echo 'target_link_libraries(qubit_engine PUBLIC \
+    grpc++ \
+    protobuf \
+    gflags \
+    glog \
+    grpc++_reflection \
+    )' >> CMakeLists.txt
+
+# --- Protobuf Compilation (Standard + Reflection) ---
+RUN mkdir -p backend/src/generated
+
+# Step A: Manually Download Reflection API Source
+# We use /build/reflection_src as the temporary source root.
+RUN mkdir -p /build/reflection_src/grpc/reflection/v1alpha
+# Cache Buster added to force re-run
+ARG TIMESTAMP=$(date +%s)
+RUN wget -O /build/reflection_src/grpc/reflection/v1alpha/reflection.proto \
+    https://raw.githubusercontent.com/grpc/grpc/v1.51.1/src/proto/grpc/reflection/v1alpha/reflection.proto?t=${TIMESTAMP}
+
+# Step B: Compile BOTH Protobuf files in one command
+# Use -I /build/reflection_src to resolve internal imports within the reflection.proto file.
+RUN /usr/bin/protoc \
+    -I . \
+    -I /build/reflection_src \
+    -I /usr/include \
+    --cpp_out=backend/src/generated \
+    --grpc_out=backend/src/generated \
+    --plugin=protoc-gen-grpc=/usr/bin/grpc_cpp_plugin \
+    api/proto/quantum.proto \
+    /build/reflection_src/grpc/reflection/v1alpha/reflection.proto
+
+# --- Header Copy Stage ---
+
+# Step 2.A: Copy YOUR Custom Headers to match the C++ path <api/proto/...>
+RUN mkdir -p /usr/local/include/generated/api/proto/
+RUN cp backend/src/generated/api/proto/*pb.h /usr/local/include/generated/api/proto/
+
+# Step 2.B: Copy Reflection Header (GENERATED ONLY)
+# We ONLY copy the generated header. The static header is already in /usr/include/grpcpp/ext/
+RUN mkdir -p /usr/local/include/generated/grpc/grpc_reflection_v1alpha/
+RUN cp backend/src/generated/grpc/reflection/v1alpha/reflection.grpc.pb.h /usr/local/include/generated/grpc/grpc_reflection_v1alpha/reflection.grpc.pb.h
+
+# Go CLI tools install
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
+    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+# 3. C++ Compilation
 RUN cmake -B build \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_FIND_LIBRARY_SUFFIXES=".a" \
-    . && \
-    cmake --build build --config Release
+    -DCMAKE_CXX_FLAGS="-I/usr/local/include/generated" \
+    . \
+    && cmake --build build --config Release
 
-# Strip the binary to remove debug symbols (crucial for size)
-RUN strip --strip-all build/qubit_engine
+# Final executable permissions
+RUN chmod +x /build/build/qubit_engine
 
-# --- Stage 2: Runtime (Scratch) ---
-FROM scratch
+# -------------------------------------------------------------
+# --- Stage 2: Optimized Runtime (Glibc/Debian Final Image) ---
+FROM debian:bookworm-slim
 
-# Copy the static binary
-COPY --from=builder /build/build/qubit_engine /qubit_engine
+# Copy the final compiled binary
+COPY --from=builder /build/build/qubit_engine /usr/local/bin/qubit_engine
+
+# Install the minimal runtime dependencies (Glibc-compatible, using official packages)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libstdc++6 \
+    libgrpc++1.51 \
+    libprotobuf32 \
+    libssl3 \
+    zlib1g \
+    libc-ares2 \
+    libgflags2.2 \
+    libgoogle-glog0v6 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Expose gRPC port
 EXPOSE 50051
 
-ENTRYPOINT ["/qubit_engine"]
+ENTRYPOINT ["/usr/local/bin/qubit_engine"]

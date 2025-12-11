@@ -1,0 +1,14 @@
+{
+  "num_qubits": 2,
+  "operations": [
+    {
+      "type": "HADAMARD",
+      "target_qubit": 0
+    },
+    {
+      "type": "CNOT",
+      "control_qubit": 0,
+      "target_qubit": 1
+    }
+  ]
+}

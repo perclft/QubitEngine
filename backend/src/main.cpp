@@ -5,6 +5,10 @@
 #include <thread>
 #include <atomic>
 #include <grpcpp/grpcpp.h>
+// HEADER FIX: Use the standard generated reflection header
+#include <grpc/grpc_reflection_v1alpha/reflection.grpc.pb.h>
+// HEADER FIX: Use the official gRPC extension header for the plugin
+#include <grpcpp/ext/proto_server_reflection_plugin.h> 
 #include "ServiceImpl.hpp"
 
 std::atomic<bool> shutdown_requested(false);
@@ -21,6 +25,9 @@ void RunServer() {
     grpc::ServerBuilder builder;
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
     builder.RegisterService(&service);
+    
+    // CRITICAL: Initialize the reflection plugin
+    grpc::reflection::InitProtoReflectionServerBuilderPlugin();
     
     std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
     std::cout << "QubitEngine (C++) listening on " << server_address << std::endl;

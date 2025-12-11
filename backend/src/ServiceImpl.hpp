@@ -1,5 +1,5 @@
 #pragma once
-#include "quantum.grpc.pb.h"
+#include <api/proto/quantum.grpc.pb.h>
 #include <grpcpp/grpcpp.h>
 
 class QubitEngineServiceImpl final : public qubit_engine::QuantumCompute::Service {
