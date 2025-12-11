@@ -1,44 +1,42 @@
-# Stage 1: Builder
-FROM alpine:3.21 AS builder
+# --- Stage 1: Builder (Alpine for Musl Static Linking) ---
+FROM alpine:latest AS builder
 
-# Install build dependencies
+# Install build tools and static libraries
+# grpc-dev and protobuf-dev in Alpine usually include static (.a) libs
 RUN apk add --no-cache \
-    build-base cmake git linux-headers \
-    grpc-dev protobuf-dev abseil-cpp-dev libstdc++ \
-    gtest-dev \
-    upx
+    build-base \
+    cmake \
+    git \
+    linux-headers \
+    protobuf-dev \
+    grpc-dev \
+    openssl-dev \
+    openssl-libs-static \
+    zlib-static
 
-WORKDIR /src
+WORKDIR /build
+
+# Copy source
 COPY . .
 
-# Clean & Build
-RUN rm -rf backend/build backend/src/generated
-RUN mkdir -p backend/build && cd backend/build && \
-    cmake .. \
+# Compile
+# We define -DCMAKE_FIND_LIBRARY_SUFFIXES=".a" to prefer static libs
+RUN cmake -B build \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_CXX_FLAGS="-O3" \
-    -DABSL_PROPAGATE_CXX_STD=ON && \
-    make -j$(nproc) qubit_engine
+    -DCMAKE_FIND_LIBRARY_SUFFIXES=".a" \
+    . && \
+    cmake --build build --config Release
 
-# Strip & Compress
-WORKDIR /src/backend/build
-RUN strip --strip-all qubit_engine
-RUN upx --best --lzma qubit_engine
+# Strip the binary to remove debug symbols (crucial for size)
+RUN strip --strip-all build/qubit_engine
 
-# Stage 2: The "Safe" Runtime
-FROM alpine:3.21
+# --- Stage 2: Runtime (Scratch) ---
+FROM scratch
 
-# Install runtime dependencies (Shared Libraries)
-# FIX: Added 'libgomp' to this list
-RUN apk add --no-cache \
-    libstdc++ \
-    grpc-cpp \
-    protobuf \
-    abseil-cpp \
-    libgomp
+# Copy the static binary
+COPY --from=builder /build/build/qubit_engine /qubit_engine
 
-# Copy the compressed binary
-COPY --from=builder /src/backend/build/qubit_engine /usr/local/bin/qubit_engine
-
+# Expose gRPC port
 EXPOSE 50051
-ENTRYPOINT ["qubit_engine"]
+
+ENTRYPOINT ["/qubit_engine"]
