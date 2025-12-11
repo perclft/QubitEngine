@@ -5,9 +5,6 @@
 #include <thread>
 #include <atomic>
 #include <grpcpp/grpcpp.h>
-// HEADER FIX: Use the standard generated reflection header
-#include <grpc/grpc_reflection_v1alpha/reflection.grpc.pb.h>
-// HEADER FIX: Use the official gRPC extension header for the plugin
 #include <grpcpp/ext/proto_server_reflection_plugin.h> 
 #include "ServiceImpl.hpp"
 

@@ -36,7 +36,7 @@ COPY api/ api/
 COPY backend/ backend/
 COPY CMakeLists.txt .
 
-# CRITICAL FIX (Glibc): Append the necessary Abseil/Gflags/Glog linker targets (by name).
+# CRITICAL FIX (Glibc): Link against the reflection library provided by Debian
 RUN echo 'target_link_libraries(qubit_engine PUBLIC \
     grpc++ \
     protobuf \
@@ -45,39 +45,23 @@ RUN echo 'target_link_libraries(qubit_engine PUBLIC \
     grpc++_reflection \
     )' >> CMakeLists.txt
 
-# --- Protobuf Compilation (Standard + Reflection) ---
+# --- Protobuf Compilation (Standard Only) ---
 RUN mkdir -p backend/src/generated
 
-# Step A: Manually Download Reflection API Source
-# We use /build/reflection_src as the temporary source root.
-RUN mkdir -p /build/reflection_src/grpc/reflection/v1alpha
-# Cache Buster added to force re-run
-ARG TIMESTAMP=$(date +%s)
-RUN wget -O /build/reflection_src/grpc/reflection/v1alpha/reflection.proto \
-    https://raw.githubusercontent.com/grpc/grpc/v1.51.1/src/proto/grpc/reflection/v1alpha/reflection.proto?t=${TIMESTAMP}
-
-# Step B: Compile BOTH Protobuf files in one command
-# Use -I /build/reflection_src to resolve internal imports within the reflection.proto file.
-RUN /usr/bin/protoc \
-    -I . \
-    -I /build/reflection_src \
-    -I /usr/include \
+# Compile YOUR Custom Protobuf
+RUN /usr/bin/protoc -I . \
     --cpp_out=backend/src/generated \
     --grpc_out=backend/src/generated \
     --plugin=protoc-gen-grpc=/usr/bin/grpc_cpp_plugin \
-    api/proto/quantum.proto \
-    /build/reflection_src/grpc/reflection/v1alpha/reflection.proto
+    api/proto/quantum.proto
 
 # --- Header Copy Stage ---
 
-# Step 2.A: Copy YOUR Custom Headers to match the C++ path <api/proto/...>
+# Copy YOUR Custom Headers to match the C++ path <api/proto/...>
 RUN mkdir -p /usr/local/include/generated/api/proto/
 RUN cp backend/src/generated/api/proto/*pb.h /usr/local/include/generated/api/proto/
 
-# Step 2.B: Copy Reflection Header (GENERATED ONLY)
-# We ONLY copy the generated header. The static header is already in /usr/include/grpcpp/ext/
-RUN mkdir -p /usr/local/include/generated/grpc/grpc_reflection_v1alpha/
-RUN cp backend/src/generated/grpc/reflection/v1alpha/reflection.grpc.pb.h /usr/local/include/generated/grpc/grpc_reflection_v1alpha/reflection.grpc.pb.h
+# NOTE: We DO NOT copy reflection headers anymore. We use the system-installed ones.
 
 # Go CLI tools install
 RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
@@ -93,14 +77,13 @@ RUN cmake -B build \
 # Final executable permissions
 RUN chmod +x /build/build/qubit_engine
 
-# -------------------------------------------------------------
-# --- Stage 2: Optimized Runtime (Glibc/Debian Final Image) ---
+# --- Stage 2: Optimized Runtime ---
 FROM debian:bookworm-slim
 
 # Copy the final compiled binary
 COPY --from=builder /build/build/qubit_engine /usr/local/bin/qubit_engine
 
-# Install the minimal runtime dependencies (Glibc-compatible, using official packages)
+# Install runtime dependencies (including reflection support via libgrpc++)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libstdc++6 \
     libgrpc++1.51 \
