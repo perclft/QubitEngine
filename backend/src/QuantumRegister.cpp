@@ -4,14 +4,22 @@
 #include <omp.h>
 #include <stdexcept>
 #include <random>
+// --- AVX2 SIMD Intrinsics Header ---
+#include <immintrin.h>
+// ------------------------------------
 
 const double INV_SQRT_2 = 1.0 / std::sqrt(2.0);
+
+// Assuming Complex is defined as std::complex<double> in your header
+// If not, you must define it here or in the header:
+// using Complex = std::complex<double>; 
 
 QuantumRegister::QuantumRegister(size_t n) : num_qubits(n) {
     size_t dim = 1ULL << n;
     state.resize(dim, 0.0);
     state[0] = 1.0;
 }
+
 bool QuantumRegister::measure(size_t target) {
     validateIndex(target);
     
@@ -56,22 +64,68 @@ bool QuantumRegister::measure(size_t target) {
 
     return outcome;
 }
+
+// -----------------------------------------------------------------
+// 🎯 AVX2 + OpenMP Implementation for Hadamard Gate
+// -----------------------------------------------------------------
 void QuantumRegister::applyHadamard(size_t target) {
     validateIndex(target);
     size_t limit = state.size();
     size_t stride = 1ULL << target;
+    
+    // Load constant 1/sqrt(2) into an AVX2 register, duplicated across 4 doubles
+    const __m256d inv_sqrt2_vec = _mm256_set1_pd(INV_SQRT_2);
 
-    #pragma omp parallel for
+    #pragma omp parallel for 
     for (size_t i = 0; i < limit; i += 2 * stride) {
-        for (size_t j = i; j < i + stride; ++j) {
-            size_t k = j + stride;
-            Complex a = state[j];
-            Complex b = state[k];
-            state[j] = (a + b) * INV_SQRT_2;
-            state[k] = (a - b) * INV_SQRT_2;
+        
+        // Inner loop: Vectorize in blocks of 4 complex numbers (8 doubles)
+        for (size_t j = i; j < i + stride; j += 4) {
+            
+            // --- SCALAR TAIL HANDLING (for unaligned end of segment) ---
+            if (j + 4 > i + stride) {
+                for (size_t k_scalar = j; k_scalar < i + stride; ++k_scalar) {
+                    size_t k = k_scalar + stride;
+                    Complex a = state[k_scalar];
+                    Complex b = state[k];
+                    state[k_scalar] = (a + b) * INV_SQRT_2;
+                    state[k] = (a - b) * INV_SQRT_2;
+                }
+                break; // Exit the inner SIMD loop
+            }
+
+            // --- AVX2 Core Block: Process 4 Complex Numbers ---
+
+            // Load 4 complex numbers (8 doubles) for the '0' side (j)
+            __m256d s0_vec_low = _mm256_loadu_pd(reinterpret_cast<const double*>(&state[j]));
+            __m256d s0_vec_high = _mm256_loadu_pd(reinterpret_cast<const double*>(&state[j+2]));
+            
+            // Load 4 complex numbers (8 doubles) for the '1' side (j + stride)
+            __m256d s1_vec_low = _mm256_loadu_pd(reinterpret_cast<const double*>(&state[j + stride]));
+            __m256d s1_vec_high = _mm256_loadu_pd(reinterpret_cast<const double*>(&state[j + stride + 2]));
+
+            // Calculate Sums and Differences
+            __m256d sum_low = _mm256_add_pd(s0_vec_low, s1_vec_low);
+            __m256d diff_low = _mm256_sub_pd(s0_vec_low, s1_vec_low);
+            __m256d sum_high = _mm256_add_pd(s0_vec_high, s1_vec_high);
+            __m256d diff_high = _mm256_sub_pd(s0_vec_high, s1_vec_high);
+
+            // Apply 1/sqrt(2) multiplication (FMA is implicitly used here by the compiler with -mfma)
+            __m256d s0_new_low = _mm256_mul_pd(sum_low, inv_sqrt2_vec);
+            __m256d s0_new_high = _mm256_mul_pd(sum_high, inv_sqrt2_vec);
+            __m256d s1_new_low = _mm256_mul_pd(diff_low, inv_sqrt2_vec);
+            __m256d s1_new_high = _mm256_mul_pd(diff_high, inv_sqrt2_vec);
+            
+            // Store results back to memory
+            _mm256_storeu_pd(reinterpret_cast<double*>(&state[j]), s0_new_low);
+            _mm256_storeu_pd(reinterpret_cast<double*>(&state[j + 2]), s0_new_high);
+            _mm256_storeu_pd(reinterpret_cast<double*>(&state[j + stride]), s1_new_low);
+            _mm256_storeu_pd(reinterpret_cast<double*>(&state[j + stride + 2]), s1_new_high);
         }
     }
 }
+// -----------------------------------------------------------------
+
 
 void QuantumRegister::applyX(size_t target) {
     validateIndex(target);

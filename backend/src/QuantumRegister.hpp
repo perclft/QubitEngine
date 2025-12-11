@@ -20,7 +20,7 @@ private:
 public:
     explicit QuantumRegister(size_t n);
     
-    void applyHadamard(size_t target_qubit);
+    void applyHadamard(size_t target_qubit) __attribute__((target("avx2,fma")));
     void applyX(size_t target_qubit);
     void applyCNOT(size_t control_qubit, size_t target_qubit);
     bool measure(size_t target_qubit);

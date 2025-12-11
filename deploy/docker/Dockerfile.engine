@@ -1,44 +1,44 @@
 # Stage 1: Builder
-# We pin to alpine:3.21 to ensure we get gRPC 1.62+ consistently
 FROM alpine:3.21 AS builder
 
+# Install build dependencies
 RUN apk add --no-cache \
-    build-base \
-    cmake \
-    git \
-    linux-headers \
-    grpc-dev \
-    protobuf-dev \
-    abseil-cpp-dev \
+    build-base cmake git linux-headers \
+    grpc-dev protobuf-dev abseil-cpp-dev libstdc++ \
     gtest-dev \
-    libstdc++ \
-    libgomp
+    upx
 
 WORKDIR /src
 COPY . .
 
-# CRITICAL: Clean any host-generated artifacts to prevent poisoning
+# Clean & Build
 RUN rm -rf backend/build backend/src/generated
-
-# Build
 RUN mkdir -p backend/build && cd backend/build && \
-    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-O3 -fopenmp" && \
-    make -j$(nproc)
+    cmake .. \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_CXX_FLAGS="-O3" \
+    -DABSL_PROPAGATE_CXX_STD=ON && \
+    make -j$(nproc) qubit_engine
 
-# Stage 2: Runtime
+# Strip & Compress
+WORKDIR /src/backend/build
+RUN strip --strip-all qubit_engine
+RUN upx --best --lzma qubit_engine
+
+# Stage 2: The "Safe" Runtime
 FROM alpine:3.21
 
-# FIX: Added 'grpc-cpp' to get libgrpc++.so
+# Install runtime dependencies (Shared Libraries)
+# FIX: Added 'libgomp' to this list
 RUN apk add --no-cache \
     libstdc++ \
-    libgomp \
     grpc-cpp \
     protobuf \
-    abseil-cpp
+    abseil-cpp \
+    libgomp
 
-# Copy binary from builder
+# Copy the compressed binary
 COPY --from=builder /src/backend/build/qubit_engine /usr/local/bin/qubit_engine
 
 EXPOSE 50051
-
-CMD ["qubit_engine"]
+ENTRYPOINT ["qubit_engine"]

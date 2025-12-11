@@ -2,12 +2,30 @@ syntax = "proto3";
 
 package qubit_engine;
 
+// Standard options for Go (used in your original file)
 option go_package = "github.com/perclft/QubitEngine/cli/internal/generated";
 
+// Standard options for C++ (often included for generated headers)
+option cc_enable_arenas = true;
+option java_multiple_files = true;
+option java_package = "com.perclft.qubitengine";
+
+// ------------------------------------------------------------------
+// Service Definition
+// ------------------------------------------------------------------
+
 service QuantumCompute {
+  // Synchronous run for small to medium circuits.
   rpc RunCircuit (CircuitRequest) returns (StateResponse) {}
+  
+  // Streaming method for large or interactive circuits.
+  // Sends a stream of gates and receives a stream of measurements/results.
   rpc StreamGates (stream GateOperation) returns (stream Measurement) {}
 }
+
+// ------------------------------------------------------------------
+// Messages (Data Structures)
+// ------------------------------------------------------------------
 
 message CircuitRequest {
   int32 num_qubits = 1;
@@ -25,22 +43,24 @@ message GateOperation {
   uint32 target_qubit = 2;
   uint32 control_qubit = 3;
   // Optional: Register to store the classical result (useful for complex circuits)
-  uint32 classical_register = 4; 
+  uint32 classical_register = 4;
 }
 
 message StateResponse {
   message ComplexNumber {
+    // Note: Using 'double' is standard for quantum state vectors.
     double real = 1;
     double imag = 2;
   }
+  // The full state vector of size 2^num_qubits
   repeated ComplexNumber state_vector = 1;
-  
+
   // New: Return measured classical bits (e.g., Qubit 0 -> 1)
-  map<uint32, bool> classical_results = 2; 
+  map<uint32, bool> classical_results = 2;
 }
 
 message Measurement {
   uint32 qubit_index = 1;
   bool result = 2;
-  double probability = 3;
+  double probability = 3; // Probability of the measured result
 }

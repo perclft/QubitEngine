@@ -1,0 +1,42 @@
+# --- Stage 1: Builder (Alpine for Musl Static Linking) ---
+FROM alpine:latest AS builder
+
+# Install build tools and static libraries
+# grpc-dev and protobuf-dev in Alpine usually include static (.a) libs
+RUN apk add --no-cache \
+    build-base \
+    cmake \
+    git \
+    linux-headers \
+    protobuf-dev \
+    grpc-dev \
+    openssl-dev \
+    openssl-libs-static \
+    zlib-static
+
+WORKDIR /build
+
+# Copy source
+COPY . .
+
+# Compile
+# We define -DCMAKE_FIND_LIBRARY_SUFFIXES=".a" to prefer static libs
+RUN cmake -B build \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_FIND_LIBRARY_SUFFIXES=".a" \
+    . && \
+    cmake --build build --config Release
+
+# Strip the binary to remove debug symbols (crucial for size)
+RUN strip --strip-all build/qubit_engine
+
+# --- Stage 2: Runtime (Scratch) ---
+FROM scratch
+
+# Copy the static binary
+COPY --from=builder /build/build/qubit_engine /qubit_engine
+
+# Expose gRPC port
+EXPOSE 50051
+
+ENTRYPOINT ["/qubit_engine"]

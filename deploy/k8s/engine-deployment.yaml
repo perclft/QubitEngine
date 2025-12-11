@@ -2,11 +2,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: qubit-engine
-  namespace: qubit-system
+  namespace: quantum-system  # Adjust if you use 'default'
   labels:
     app: qubit-engine
 spec:
-  replicas: 3 # SCALED UP: Run 3 copies for High Availability
+  replicas: 1
   selector:
     matchLabels:
       app: qubit-engine
@@ -16,33 +16,31 @@ spec:
         app: qubit-engine
     spec:
       containers:
-        - name: engine
-          image: qubit-engine:latest
-          imagePullPolicy: IfNotPresent
-          ports:
-            - containerPort: 50051
-              name: grpc
-          
-          # HARDWARE LIMITS (Critical for preventing OOM kills on host)
-          resources:
-            requests:
-              memory: "128Mi"
-              cpu: "100m"
-            limits:
-              memory: "512Mi"
-              cpu: "1000m"
+      - name: engine
+        image: qubit-engine:prod
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 50051
+          name: grpc-port
+        
+        # Native gRPC Health Checking
+        # (Your C++ code must enable the standard Health service for this to pass)
+        readinessProbe:
+          tcpSocket:
+            port: 50051
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 50051
+          initialDelaySeconds: 15
+          periodSeconds: 20
 
-          # HEALTH CHECKS
-          # Liveness: Kills the pod if it hangs (Deadlock protection)
-          livenessProbe:
-            tcpSocket:
-              port: 50051
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          
-          # Readiness: Don't send traffic until the socket is open
-          readinessProbe:
-            tcpSocket:
-              port: 50051
-            initialDelaySeconds: 2
-            periodSeconds: 5
+        # Resources: Quantum sims are CPU intensive
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "256Mi"
+          limits:
+            cpu: "2000m" 
+            memory: "1Gi"
