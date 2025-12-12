@@ -36,10 +36,22 @@ test:
 	@echo "Running C++ Unit Tests..."
 	cd backend/build && ctest --output-on-failure
 
+# Build Docker Images
 docker-build:
 	@echo "Building Docker Images..."
 	docker build -t $(ENGINE_IMAGE) -f deploy/docker/Dockerfile.engine .
 	docker build -t $(CLI_IMAGE) -f deploy/docker/Dockerfile.cli .
+
+# Generate Web Clients (TypeScript)
+web-proto:
+	@echo "Generating Web Clients..."
+	@mkdir -p web/src/generated
+	$(PROTOC) -I $(PROTO_DIR) \
+		--js_out=import_style=commonjs,binary:web/src/generated \
+		--grpc-web_out=import_style=typescript,mode=grpcwebtext:web/src/generated \
+		--plugin=protoc-gen-grpc-web=./bin/protoc-gen-grpc-web \
+		--plugin=protoc-gen-js=./web/node_modules/.bin/protoc-gen-js \
+		$(PROTO_DIR)/quantum.proto
 
 deploy:
 	@echo "Deploying to Kubernetes..."
