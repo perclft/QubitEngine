@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # 1. Quantum Engine (Backend)
+  engine:
+    image: qubit-engine:latest
+    ports:
+      - "50051:50051"
+    networks:
+      - qubit-net
+
+  # 2. Envoy Proxy (Bridge gRPC-Web -> gRPC)
+  envoy:
+    image: envoyproxy/envoy:v1.25-latest
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml
+    ports:
+      - "8080:8080"
+      - "9901:9901"
+    networks:
+      - qubit-net
+    depends_on:
+      - engine
+
+  # 3. Web Dashboard (Frontend)
+  web:
+    build:
+      context: ../../web
+      dockerfile: ../deploy/docker/Dockerfile.web
+    ports:
+      - "5173:80" # Map Nginx 80 to host 5173
+    networks:
+      - qubit-net
+    depends_on:
+      - envoy
+
+networks:
+  qubit-net:
+    driver: bridge
