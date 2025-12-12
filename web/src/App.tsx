@@ -4,6 +4,7 @@ import { OrbitControls } from '@react-three/drei';
 import { BlochSphere } from './components/BlochSphere';
 import { GenerativeCanvas } from './components/GenerativeCanvas';
 import { QuantumAudio } from './components/QuantumAudio';
+import { ArtStudio } from './components/ArtStudio';
 import { QuantumComputeClient } from './generated/quantum.client';
 import { CircuitRequest, GateOperation, GateOperation_GateType } from './generated/quantum';
 import { GrpcWebFetchTransport } from '@protobuf-ts/grpcweb-transport';
@@ -19,7 +20,11 @@ const transport = new GrpcWebFetchTransport({
 
 const client = new QuantumComputeClient(transport);
 
+// View types
+type ViewMode = 'dashboard' | 'artStudio';
+
 function App() {
+  const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
   const [q0State, setQ0State] = useState({ real: 1, imag: 0 }); // |0>
   const [amplitude1, setAmplitude1] = useState({ real: 0, imag: 0 }); // Coeff of |1> for Qubit 0
   const [status, setStatus] = useState('Idle');
@@ -121,6 +126,11 @@ function App() {
     }
   };
 
+  // If Art Studio mode, render it instead
+  if (viewMode === 'artStudio') {
+    return <ArtStudio onBack={() => setViewMode('dashboard')} />;
+  }
+
   return (
     <div className="App">
       <div className="ui-overlay">
@@ -162,7 +172,7 @@ function App() {
         </div>
 
         {serverId && <p style={{ color: '#00ffff' }}>Computed By: {serverId}</p>}
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button onClick={runSimulation} disabled={isRunning}>
             {isRunning ? 'Running...' : 'Run 1-Qubit Simulation'}
           </button>
@@ -172,6 +182,20 @@ function App() {
             style={{ background: '#ff4444', color: 'white' }}
           >
             Stop
+          </button>
+          <button
+            onClick={() => setViewMode('artStudio')}
+            style={{
+              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              color: 'white',
+              border: 'none',
+              padding: '10px 20px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontWeight: '600'
+            }}
+          >
+            🎨 Art Studio
           </button>
         </div>
       </div>
@@ -193,3 +217,4 @@ function App() {
 }
 
 export default App;
+
