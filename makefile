@@ -53,6 +53,11 @@ web-proto:
 		--plugin=protoc-gen-js=./web/node_modules/.bin/protoc-gen-js \
 		$(PROTO_DIR)/quantum.proto
 
+# Run the full stack (Engine + Envoy + Web)
+run-web:
+	@echo "Starting Full Stack..."
+	docker compose -f deploy/docker/docker-compose.yaml up --build
+
 deploy:
 	@echo "Deploying to Kubernetes..."
 	kubectl apply -f deploy/k8s/namespace.yaml
