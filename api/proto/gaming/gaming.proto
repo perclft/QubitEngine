@@ -30,6 +30,9 @@ service QuantumGaming {
     
     // Generate a random deck shuffle
     rpc ShuffleDeck(ShuffleRequest) returns (ShuffledDeck);
+    
+    // 🎱 Ask the Quantum Oracle (Magic 8-Ball)
+    rpc AskOracle(OracleRequest) returns (OracleResponse);
 }
 
 // ------------------------------------------------------------------
@@ -139,4 +142,33 @@ message ShuffleRequest {
 message ShuffledDeck {
     repeated int32 card_order = 1; // Indices in shuffled order
     string shuffle_proof = 2;     // Hash for verification
+}
+
+// ------------------------------------------------------------------
+// Quantum Oracle (Magic 8-Ball)
+// ------------------------------------------------------------------
+
+enum OracleMood {
+    MOOD_MYSTERIOUS = 0;       // Cryptic, mystical responses
+    MOOD_SARCASTIC = 1;        // Snarky, eye-roll worthy
+    MOOD_PHILOSOPHICAL = 2;    // Deep, physics-inspired
+    MOOD_CHAOTIC = 3;          // Unhinged, chaotic energy
+}
+
+message OracleRequest {
+    string question = 1;        // The question being asked
+    string user_id = 2;         // For rate limiting / caching
+    OracleMood mood = 3;        // Affects response style
+    string session_id = 4;      // Optional session tracking
+}
+
+message OracleResponse {
+    string prophecy = 1;        // The 8-ball response text
+    int32 outcome_index = 2;    // 0-7 quantum outcome
+    double confidence = 3;      // How sure the Oracle is (0.0-1.0)
+    string quantum_state = 4;   // Bloch sphere coordinates
+    int64 timestamp = 5;
+    bool from_cache = 6;        // True if cached response
+    string circuit_id = 7;      // ID of the quantum circuit used
+    int32 qubits_used = 8;      // Number of qubits (always 3 for 8-ball)
 }
