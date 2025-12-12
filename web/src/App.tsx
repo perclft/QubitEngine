@@ -5,6 +5,7 @@ import { BlochSphere } from './components/BlochSphere';
 import { GenerativeCanvas } from './components/GenerativeCanvas';
 import { QuantumAudio } from './components/QuantumAudio';
 import { ArtStudio } from './components/ArtStudio';
+import { QuantumBB84 } from './components/crypto/QuantumBB84';
 import { QuantumComputeClient } from './generated/quantum.client';
 import { CircuitRequest, GateOperation, GateOperation_GateType } from './generated/quantum';
 import { GrpcWebFetchTransport } from '@protobuf-ts/grpcweb-transport';
@@ -21,7 +22,7 @@ const transport = new GrpcWebFetchTransport({
 const client = new QuantumComputeClient(transport);
 
 // View types
-type ViewMode = 'dashboard' | 'artStudio';
+type ViewMode = 'dashboard' | 'artStudio' | 'crypto';
 
 function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
@@ -131,6 +132,11 @@ function App() {
     return <ArtStudio onBack={() => setViewMode('dashboard')} />;
   }
 
+  // If Crypto mode, render it
+  if (viewMode === 'crypto') {
+    return <QuantumBB84 onBack={() => setViewMode('dashboard')} />;
+  }
+
   return (
     <div className="App">
       <div className="ui-overlay">
@@ -197,6 +203,20 @@ function App() {
           >
             🎨 Art Studio
           </button>
+          <button
+            onClick={() => setViewMode('crypto')}
+            style={{
+              background: 'linear-gradient(135deg, #10b981, #34d399)',
+              color: 'white',
+              border: 'none',
+              padding: '10px 20px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontWeight: '600'
+            }}
+          >
+            🔐 Crypto
+          </button>
         </div>
       </div>
 
@@ -212,7 +232,7 @@ function App() {
 
       <GenerativeCanvas amplitude0={q0State} amplitude1={amplitude1} />
       <QuantumAudio amplitude0={q0State} amplitude1={amplitude1} isActive={audioActive} />
-    </div>
+    </div >
   );
 }
 

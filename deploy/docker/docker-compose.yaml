@@ -152,6 +152,34 @@ services:
     profiles:
       - bot  # Only start with `docker compose --profile bot up`
 
+  # 11. Music Module (Quantum Mozart)
+  music:
+    build:
+      context: ../../modules/music
+      dockerfile: Dockerfile
+    ports:
+      - "50062:50062"
+    command: ["-port", "50062", "-engine-addr", "engine:50051"]
+    networks:
+      - qubit-net
+    depends_on:
+      engine:
+        condition: service_started
+
+  # 12. Crypto Module (BB84 Protocol)
+  crypto:
+    build:
+      context: ../..
+      dockerfile: modules/crypto/Dockerfile
+    ports:
+      - "50063:50063"
+    command: ["-port", "50063", "-engine-addr", "engine:50051"]
+    networks:
+      - qubit-net
+    depends_on:
+      engine:
+        condition: service_started
+
 networks:
   qubit-net:
     driver: bridge

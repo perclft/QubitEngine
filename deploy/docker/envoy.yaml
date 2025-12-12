@@ -21,12 +21,62 @@ static_resources:
                     - name: local_service
                       domains: ["*"]
                       routes:
+                        # Gaming Module (Oracle)
+                        - match:
+                            { prefix: "/qubit_engine.gaming.QuantumGaming/" }
+                          route:
+                            cluster: gaming_service
+                            timeout: 0s
+                            max_stream_duration:
+                              grpc_timeout_header_max: 0s
+                          cors:
+                            allow_origin_string_match:
+                              - prefix: "*"
+                            allow_methods: GET, PUT, DELETE, POST, OPTIONS
+                            allow_headers: keep-alive,user-agent,cache-control,content-type,content-transfer-encoding,custom-header-1,x-accept-content-transfer-encoding,x-accept-response-streaming,x-user-agent,x-grpc-web,grpc-timeout
+                            max_age: "1728000"
+                            expose_headers: custom-header-1,grpc-status,grpc-message
+
+                        # Music Module (Composer)
+                        - match:
+                            { prefix: "/qubit_engine.music.QuantumComposer/" }
+                          route:
+                            cluster: music_service
+                            timeout: 0s
+                            max_stream_duration:
+                              grpc_timeout_header_max: 0s
+                          cors:
+                            allow_origin_string_match:
+                              - prefix: "*"
+                            allow_methods: GET, PUT, DELETE, POST, OPTIONS
+                            allow_headers: keep-alive,user-agent,cache-control,content-type,content-transfer-encoding,custom-header-1,x-accept-content-transfer-encoding,x-accept-response-streaming,x-user-agent,x-grpc-web,grpc-timeout
+                            max_age: "1728000"
+                            expose_headers: custom-header-1,grpc-status,grpc-message
+
+                        # Crypto Module (BB84)
+                        - match:
+                            { prefix: "/qubit_engine.crypto.QuantumCrypto/" }
+                          route:
+                            cluster: crypto_service
+                            timeout: 0s
+                            max_stream_duration:
+                              grpc_timeout_header_max: 0s
+                          cors:
+                            allow_origin_string_match:
+                              - prefix: "*"
+                            allow_methods: GET, PUT, DELETE, POST, OPTIONS
+                            allow_headers: keep-alive,user-agent,cache-control,content-type,content-transfer-encoding,custom-header-1,x-accept-content-transfer-encoding,x-accept-response-streaming,x-user-agent,x-grpc-web,grpc-timeout
+                            max_age: "1728000"
+                            expose_headers: custom-header-1,grpc-status,grpc-message
+
+                        # Default: Quantum Engine
                         - match: { prefix: "/" }
                           route:
                             cluster: qubit_service
                             timeout: 0s
                             max_stream_duration:
                               grpc_timeout_header_max: 0s
+                        # Global CORS handled by filters, but per-route override used above for specificity
                       cors:
                         allow_origin_string_match:
                           - prefix: "*"
@@ -60,3 +110,48 @@ static_resources:
                     socket_address:
                       address: engine
                       port_value: 50051
+
+    - name: gaming_service
+      connect_timeout: 0.25s
+      type: logical_dns
+      http2_protocol_options: {}
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: gaming_service
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: gaming
+                      port_value: 50061
+
+    - name: music_service
+      connect_timeout: 0.25s
+      type: logical_dns
+      http2_protocol_options: {}
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: music_service
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: music
+                      port_value: 50062
+
+    - name: crypto_service
+      connect_timeout: 0.25s
+      type: logical_dns
+      http2_protocol_options: {}
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: crypto_service
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: crypto
+                      port_value: 50063

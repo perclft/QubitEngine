@@ -22,6 +22,20 @@ proto:
     --go-grpc_out=$(GO_OUT_DIR) --go-grpc_opt=paths=source_relative \
     $(PROTO_DIR)/quantum.proto
 
+proto-crypto:
+	mkdir -p modules/crypto/generated/crypto
+	mkdir -p modules/crypto/generated/engine
+	protoc -I api/proto \
+		--go_out=modules/crypto/generated/crypto --go_opt=paths=source_relative \
+		--go-grpc_out=modules/crypto/generated/crypto --go-grpc_opt=paths=source_relative \
+		api/proto/crypto/crypto.proto
+	cd api/proto && protoc \
+		--go_out=../../modules/crypto/generated/engine --go_opt=paths=source_relative \
+		--go-grpc_out=../../modules/crypto/generated/engine --go-grpc_opt=paths=source_relative \
+		--go_opt=Mquantum.proto=github.com/perclft/QubitEngine/modules/crypto/generated/engine \
+		--go-grpc_opt=Mquantum.proto=github.com/perclft/QubitEngine/modules/crypto/generated/engine \
+		quantum.proto
+
 build-cpp:
 	@echo "Building C++ Engine..."
 	@mkdir -p backend/build
@@ -50,7 +64,8 @@ web-proto:
 	$(PROTOC) -I $(PROTO_DIR) \
 		--ts_out=web/src/generated \
 		--plugin=protoc-gen-ts=./web/node_modules/.bin/protoc-gen-ts \
-		$(PROTO_DIR)/quantum.proto
+		$(PROTO_DIR)/quantum.proto \
+		$(PROTO_DIR)/crypto/crypto.proto
 
 # Run the full stack (Engine + Envoy + Web)
 run-web:

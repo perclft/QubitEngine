@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package qubit_engine.crypto;
 
-option go_package = "github.com/perclft/QubitEngine/modules/crypto/generated";
+option go_package = "github.com/perclft/QubitEngine/modules/crypto/generated/crypto";
 
 // ------------------------------------------------------------------
 // Quantum Cryptography Service
@@ -44,6 +44,7 @@ enum Basis {
 message BB84AliceRequest {
     int32 num_bits = 1;       // Number of qubits to send
     string session_id = 2;
+    double eavesdrop_probability = 3; // Simulation: Probability of eavesdropping
 }
 
 message BB84AliceState {
@@ -133,6 +134,7 @@ message EavesdropRequest {
     string session_id = 1;
     repeated int32 alice_check_bits = 2;
     repeated int32 bob_check_bits = 3;
+    double eavesdrop_probability = 4; // Probability that Eve measures a qubit (0.0 - 1.0)
 }
 
 message EavesdropResult {
