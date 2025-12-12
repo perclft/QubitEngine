@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package qubit_engine;
+
+option go_package = "github.com/perclft/QubitEngine/services/registry/generated";
+
+import "api/proto/quantum.proto";
+
+// ------------------------------------------------------------------
+// Circuit Registry Service
+// Enables circuit sharing, versioning, and reuse across all modules
+// ------------------------------------------------------------------
+
+service CircuitRegistry {
+    // Save a circuit to the registry
+    rpc SaveCircuit(SaveCircuitRequest) returns (CircuitMetadata);
+    
+    // Load a circuit by ID
+    rpc LoadCircuit(LoadCircuitRequest) returns (CircuitRequest);
+    
+    // List circuits with optional filters
+    rpc ListCircuits(ListCircuitsRequest) returns (CircuitList);
+    
+    // Fork (copy) an existing circuit for modification
+    rpc ForkCircuit(ForkCircuitRequest) returns (CircuitMetadata);
+    
+    // Delete a circuit (owner only)
+    rpc DeleteCircuit(DeleteCircuitRequest) returns (Empty);
+}
+
+// ------------------------------------------------------------------
+// Messages
+// ------------------------------------------------------------------
+
+message SaveCircuitRequest {
+    string name = 1;
+    string description = 2;
+    CircuitRequest circuit = 3;
+    string domain = 4;  // "physics", "gaming", "finance", "education", "music", "crypto"
+    repeated string tags = 5;
+    bool is_public = 6;
+}
+
+message LoadCircuitRequest {
+    string circuit_id = 1;
+    int32 version = 2;  // 0 = latest
+}
+
+message ListCircuitsRequest {
+    string domain = 1;          // Filter by domain
+    repeated string tags = 2;   // Filter by tags (AND)
+    string author = 3;          // Filter by author
+    bool public_only = 4;
+    int32 page = 5;
+    int32 page_size = 6;
+}
+
+message ForkCircuitRequest {
+    string source_circuit_id = 1;
+    string new_name = 2;
+}
+
+message DeleteCircuitRequest {
+    string circuit_id = 1;
+}
+
+message CircuitMetadata {
+    string id = 1;
+    string name = 2;
+    string description = 3;
+    string author = 4;
+    string domain = 5;
+    repeated string tags = 6;
+    int32 num_qubits = 7;
+    int32 num_operations = 8;
+    int32 version = 9;
+    int64 created_at = 10;  // Unix timestamp
+    int64 updated_at = 11;
+    bool is_public = 12;
+    int32 fork_count = 13;
+    int32 run_count = 14;
+}
+
+message CircuitList {
+    repeated CircuitMetadata circuits = 1;
+    int32 total_count = 2;
+    int32 page = 3;
+    int32 page_size = 4;
+}
+
+message Empty {}

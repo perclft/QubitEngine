@@ -93,18 +93,25 @@ export const QuantumAudio: React.FC<QuantumAudioProps> = ({ amplitude0, amplitud
         const phase0 = Math.atan2(amplitude0.imag, amplitude0.real); // -PI to PI
         const phase1 = Math.atan2(amplitude1.imag, amplitude1.real);
 
+        // Log phase values for debugging
+        console.log(`[Audio] Phase0: ${phase0.toFixed(3)}, Phase1: ${phase1.toFixed(3)}`);
+
         // Robust Update using setTargetAtTime (Exponential approach handles "current value" implicitly)
         // Gain: Scaling factor 0.3 to avoid clipping
         gain0Ref.current.gain.setTargetAtTime(p0 * 0.3, now, rampTime);
         gain1Ref.current.gain.setTargetAtTime(p1 * 0.3, now, rampTime);
 
-        // Frequency
+        // Frequency - EXTREMELY DRAMATIC (500Hz per radian = ~1500Hz total range)
         const baseFreq0 = 440;
         const baseFreq1 = 554.37;
 
-        // Massive pitch shift (200Hz per radian) to make it obvious
-        osc0Ref.current.frequency.setTargetAtTime(baseFreq0 + (phase0 * 200), now, rampTime);
-        osc1Ref.current.frequency.setTargetAtTime(baseFreq1 + (phase1 * 200), now, rampTime);
+        const newFreq0 = baseFreq0 + (phase0 * 500);
+        const newFreq1 = baseFreq1 + (phase1 * 500);
+
+        console.log(`[Audio] Freq0: ${newFreq0.toFixed(1)}Hz, Freq1: ${newFreq1.toFixed(1)}Hz`);
+
+        osc0Ref.current.frequency.setTargetAtTime(newFreq0, now, rampTime);
+        osc1Ref.current.frequency.setTargetAtTime(newFreq1, now, rampTime);
 
     }, [amplitude0, amplitude1, isActive]); // Added isActive to dependency to ensure it runs on enable
 

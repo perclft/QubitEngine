@@ -11,6 +11,8 @@ services:
       - "50051:50051"
     networks:
       - qubit-net
+    depends_on:
+      - postgres
 
   # 2. Envoy Proxy (Bridge gRPC-Web -> gRPC)
   envoy:
@@ -24,6 +26,7 @@ services:
       - qubit-net
     depends_on:
       - engine
+      - registry
 
   # 3. Web Dashboard (Frontend)
   web:
@@ -37,6 +40,56 @@ services:
     depends_on:
       - envoy
 
+  # 4. PostgreSQL (Circuit Registry Backend)
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: qubit
+      POSTGRES_PASSWORD: quantum
+      POSTGRES_DB: quantumcloud
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - qubit-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qubit -d quantumcloud"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 5. Circuit Registry Service
+  registry:
+    build:
+      context: ../../services/registry
+      dockerfile: Dockerfile
+    ports:
+      - "50052:50052"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=qubit
+      - DB_PASS=quantum
+      - DB_NAME=quantumcloud
+    command: ["-db-host", "postgres"]
+    networks:
+      - qubit-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # 6. Redis (Job Queue - Coming in Phase 11.2)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - qubit-net
+
 networks:
   qubit-net:
     driver: bridge
+
+volumes:
+  postgres_data:

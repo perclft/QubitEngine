@@ -1,7 +1,6 @@
-import React, { useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import React, { useMemo } from 'react';
 import { Sphere, Line, Text, Trail, Stars } from '@react-three/drei';
-import { EffectComposer, Bloom, Noise, Vignette, ChromaticAberration, Glitch } from '@react-three/postprocessing';
+import { EffectComposer, Bloom, Noise, Vignette, ChromaticAberration } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
 import { LayerMaterial, Depth, Noise as LayerNoise } from 'lamina';
 import * as THREE from 'three';
@@ -25,6 +24,22 @@ export const BlochSphere: React.FC<BlochSphereProps> = ({ amplitude0, amplitude1
     const bc_ad = c0_imag * c1_real - c0_real * c1_imag;
     const x = 2 * ac_bd;
     const y = 2 * bc_ad;
+
+    // 2. Calculate Phase-based Color
+    // Phase of |1⟩ relative to |0⟩ determines the hue
+    const phase = Math.atan2(c1_imag, c1_real); // -PI to PI
+    // Map phase to hue (0-360 degrees)
+    const hue = ((phase + Math.PI) / (2 * Math.PI)) * 360;
+
+    // Create dynamic color using HSL
+    const dynamicColor = useMemo(() => {
+        return new THREE.Color().setHSL(hue / 360, 1.0, 0.5);
+    }, [hue]);
+
+    const colorHex = `hsl(${hue}, 100%, 50%)`;
+
+    // Debug logging
+    console.log(`[BlochSphere] Phase: ${phase.toFixed(3)}, Hue: ${hue.toFixed(1)}, Color: ${colorHex}`);
 
     return (
         <group>
@@ -70,33 +85,39 @@ export const BlochSphere: React.FC<BlochSphereProps> = ({ amplitude0, amplitude1
             {/* 4. Labels */}
             <Text position={[0, 1.3, 0]} fontSize={0.15} color="#00ffff" anchorX="center" anchorY="middle">|0⟩</Text>
             <Text position={[0, -1.3, 0]} fontSize={0.15} color="#00ffff" anchorX="center" anchorY="middle">|1⟩</Text>
-            <Text position={[0, 1.7, 0]} fontSize={0.3} color="#ff00ff" font="/fonts/Inter-Bold.woff" anchorX="center" anchorY="middle">
+            <Text position={[0, 1.7, 0]} fontSize={0.3} color={dynamicColor} anchorX="center" anchorY="middle">
                 {enableEffects ? "VISUAL OVERDRIVE" : "✨ FUNKY MODE ✨"}
             </Text>
 
-            {/* 5. The Funky State Vector */}
-            <Line points={[[0, 0, 0], [x, y, z]]} color="#ff00ff" lineWidth={3} opacity={0.8} transparent />
+            {/* 5. The DYNAMIC COLOR State Vector - Changes with Phase! */}
+            <Line points={[[0, 0, 0], [x, y, z]]} color={dynamicColor} lineWidth={5} opacity={0.9} transparent />
 
-            {/* 6. The Psychedelic Trail Tip */}
+            {/* 6. The Psychedelic Trail Tip - Also Dynamic Color */}
             <Trail
-                width={2}
-                length={20}
-                color={new THREE.Color("#ff00ff")}
+                width={3}
+                length={25}
+                color={dynamicColor}
                 attenuation={(t) => t * t}
             >
                 <mesh position={[x, y, z]}>
-                    <sphereGeometry args={[0.08]} />
+                    <sphereGeometry args={[0.1]} />
                     <meshStandardMaterial
-                        color="#ffffff"
-                        emissive="#ff00ff"
-                        emissiveIntensity={4}
+                        color={dynamicColor}
+                        emissive={dynamicColor}
+                        emissiveIntensity={5}
                         toneMapped={false}
                     />
                 </mesh>
             </Trail>
 
-            {/* 7. Inner Glow */}
-            <pointLight position={[0, 0, 0]} intensity={2} color="#00ffff" distance={3} />
+            {/* 7. Inner Glow - Also Dynamic! */}
+            <pointLight position={[0, 0, 0]} intensity={3} color={dynamicColor} distance={4} />
+
+            {/* 8. Debug: Show current hue value */}
+            <Text position={[0, -1.7, 0]} fontSize={0.12} color="white" anchorX="center" anchorY="middle">
+                Phase: {(phase * 180 / Math.PI).toFixed(0)}°
+            </Text>
         </group>
     );
 };
+

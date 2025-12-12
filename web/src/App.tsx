@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { BlochSphere } from './components/BlochSphere';
@@ -23,14 +23,23 @@ function App() {
   const [q0State, setQ0State] = useState({ real: 1, imag: 0 }); // |0>
   const [amplitude1, setAmplitude1] = useState({ real: 0, imag: 0 }); // Coeff of |1> for Qubit 0
   const [status, setStatus] = useState('Idle');
+  const [stepCount, setStepCount] = useState(0);
   const [serverId, setServerId] = useState<string>('');
   const [noiseProb, setNoiseProb] = useState(0.0);
   const [audioActive, setAudioActive] = useState(false);
   const [enableEffects, setEnableEffects] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const runSimulation = async () => {
+    // Create abort controller for this run
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+
     setStatus('Connecting...');
     setServerId('');
+    setIsRunning(true);
+    setStepCount(0);
 
     try {
       // 1. Build Circuit Request (Standard Test: Hadamard + Phase)
@@ -59,10 +68,20 @@ function App() {
       setStatus('Streaming...');
 
       // 3. Iterate Responses (Async Iterable)
+      let step = 0;
       for await (const response of streamCall.responses) {
-        // Artificial delay for visualization/audio playback (1000ms = 1 Second)
-        console.log("Tick - Delaying...");
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        step++;
+        setStepCount(step);
+        // Artificial delay for visualization/audio playback (2000ms = 2 Seconds)
+        console.log(`Step ${step} - Delaying 2 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Check for abort before updating state
+        if (signal.aborted) {
+          setStatus('Stopped');
+          setIsRunning(false);
+          return;
+        }
 
         console.log('Received response:', response);
         // Capture Pod ID
@@ -83,17 +102,30 @@ function App() {
       }
 
       setStatus('Completed');
+      setIsRunning(false);
     } catch (err: any) {
-      console.error(err);
-      setStatus('Error: ' + err.message);
+      if (err.name === 'AbortError' || signal.aborted) {
+        setStatus('Stopped');
+      } else {
+        console.error(err);
+        setStatus('Error: ' + err.message);
+      }
+      setIsRunning(false);
+    }
+  };
+
+  const stopSimulation = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setStatus('Stopping...');
     }
   };
 
   return (
     <div className="App">
       <div className="ui-overlay">
-        <h1>Qubit Engine Live</h1>
-        <p>Status: {status}</p>
+        <h1>Qubit Engine Live <span style={{ fontSize: '0.4em', color: 'lime' }}>v3.0-SLOWMO</span></h1>
+        <p>Status: {status} {stepCount > 0 && <span style={{ color: 'yellow' }}>| Step {stepCount}/51</span>}</p>
 
         <div style={{ margin: '10px 0', border: '1px solid #333', padding: '10px', borderRadius: '5px' }}>
           <label style={{ display: 'block', marginBottom: '5px' }}>Entropy (Noise): {noiseProb.toFixed(2)}</label>
@@ -130,7 +162,18 @@ function App() {
         </div>
 
         {serverId && <p style={{ color: '#00ffff' }}>Computed By: {serverId}</p>}
-        <button onClick={runSimulation}>Run 1-Qubit Simulation</button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button onClick={runSimulation} disabled={isRunning}>
+            {isRunning ? 'Running...' : 'Run 1-Qubit Simulation'}
+          </button>
+          <button
+            onClick={stopSimulation}
+            disabled={!isRunning}
+            style={{ background: '#ff4444', color: 'white' }}
+          >
+            Stop
+          </button>
+        </div>
       </div>
 
       <div className="canvas-container">

@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: circuit-registry
+  namespace: quantum-system
+  labels:
+    app: circuit-registry
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: circuit-registry
+  template:
+    metadata:
+      labels:
+        app: circuit-registry
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: registry
+          image: circuit-registry:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 50052
+              name: grpc-port
+          env:
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: host
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+            - name: DB_NAME
+              value: quantumcloud
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            tcpSocket:
+              port: 50052
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 50052
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: circuit-registry
+  namespace: quantum-system
+spec:
+  selector:
+    app: circuit-registry
+  ports:
+    - port: 50052
+      targetPort: 50052
+      name: grpc
+  type: ClusterIP
