@@ -7,6 +7,9 @@ import { QuantumAudio } from './components/QuantumAudio';
 import { ArtStudio } from './components/ArtStudio';
 import { QuantumBB84 } from './components/crypto/QuantumBB84';
 import { QuantumChemistry } from './components/chemistry/QuantumChemistry';
+import { CircuitLibrary } from './components/education/CircuitLibrary';
+import { QuizMode } from './components/education/QuizMode';
+import { TutorialOverlay } from './components/education/TutorialOverlay';
 import { QuantumComputeClient } from './generated/quantum.client';
 import { CircuitRequest, GateOperation, GateOperation_GateType } from './generated/quantum';
 import { GrpcWebFetchTransport } from '@protobuf-ts/grpcweb-transport';
@@ -36,6 +39,9 @@ function App() {
   const [audioActive, setAudioActive] = useState(false);
   const [enableEffects, setEnableEffects] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [showQuiz, setShowQuiz] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const runSimulation = async () => {
@@ -257,7 +263,30 @@ function App() {
             🧪 VQE Lab
           </button>
         </div>
+
+        {/* Education Toolbar */}
+        <div style={{ marginTop: '15px', display: 'flex', gap: '8px' }}>
+          <button onClick={() => setShowLibrary(true)} style={eduBtnStyle}>📚 Library</button>
+          <button onClick={() => setShowQuiz(true)} style={eduBtnStyle}>🧠 Quiz</button>
+          <button onClick={() => setShowTutorial(true)} style={eduBtnStyle}>🎓 Tour</button>
+        </div>
       </div>
+
+      {/* Education Overlays */}
+      {showLibrary && (
+        <CircuitLibrary
+          onLoadCircuit={(req) => {
+            // In a real app we'd load this into state. 
+            // For now, let's just run it immediately as a demo!
+            console.log("Loaded Circuit:", req);
+            client.visualizeCircuit(req); // Fire and forget for demo
+            setStatus("Loaded Preset Circuit");
+          }}
+          onClose={() => setShowLibrary(false)}
+        />
+      )}
+      {showQuiz && <QuizMode onClose={() => setShowQuiz(false)} />}
+      {showTutorial && <TutorialOverlay onClose={() => setShowTutorial(false)} />}
 
       <div className="canvas-container">
         <Canvas camera={{ position: [3, 2, 5] }}>
@@ -274,6 +303,16 @@ function App() {
     </div >
   );
 }
+
+const eduBtnStyle = {
+  background: 'rgba(255, 255, 255, 0.1)',
+  border: '1px solid rgba(255, 255, 255, 0.2)',
+  color: '#ddd',
+  padding: '5px 12px',
+  borderRadius: '15px',
+  cursor: 'pointer',
+  fontSize: '0.85rem'
+};
 
 export default App;
 
