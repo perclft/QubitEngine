@@ -180,6 +180,11 @@ export function SoundWaves({ onNotePlay }: SoundWavesProps) {
     const togglePlay = () => {
         if (playing) {
             setPlaying(false);
+            // Close audio context when stopping
+            if (audioContextRef.current) {
+                audioContextRef.current.close();
+                audioContextRef.current = null;
+            }
         } else {
             const newMelody = melody.length > 0 ? melody : generateMelody();
             setMelody(newMelody);
@@ -188,9 +193,19 @@ export function SoundWaves({ onNotePlay }: SoundWavesProps) {
         }
     };
 
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (audioContextRef.current) {
+                audioContextRef.current.close();
+                audioContextRef.current = null;
+            }
+        };
+    }, []);
+
     // Playback loop
     useEffect(() => {
-        if (!playing) return;
+        if (!playing || melody.length === 0) return;
 
         const interval = setInterval(() => {
             playNote(currentNote);
@@ -198,7 +213,7 @@ export function SoundWaves({ onNotePlay }: SoundWavesProps) {
         }, (60 / tempo) * 1000);
 
         return () => clearInterval(interval);
-    }, [playing, currentNote, tempo, melody]);
+    }, [playing, currentNote, tempo, melody.length]);
 
     // Decay frequencies
     useEffect(() => {
