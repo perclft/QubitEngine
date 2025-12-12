@@ -82,5 +82,27 @@ export class QuantumComputeClient {
     this.methodDescriptorRunCircuit);
   }
 
+  methodDescriptorVisualizeCircuit = new grpcWeb.MethodDescriptor(
+    '/qubit_engine.QuantumCompute/VisualizeCircuit',
+    grpcWeb.MethodType.SERVER_STREAMING,
+    quantum_pb.CircuitRequest,
+    quantum_pb.StateResponse,
+    (request: quantum_pb.CircuitRequest) => {
+      return request.serializeBinary();
+    },
+    quantum_pb.StateResponse.deserializeBinary
+  );
+
+  visualizeCircuit(
+    request: quantum_pb.CircuitRequest,
+    metadata?: grpcWeb.Metadata): grpcWeb.ClientReadableStream<quantum_pb.StateResponse> {
+    return this.client_.serverStreaming(
+      this.hostname_ +
+        '/qubit_engine.QuantumCompute/VisualizeCircuit',
+      request,
+      metadata || {},
+      this.methodDescriptorVisualizeCircuit);
+  }
+
 }
 

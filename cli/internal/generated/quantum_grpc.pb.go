@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	QuantumCompute_RunCircuit_FullMethodName  = "/qubit_engine.QuantumCompute/RunCircuit"
-	QuantumCompute_StreamGates_FullMethodName = "/qubit_engine.QuantumCompute/StreamGates"
+	QuantumCompute_RunCircuit_FullMethodName       = "/qubit_engine.QuantumCompute/RunCircuit"
+	QuantumCompute_StreamGates_FullMethodName      = "/qubit_engine.QuantumCompute/StreamGates"
+	QuantumCompute_VisualizeCircuit_FullMethodName = "/qubit_engine.QuantumCompute/VisualizeCircuit"
 )
 
 // QuantumComputeClient is the client API for QuantumCompute service.
@@ -32,6 +33,10 @@ type QuantumComputeClient interface {
 	// Streaming method for large or interactive circuits.
 	// Sends a stream of gates and receives a stream of FULL STATE VECTORS.
 	StreamGates(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[GateOperation, StateResponse], error)
+	// Visualization method for Web (Server-Side Streaming only).
+	// gRPC-Web does not support bidirectional streaming.
+	// This executes a circuit and streams back the state after EACH step.
+	VisualizeCircuit(ctx context.Context, in *CircuitRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StateResponse], error)
 }
 
 type quantumComputeClient struct {
@@ -65,6 +70,25 @@ func (c *quantumComputeClient) StreamGates(ctx context.Context, opts ...grpc.Cal
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type QuantumCompute_StreamGatesClient = grpc.BidiStreamingClient[GateOperation, StateResponse]
 
+func (c *quantumComputeClient) VisualizeCircuit(ctx context.Context, in *CircuitRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StateResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &QuantumCompute_ServiceDesc.Streams[1], QuantumCompute_VisualizeCircuit_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[CircuitRequest, StateResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type QuantumCompute_VisualizeCircuitClient = grpc.ServerStreamingClient[StateResponse]
+
 // QuantumComputeServer is the server API for QuantumCompute service.
 // All implementations must embed UnimplementedQuantumComputeServer
 // for forward compatibility.
@@ -74,6 +98,10 @@ type QuantumComputeServer interface {
 	// Streaming method for large or interactive circuits.
 	// Sends a stream of gates and receives a stream of FULL STATE VECTORS.
 	StreamGates(grpc.BidiStreamingServer[GateOperation, StateResponse]) error
+	// Visualization method for Web (Server-Side Streaming only).
+	// gRPC-Web does not support bidirectional streaming.
+	// This executes a circuit and streams back the state after EACH step.
+	VisualizeCircuit(*CircuitRequest, grpc.ServerStreamingServer[StateResponse]) error
 	mustEmbedUnimplementedQuantumComputeServer()
 }
 
@@ -89,6 +117,9 @@ func (UnimplementedQuantumComputeServer) RunCircuit(context.Context, *CircuitReq
 }
 func (UnimplementedQuantumComputeServer) StreamGates(grpc.BidiStreamingServer[GateOperation, StateResponse]) error {
 	return status.Error(codes.Unimplemented, "method StreamGates not implemented")
+}
+func (UnimplementedQuantumComputeServer) VisualizeCircuit(*CircuitRequest, grpc.ServerStreamingServer[StateResponse]) error {
+	return status.Error(codes.Unimplemented, "method VisualizeCircuit not implemented")
 }
 func (UnimplementedQuantumComputeServer) mustEmbedUnimplementedQuantumComputeServer() {}
 func (UnimplementedQuantumComputeServer) testEmbeddedByValue()                        {}
@@ -136,6 +167,17 @@ func _QuantumCompute_StreamGates_Handler(srv interface{}, stream grpc.ServerStre
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type QuantumCompute_StreamGatesServer = grpc.BidiStreamingServer[GateOperation, StateResponse]
 
+func _QuantumCompute_VisualizeCircuit_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(CircuitRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(QuantumComputeServer).VisualizeCircuit(m, &grpc.GenericServerStream[CircuitRequest, StateResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type QuantumCompute_VisualizeCircuitServer = grpc.ServerStreamingServer[StateResponse]
+
 // QuantumCompute_ServiceDesc is the grpc.ServiceDesc for QuantumCompute service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -154,6 +196,11 @@ var QuantumCompute_ServiceDesc = grpc.ServiceDesc{
 			Handler:       _QuantumCompute_StreamGates_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "VisualizeCircuit",
+			Handler:       _QuantumCompute_VisualizeCircuit_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "quantum.proto",

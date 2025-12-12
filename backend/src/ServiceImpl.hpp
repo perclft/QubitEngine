@@ -13,4 +13,8 @@ public:
       grpc::ServerContext *context,
       grpc::ServerReaderWriter<qubit_engine::StateResponse,
                                qubit_engine::GateOperation> *stream) override;
+
+  grpc::Status VisualizeCircuit(
+      grpc::ServerContext *context, const qubit_engine::CircuitRequest *request,
+      grpc::ServerWriter<qubit_engine::StateResponse> *writer) override;
 };

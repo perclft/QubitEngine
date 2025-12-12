@@ -438,11 +438,12 @@ const file_quantum_proto_rawDesc = "" +
 	"\vqubit_index\x18\x01 \x01(\rR\n" +
 	"qubitIndex\x12\x16\n" +
 	"\x06result\x18\x02 \x01(\bR\x06result\x12 \n" +
-	"\vprobability\x18\x03 \x01(\x01R\vprobability2\xaa\x01\n" +
+	"\vprobability\x18\x03 \x01(\x01R\vprobability2\xfd\x01\n" +
 	"\x0eQuantumCompute\x12I\n" +
 	"\n" +
 	"RunCircuit\x12\x1c.qubit_engine.CircuitRequest\x1a\x1b.qubit_engine.StateResponse\"\x00\x12M\n" +
-	"\vStreamGates\x12\x1b.qubit_engine.GateOperation\x1a\x1b.qubit_engine.StateResponse\"\x00(\x010\x01BU\n" +
+	"\vStreamGates\x12\x1b.qubit_engine.GateOperation\x1a\x1b.qubit_engine.StateResponse\"\x00(\x010\x01\x12Q\n" +
+	"\x10VisualizeCircuit\x12\x1c.qubit_engine.CircuitRequest\x1a\x1b.qubit_engine.StateResponse\"\x000\x01BU\n" +
 	"\x17com.perclft.qubitengineP\x01Z5github.com/perclft/QubitEngine/cli/internal/generated\xf8\x01\x01b\x06proto3"
 
 var (
@@ -475,10 +476,12 @@ var file_quantum_proto_depIdxs = []int32{
 	6, // 3: qubit_engine.StateResponse.classical_results:type_name -> qubit_engine.StateResponse.ClassicalResultsEntry
 	1, // 4: qubit_engine.QuantumCompute.RunCircuit:input_type -> qubit_engine.CircuitRequest
 	2, // 5: qubit_engine.QuantumCompute.StreamGates:input_type -> qubit_engine.GateOperation
-	3, // 6: qubit_engine.QuantumCompute.RunCircuit:output_type -> qubit_engine.StateResponse
-	3, // 7: qubit_engine.QuantumCompute.StreamGates:output_type -> qubit_engine.StateResponse
-	6, // [6:8] is the sub-list for method output_type
-	4, // [4:6] is the sub-list for method input_type
+	1, // 6: qubit_engine.QuantumCompute.VisualizeCircuit:input_type -> qubit_engine.CircuitRequest
+	3, // 7: qubit_engine.QuantumCompute.RunCircuit:output_type -> qubit_engine.StateResponse
+	3, // 8: qubit_engine.QuantumCompute.StreamGates:output_type -> qubit_engine.StateResponse
+	3, // 9: qubit_engine.QuantumCompute.VisualizeCircuit:output_type -> qubit_engine.StateResponse
+	7, // [7:10] is the sub-list for method output_type
+	4, // [4:7] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name
 	4, // [4:4] is the sub-list for extension extendee
 	0, // [0:4] is the sub-list for field type_name

@@ -21,6 +21,11 @@ service QuantumCompute {
   // Streaming method for large or interactive circuits.
   // Sends a stream of gates and receives a stream of FULL STATE VECTORS.
   rpc StreamGates (stream GateOperation) returns (stream StateResponse) {}
+
+  // Visualization method for Web (Server-Side Streaming only).
+  // gRPC-Web does not support bidirectional streaming.
+  // This executes a circuit and streams back the state after EACH step.
+  rpc VisualizeCircuit (CircuitRequest) returns (stream StateResponse) {}
 }
 
 // ------------------------------------------------------------------
