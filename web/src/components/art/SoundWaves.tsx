@@ -126,32 +126,44 @@ export function SoundWaves({ onNotePlay }: SoundWavesProps) {
         return newMelody;
     };
 
-    // Play a note
-    const playNote = (noteIndex: number) => {
-        if (!audioContextRef.current) {
+    // Play a note - accepts melody and mood to avoid stale closure
+    const playNote = (noteIndex: number, currentMelody: number[], mood: typeof MOODS[0]) => {
+        if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
             audioContextRef.current = new AudioContext();
         }
 
         const ctx = audioContextRef.current;
-        const note = melody[noteIndex % melody.length];
-        const freq = selectedMood.baseFreq * Math.pow(2, note / 12);
+        if (currentMelody.length === 0) return;
 
-        // Create oscillator
+        const note = currentMelody[noteIndex % currentMelody.length];
+        const freq = mood.baseFreq * Math.pow(2, note / 12);
+
+        // Create oscillator with different wave types for variety
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
 
-        osc.type = 'sine';
+        // Use different oscillator types based on mood
+        const oscTypes: OscillatorType[] = ['sine', 'triangle', 'square', 'sawtooth'];
+        osc.type = oscTypes[MOODS.findIndex(m => m.id === mood.id) % oscTypes.length];
         osc.frequency.value = freq;
 
-        gain.gain.setValueAtTime(0, ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.05);
-        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3);
+        // ADSR envelope for more musical sound
+        const now = ctx.currentTime;
+        const attackTime = 0.02;
+        const decayTime = 0.1;
+        const sustainLevel = 0.2;
+        const releaseTime = 0.2;
+
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.4, now + attackTime);
+        gain.gain.linearRampToValueAtTime(sustainLevel, now + attackTime + decayTime);
+        gain.gain.linearRampToValueAtTime(0, now + attackTime + decayTime + releaseTime);
 
         osc.connect(gain);
         gain.connect(ctx.destination);
 
-        osc.start();
-        osc.stop(ctx.currentTime + 0.3);
+        osc.start(now);
+        osc.stop(now + attackTime + decayTime + releaseTime + 0.05);
 
         // Update visuals
         setPhase(prev => prev + 0.5);
@@ -168,7 +180,7 @@ export function SoundWaves({ onNotePlay }: SoundWavesProps) {
             ...prev.slice(-10),
             {
                 position: [(Math.random() - 0.5) * 6, Math.random() * 2, (Math.random() - 0.5) * 3] as [number, number, number],
-                color: selectedMood.color,
+                color: mood.color,
                 size: 0.1 + (note / 24) * 0.1,
             }
         ]);
@@ -208,12 +220,12 @@ export function SoundWaves({ onNotePlay }: SoundWavesProps) {
         if (!playing || melody.length === 0) return;
 
         const interval = setInterval(() => {
-            playNote(currentNote);
+            playNote(currentNote, melody, selectedMood);
             setCurrentNote(prev => (prev + 1) % melody.length);
         }, (60 / tempo) * 1000);
 
         return () => clearInterval(interval);
-    }, [playing, currentNote, tempo, melody.length]);
+    }, [playing, currentNote, tempo, melody, selectedMood]);
 
     // Decay frequencies
     useEffect(() => {
