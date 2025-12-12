@@ -1,0 +1,221 @@
+/* Sound Waves Mode Styles */
+
+.sound-waves-container {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.waves-canvas {
+    flex: 1;
+    height: 100%;
+}
+
+.waves-controls {
+    width: 320px;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(15px);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Selectors */
+.mood-selector,
+.scale-selector {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 14px;
+}
+
+.selector-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 10px;
+}
+
+.mood-options,
+.scale-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.mood-btn,
+.scale-btn {
+    flex: 1;
+    min-width: 70px;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.05);
+    color: white;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.mood-btn:hover,
+.scale-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.mood-btn.active {
+    background: var(--mood-color, #4ecdc4);
+    border-color: transparent;
+    box-shadow: 0 4px 15px color-mix(in srgb, var(--mood-color, #4ecdc4) 50%, transparent);
+}
+
+.scale-btn.active {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border-color: transparent;
+}
+
+/* Tempo Control */
+.tempo-control {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 14px;
+}
+
+.tempo-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    margin-bottom: 10px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.tempo-value {
+    color: #4ecdc4;
+    font-weight: 600;
+}
+
+.tempo-slider {
+    width: 100%;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    outline: none;
+}
+
+.tempo-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+}
+
+/* Buttons */
+.play-button,
+.generate-button {
+    width: 100%;
+    padding: 14px 24px;
+    font-size: 1rem;
+    font-weight: 700;
+    border: none;
+    border-radius: 12px;
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.play-button {
+    background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.play-button.playing {
+    background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+}
+
+.play-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+}
+
+.generate-button {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+
+.generate-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+}
+
+.generate-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Melody Display */
+.melody-display {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 14px;
+    min-height: 80px;
+}
+
+.melody-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.melody-notes {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 60px;
+}
+
+.melody-note {
+    flex: 1;
+    min-width: 8px;
+    border-radius: 2px 2px 0 0;
+    transition: all 0.1s ease;
+}
+
+.melody-note.active {
+    box-shadow: 0 0 15px currentColor;
+}
+
+/* Current Note Display */
+.current-note {
+    text-align: center;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+}
+
+.note-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 4px;
+}
+
+.note-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    text-shadow: 0 0 20px currentColor;
+}

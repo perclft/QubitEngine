@@ -6,6 +6,7 @@ import { GenerativeCanvas } from './GenerativeCanvas';
 import { QuantumAudio } from './QuantumAudio';
 import { ChaosDice } from './art/ChaosDice';
 import { MatterSculpt } from './art/MatterSculpt';
+import { SoundWaves } from './art/SoundWaves';
 import './ArtStudio.css';
 
 // Art mode definitions
@@ -123,22 +124,7 @@ export function ArtStudio({ onBack }: ArtStudioProps) {
             case 'matter':
                 return <MatterSculpt onEnergyUpdate={(e) => console.log('Energy:', e)} />;
             case 'sound':
-                return (
-                    <div className="mode-placeholder">
-                        <div className="mode-placeholder-icon">🎵</div>
-                        <div className="mode-placeholder-title">Sound Waves</div>
-                        <div className="mode-placeholder-desc">
-                            Generate quantum melodies visualized as flowing ribbons of light.
-                        </div>
-                        <button
-                            className="action-btn primary"
-                            style={{ marginTop: '20px', width: 'auto', padding: '12px 32px' }}
-                            onClick={runDemoAnimation}
-                        >
-                            🎵 Compose Quantum Music
-                        </button>
-                    </div>
-                );
+                return <SoundWaves onNotePlay={(n) => console.log('Note:', n)} />;
             case 'classic':
             default:
                 return null; // Bloch sphere shown by default
