@@ -198,40 +198,36 @@ service VQESolver {
 - Ansatz options: UCCSD, Hardware-Efficient, RY layers
 - Optimizers: COBYLA, SPSA, Adam, Gradient Descent
 
-### 🎮 Gaming: Quantum RNG
-
+### 🎮 Gaming: Quantum RNG & Oracle
 ```protobuf
 service QuantumGaming {
     rpc GenerateRandom(RandomRequest) returns (RandomResponse);
+    rpc AskOracle(OracleRequest) returns (OracleResponse); // The Magic 8-Ball
     rpc QuantumCoinFlip(CoinFlipRequest) returns (CoinFlipResult);
     rpc QuantumDiceRoll(DiceRequest) returns (DiceResult);
     rpc ShuffleDeck(ShuffleRequest) returns (ShuffledDeck);
-    rpc CreateSuperposition(SuperpositionRequest) returns (SuperpositionState);
 }
 ```
 
 **Features:**
-- True quantum random number generation
-- Superposition-based game mechanics (Schrödinger's loot box)
-- Verifiable deck shuffling with proof hashes
-- Configurable bias for fair/unfair coins
+- **Magic 8-Ball Oracle:** 3-qubit superposition decides your fate with 32 unique prophecies (Mysterious, Sarcastic, Philosophical, Chaotic).
+- **Discord Bot Integration:** Consult the oracle via `/8ball` or `/oracle`.
+- **True Quantum RNG:** Certified random numbers from quantum measurements.
+- **Verifiable Shuffling:** Cryptographically secure deck shuffling.
 
-### 🎵 Music: Quantum Composer
-
+### 🎵 Music: The Quantum Mozart
 ```protobuf
 service QuantumComposer {
-    rpc GenerateMelody(MelodyRequest) returns (Melody);
-    rpc GenerateChordProgression(ChordRequest) returns (ChordProgression);
-    rpc ComposeTrack(CompositionRequest) returns (stream CompositionEvent);
-    rpc ExportMIDI(ExportRequest) returns (MIDIFile);
+    rpc GenerateQuantumMelody(QuantumMelodyRequest) returns (stream QuantumNote);
+    rpc GetStateVector(Empty) returns (StateVectorResponse);
 }
 ```
 
 **Features:**
-- Scale-aware melody generation (Major, Minor, Pentatonic, Blues, Dorian)
-- Chord progressions (I-V-vi-IV, I-IV-V-V, etc.)
-- MIDI export for DAW integration
-- Mood-based composition (Happy, Sad, Mysterious, Epic)
+- **True Quantum Generation:** No `math/rand` here! Melodies generated via 8-state quantum superposition.
+- **Musical Interference:** Quantum phase gates simulating harmonic relationships (e.g., C → G bias).
+- **Quantum Audio Synthesis:** Real-time state vector streaming with 8-oscillator additive synthesis.
+- **Visualizer:** Live probability bars showing the collapse of the wave function.
 
 ### 🔐 Crypto: BB84 QKD Protocol
 
