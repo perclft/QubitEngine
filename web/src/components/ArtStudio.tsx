@@ -5,6 +5,7 @@ import { BlochSphere } from './BlochSphere';
 import { GenerativeCanvas } from './GenerativeCanvas';
 import { QuantumAudio } from './QuantumAudio';
 import { ChaosDice } from './art/ChaosDice';
+import { MatterSculpt } from './art/MatterSculpt';
 import './ArtStudio.css';
 
 // Art mode definitions
@@ -120,22 +121,7 @@ export function ArtStudio({ onBack }: ArtStudioProps) {
             case 'chaos':
                 return <ChaosDice onRollResult={(val) => console.log('Rolled:', val)} />;
             case 'matter':
-                return (
-                    <div className="mode-placeholder">
-                        <div className="mode-placeholder-icon">⚛️</div>
-                        <div className="mode-placeholder-title">Matter Sculpt</div>
-                        <div className="mode-placeholder-desc">
-                            Watch VQE find molecular ground states as flowing energy landscapes.
-                        </div>
-                        <button
-                            className="action-btn primary"
-                            style={{ marginTop: '20px', width: 'auto', padding: '12px 32px' }}
-                            onClick={runDemoAnimation}
-                        >
-                            ⚛️ Sculpt H₂ Molecule
-                        </button>
-                    </div>
-                );
+                return <MatterSculpt onEnergyUpdate={(e) => console.log('Energy:', e)} />;
             case 'sound':
                 return (
                     <div className="mode-placeholder">
