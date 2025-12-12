@@ -79,13 +79,48 @@ services:
       postgres:
         condition: service_healthy
 
-  # 6. Redis (Job Queue - Coming in Phase 11.2)
+  # 6. Redis (Job Queue)
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
     networks:
       - qubit-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 7. Job Scheduler Service
+  scheduler:
+    build:
+      context: ../../services/scheduler
+      dockerfile: Dockerfile
+    ports:
+      - "50053:50053"
+    command: ["-redis-addr", "redis:6379", "-engine-addr", "engine:50051"]
+    networks:
+      - qubit-net
+    depends_on:
+      redis:
+        condition: service_healthy
+      engine:
+        condition: service_started
+
+  # 8. Result Cache Service
+  cache:
+    build:
+      context: ../../services/cache
+      dockerfile: Dockerfile
+    ports:
+      - "50054:50054"
+    command: ["-redis-addr", "redis:6379", "-default-ttl", "60"]
+    networks:
+      - qubit-net
+    depends_on:
+      redis:
+        condition: service_healthy
 
 networks:
   qubit-net:

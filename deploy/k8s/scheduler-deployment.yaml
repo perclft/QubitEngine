@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quantum-scheduler
+  namespace: quantumcloud
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: quantum-scheduler
+  template:
+    metadata:
+      labels:
+        app: quantum-scheduler
+    spec:
+      containers:
+        - name: scheduler
+          image: ghcr.io/perclft/qubit-scheduler:latest
+          ports:
+            - containerPort: 50053
+          env:
+            - name: REDIS_HOST
+              value: "redis-master"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: ENGINE_HOST
+              value: "quantum-engine"
+            - name: ENGINE_PORT
+              value: "50051"
+          args:
+            - "-redis-addr"
+            - "$(REDIS_HOST):$(REDIS_PORT)"
+            - "-engine-addr"
+            - "$(ENGINE_HOST):$(ENGINE_PORT)"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            tcpSocket:
+              port: 50053
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 50053
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+---
+# Redis for Job Queue
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-master
+  namespace: quantumcloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+      role: master
+  template:
+    metadata:
+      labels:
+        app: redis
+        role: master
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          command:
+            - redis-server
+            - "--appendonly"
+            - "yes"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: redis-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-master
+  namespace: quantumcloud
+spec:
+  selector:
+    app: redis
+    role: master
+  ports:
+    - port: 6379
+      targetPort: 6379
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: quantumcloud
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard

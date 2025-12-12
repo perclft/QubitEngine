@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+package qubit_engine;
+
+option go_package = "github.com/perclft/QubitEngine/services/scheduler/generated";
+
+import "api/proto/quantum.proto";
+
+// ------------------------------------------------------------------
+// Quantum Job Scheduler Service
+// Enables async job submission, queueing, and result streaming
+// ------------------------------------------------------------------
+
+service QuantumScheduler {
+    // Submit a circuit job to the queue
+    rpc SubmitJob(JobRequest) returns (JobHandle);
+    
+    // Get the status of a job
+    rpc GetJobStatus(JobHandle) returns (JobStatus);
+    
+    // Cancel a pending or running job
+    rpc CancelJob(JobHandle) returns (CancelResponse);
+    
+    // Stream results as they become available
+    rpc StreamJobResults(JobHandle) returns (stream JobResult);
+    
+    // List all jobs for a user
+    rpc ListJobs(ListJobsRequest) returns (JobList);
+}
+
+// ------------------------------------------------------------------
+// Job Submission
+// ------------------------------------------------------------------
+
+enum JobPriority {
+    PRIORITY_LOW = 0;
+    PRIORITY_NORMAL = 1;
+    PRIORITY_HIGH = 2;
+    PRIORITY_REALTIME = 3;
+}
+
+message JobRequest {
+    CircuitRequest circuit = 1;
+    JobPriority priority = 2;
+    int32 shots = 3;              // Number of measurement repetitions
+    string callback_url = 4;       // Optional webhook for completion notification
+    string user_id = 5;           // User/tenant identifier
+    map<string, string> metadata = 6;  // Custom metadata
+}
+
+message JobHandle {
+    string job_id = 1;
+    int64 submitted_at = 2;       // Unix timestamp
+    int32 estimated_wait_seconds = 3;
+}
+
+// ------------------------------------------------------------------
+// Job Status
+// ------------------------------------------------------------------
+
+enum JobState {
+    STATE_UNKNOWN = 0;
+    STATE_QUEUED = 1;
+    STATE_RUNNING = 2;
+    STATE_COMPLETED = 3;
+    STATE_FAILED = 4;
+    STATE_CANCELLED = 5;
+}
+
+message JobStatus {
+    string job_id = 1;
+    JobState state = 2;
+    int32 position_in_queue = 3;  // 0 if running or completed
+    int32 progress_percent = 4;   // 0-100
+    string worker_id = 5;         // Which engine pod is processing
+    int64 started_at = 6;
+    int64 completed_at = 7;
+    string error_message = 8;     // Set if state == FAILED
+}
+
+message CancelResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// ------------------------------------------------------------------
+// Job Results
+// ------------------------------------------------------------------
+
+message JobResult {
+    string job_id = 1;
+    int32 shot_number = 2;        // Which shot (1 to N)
+    StateResponse state = 3;      // The quantum state after circuit
+    map<int32, bool> measurements = 4;  // Qubit -> measurement result
+}
+
+// ------------------------------------------------------------------
+// Job Listing
+// ------------------------------------------------------------------
+
+message ListJobsRequest {
+    string user_id = 1;
+    JobState state_filter = 2;    // Optional, 0 = all states
+    int32 limit = 3;
+    int32 offset = 4;
+}
+
+message JobList {
+    repeated JobStatus jobs = 1;
+    int32 total_count = 2;
+}

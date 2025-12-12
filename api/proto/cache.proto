@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package qubit_engine;
+
+option go_package = "github.com/perclft/QubitEngine/services/cache/generated";
+
+import "api/proto/quantum.proto";
+
+// ------------------------------------------------------------------
+// Result Cache Service
+// Caches circuit execution results for rapid retrieval
+// ------------------------------------------------------------------
+
+service ResultCache {
+    // Store a circuit result in cache
+    rpc CacheResult(CacheRequest) returns (CacheResponse);
+    
+    // Retrieve a cached result
+    rpc GetCachedResult(CacheLookup) returns (CacheHit);
+    
+    // Invalidate a cached result
+    rpc InvalidateCache(CacheLookup) returns (CacheResponse);
+    
+    // Get cache statistics
+    rpc GetCacheStats(Empty) returns (CacheStats);
+}
+
+// ------------------------------------------------------------------
+// Cache Operations
+// ------------------------------------------------------------------
+
+message CacheRequest {
+    string circuit_hash = 1;      // SHA-256 of circuit definition
+    int32 num_qubits = 2;
+    int32 num_operations = 3;
+    StateResponse result = 4;      // The computed result
+    int32 ttl_seconds = 5;        // Time to live (0 = default)
+}
+
+message CacheResponse {
+    bool success = 1;
+    string message = 2;
+    string cache_key = 3;
+}
+
+message CacheLookup {
+    string circuit_hash = 1;
+}
+
+message CacheHit {
+    bool found = 1;
+    StateResponse result = 2;
+    int64 cached_at = 3;          // Unix timestamp
+    int64 expires_at = 4;
+    int32 hit_count = 5;          // How many times this was retrieved
+}
+
+message Empty {}
+
+message CacheStats {
+    int64 total_entries = 1;
+    int64 total_hits = 2;
+    int64 total_misses = 3;
+    double hit_rate = 4;          // 0.0 to 1.0
+    int64 memory_used_bytes = 5;
+    int64 oldest_entry_age = 6;   // Seconds
+}
