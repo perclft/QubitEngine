@@ -1,0 +1,225 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: quantumcloud
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets: []
+
+    rule_files:
+      - /etc/prometheus/rules/*.yml
+
+    scrape_configs:
+      # Prometheus self-monitoring
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      # Quantum Engine pods
+      - job_name: 'quantum-engine'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - quantumcloud
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            regex: qubit-engine
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            target_label: __address__
+            regex: (.*)
+            replacement: $1:9100
+
+      # Scheduler service
+      - job_name: 'quantum-scheduler'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - quantumcloud
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            regex: quantum-scheduler
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            target_label: __address__
+            regex: (.*)
+            replacement: $1:9100
+
+      # Redis metrics
+      - job_name: 'redis'
+        static_configs:
+          - targets: ['redis-exporter:9121']
+
+      # PostgreSQL metrics
+      - job_name: 'postgres'
+        static_configs:
+          - targets: ['postgres-exporter:9187']
+
+      # Envoy metrics
+      - job_name: 'envoy'
+        metrics_path: /stats/prometheus
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - quantumcloud
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            regex: quantum-envoy
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            target_label: __address__
+            regex: (.*)
+            replacement: $1:9901
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: quantumcloud
+data:
+  quantum-alerts.yml: |
+    groups:
+      - name: quantum-engine
+        rules:
+          - alert: HighJobQueueDepth
+            expr: quantum_job_queue_depth > 100
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High job queue depth"
+              description: "Job queue has {{ $value }} pending jobs"
+
+          - alert: HighErrorRate
+            expr: rate(grpc_server_handled_total{grpc_code!="OK"}[5m]) / rate(grpc_server_handled_total[5m]) > 0.05
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "High gRPC error rate"
+              description: "Error rate is {{ $value | humanizePercentage }}"
+
+          - alert: LowCacheHitRate
+            expr: quantum_cache_hit_rate < 0.5
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Low cache hit rate"
+              description: "Cache hit rate is {{ $value | humanizePercentage }}"
+
+          - alert: PodRestartLoop
+            expr: rate(kube_pod_container_status_restarts_total{namespace="quantumcloud"}[15m]) > 0.5
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Pod restart loop detected"
+              description: "Pod {{ $labels.pod }} is restarting frequently"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: quantumcloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.47.0
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus"
+            - "--storage.tsdb.retention.time=15d"
+            - "--web.enable-lifecycle"
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus/prometheus.yml
+              subPath: prometheus.yml
+            - name: rules
+              mountPath: /etc/prometheus/rules
+            - name: storage
+              mountPath: /prometheus
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: rules
+          configMap:
+            name: prometheus-rules
+        - name: storage
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: quantumcloud
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - port: 9090
+      targetPort: 9090
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: quantumcloud
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes", "endpoints", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get"]
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: quantumcloud

@@ -1,0 +1,157 @@
+# Multi-Cluster Federation Configuration
+# Enables QuantumCloud to span multiple Kubernetes clusters
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: federation-config
+  namespace: quantumcloud
+data:
+  clusters.yaml: |
+    federation:
+      name: quantumcloud-global
+      primary_cluster: us-west-1
+      
+      clusters:
+        - name: us-west-1
+          region: us-west
+          endpoint: https://k8s.us-west-1.quantumcloud.io:6443
+          role: primary
+          services:
+            - quantum-engine
+            - quantum-scheduler
+            - quantum-registry
+            - quantum-cache
+          
+        - name: us-east-1
+          region: us-east
+          endpoint: https://k8s.us-east-1.quantumcloud.io:6443
+          role: secondary
+          services:
+            - quantum-engine
+            - quantum-cache
+          
+        - name: eu-central-1
+          region: eu-central
+          endpoint: https://k8s.eu-central-1.quantumcloud.io:6443
+          role: secondary
+          services:
+            - quantum-engine
+            - quantum-cache
+          
+        - name: ap-south-1
+          region: ap-south
+          endpoint: https://k8s.ap-south-1.quantumcloud.io:6443
+          role: secondary
+          services:
+            - quantum-engine
+
+      service_routing:
+        # Route based on latency
+        mode: latency-aware
+        
+        # Fallback order
+        fallback_priority:
+          - same-region
+          - same-continent
+          - global
+        
+        # Health check interval
+        health_check_interval: 30s
+        
+        # Failover threshold
+        failover_threshold: 3
+
+      replication:
+        # Replicate circuit registry across clusters
+        circuit_registry:
+          mode: eventual
+          sync_interval: 60s
+          
+        # Replicate cache selectively
+        result_cache:
+          mode: selective
+          replicate_popular: true
+          popularity_threshold: 10
+---
+# ServiceExport for multi-cluster service discovery
+apiVersion: multicluster.x-k8s.io/v1alpha1
+kind: ServiceExport
+metadata:
+  name: quantum-engine
+  namespace: quantumcloud
+---
+apiVersion: multicluster.x-k8s.io/v1alpha1
+kind: ServiceExport
+metadata:
+  name: quantum-registry
+  namespace: quantumcloud
+---
+apiVersion: multicluster.x-k8s.io/v1alpha1
+kind: ServiceExport
+metadata:
+  name: quantum-scheduler
+  namespace: quantumcloud
+---
+apiVersion: multicluster.x-k8s.io/v1alpha1
+kind: ServiceExport
+metadata:
+  name: quantum-cache
+  namespace: quantumcloud
+---
+# ServiceImport for consuming cross-cluster services
+apiVersion: multicluster.x-k8s.io/v1alpha1
+kind: ServiceImport
+metadata:
+  name: quantum-engine
+  namespace: quantumcloud
+spec:
+  type: ClusterSetIP
+  ports:
+    - port: 50051
+      protocol: TCP
+---
+# GlobalService for geographic load balancing
+apiVersion: networking.gke.io/v1beta1
+kind: ServiceNetworkEndpointGroup
+metadata:
+  name: quantum-global-neg
+  namespace: quantumcloud
+  annotations:
+    cloud.google.com/neg: '{"exposed_ports": {"50051": {}}}'
+spec:
+  networkEndpointType: "GCE_VM_IP_PORT"
+---
+# PodDisruptionBudget for high availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: quantum-engine-pdb
+  namespace: quantumcloud
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: qubit-engine
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: quantum-scheduler-pdb
+  namespace: quantumcloud
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: quantum-scheduler
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: quantum-registry-pdb
+  namespace: quantumcloud
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: quantum-registry
