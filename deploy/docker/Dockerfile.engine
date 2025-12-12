@@ -3,26 +3,13 @@ FROM debian:bookworm-slim AS builder
 
 # Install build tools and dynamic libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    cmake \
-    git \
-    libprotobuf-dev \
-    libgrpc-dev \
-    libgrpc++-dev \
-    protobuf-compiler-grpc \
-    libssl-dev \
-    zlib1g-dev \
-    libc-ares-dev \
-    libgflags-dev \
-    libgoogle-glog-dev \
-    ca-certificates \
-    wget \
-    libstdc++6 \
-    zlib1g \
-    libssl3 \
+    build-essential cmake git \
+    libprotobuf-dev libgrpc-dev libgrpc++-dev protobuf-compiler-grpc \
+    libssl-dev zlib1g-dev libc-ares-dev libgflags-dev libgoogle-glog-dev \
+    ca-certificates wget libstdc++6 zlib1g libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Go
+# Install Go (for generating stubs)
 RUN GO_VERSION=1.23.1 && \
     wget https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz && \
     rm -rf /usr/local/go && \
@@ -31,71 +18,44 @@ RUN GO_VERSION=1.23.1 && \
 ENV PATH="/usr/local/go/bin:${PATH}"
 WORKDIR /build
 
-# Copy source
 COPY api/ api/
 COPY backend/ backend/
 COPY CMakeLists.txt .
 
-# CRITICAL FIX (Glibc): Link against the reflection library provided by Debian
-RUN echo 'target_link_libraries(qubit_engine PUBLIC \
-    grpc++ \
-    protobuf \
-    gflags \
-    glog \
-    grpc++_reflection \
-    )' >> CMakeLists.txt
+# CRITICAL FIX (Glibc): Link against the reflection library
+RUN echo 'target_link_libraries(qubit_engine PUBLIC grpc++ protobuf gflags glog grpc++_reflection)' >> CMakeLists.txt
 
-# --- Protobuf Compilation (Standard Only) ---
-RUN mkdir -p backend/src/generated
+# Compile
+RUN mkdir -p backend/src/generated && \
+    /usr/bin/protoc -I . --cpp_out=backend/src/generated --grpc_out=backend/src/generated \
+    --plugin=protoc-gen-grpc=/usr/bin/grpc_cpp_plugin api/proto/quantum.proto && \
+    mkdir -p /usr/local/include/generated/api/proto/ && \
+    cp backend/src/generated/api/proto/*pb.h /usr/local/include/generated/api/proto/
 
-# Compile YOUR Custom Protobuf
-RUN /usr/bin/protoc -I . \
-    --cpp_out=backend/src/generated \
-    --grpc_out=backend/src/generated \
-    --plugin=protoc-gen-grpc=/usr/bin/grpc_cpp_plugin \
-    api/proto/quantum.proto
-
-# --- Header Copy Stage ---
-
-# Copy YOUR Custom Headers to match the C++ path <api/proto/...>
-RUN mkdir -p /usr/local/include/generated/api/proto/
-RUN cp backend/src/generated/api/proto/*pb.h /usr/local/include/generated/api/proto/
-
-# NOTE: We DO NOT copy reflection headers anymore. We use the system-installed ones.
-
-# Go CLI tools install
-RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
-    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-
-# 3. C++ Compilation
-RUN cmake -B build \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_CXX_FLAGS="-I/usr/local/include/generated" \
-    . \
-    && cmake --build build --config Release
-
-# Final executable permissions
-RUN chmod +x /build/build/qubit_engine
+RUN cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-I/usr/local/include/generated" . && \
+    cmake --build build --config Release && \
+    chmod +x /build/build/qubit_engine
 
 # --- Stage 2: Optimized Runtime ---
 FROM debian:bookworm-slim
 
-# Copy the final compiled binary
 COPY --from=builder /build/build/qubit_engine /usr/local/bin/qubit_engine
 
-# Install runtime dependencies (including reflection support via libgrpc++)
+# Install runtime libs
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libstdc++6 \
-    libgrpc++1.51 \
-    libprotobuf32 \
-    libssl3 \
-    zlib1g \
-    libc-ares2 \
-    libgflags2.2 \
-    libgoogle-glog0v6 \
+    libstdc++6 libgrpc++1.51 libprotobuf32 libssl3 zlib1g libc-ares2 \
+    libgflags2.2 libgoogle-glog0v6 \
     && rm -rf /var/lib/apt/lists/*
 
-# Expose gRPC port
 EXPOSE 50051
+
+# --- SECURITY HARDENING STARTS HERE ---
+# 1. Create a non-root user 'qubit'
+RUN useradd -m -u 1000 -s /bin/bash qubit
+# 2. Assign ownership
+RUN chown qubit:qubit /usr/local/bin/qubit_engine
+# 3. Switch context (Drop Root)
+USER qubit
+# --------------------------------------
 
 ENTRYPOINT ["/usr/local/bin/qubit_engine"]

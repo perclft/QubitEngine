@@ -1,48 +1,48 @@
+#include "ServiceImpl.hpp"
+#include <atomic>
+#include <csignal>
+#include <grpcpp/ext/proto_server_reflection_plugin.h>
+#include <grpcpp/grpcpp.h>
 #include <iostream>
 #include <memory>
 #include <string>
-#include <csignal>
 #include <thread>
-#include <atomic>
-#include <grpcpp/grpcpp.h>
-#include <grpcpp/ext/proto_server_reflection_plugin.h> 
-#include "ServiceImpl.hpp"
 
 std::atomic<bool> shutdown_requested(false);
 
 void signalHandler(int signal) {
-    std::cout << "\nShutdown signal received (" << signal << ")..." << std::endl;
-    shutdown_requested = true;
+  std::cout << "\nShutdown signal received (" << signal << ")..." << std::endl;
+  shutdown_requested = true;
 }
 
 void RunServer() {
-    std::string server_address("0.0.0.0:50051");
-    QubitEngineServiceImpl service;
+  std::string server_address("0.0.0.0:50051");
+  QubitEngineServiceImpl service;
 
-    grpc::ServerBuilder builder;
-    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-    builder.RegisterService(&service);
-    
-    // CRITICAL: Initialize the reflection plugin
-    grpc::reflection::InitProtoReflectionServerBuilderPlugin();
-    
-    std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-    std::cout << "QubitEngine (C++) listening on " << server_address << std::endl;
+  grpc::ServerBuilder builder;
+  builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+  builder.RegisterService(&service);
 
-    // Register signals
-    std::signal(SIGINT, signalHandler);
-    std::signal(SIGTERM, signalHandler);
+  // CRITICAL: Initialize the reflection plugin
+  // grpc::reflection::InitProtoReflectionServerBuilderPlugin();
 
-    // Wait loop
-    while (!shutdown_requested) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    }
+  std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
+  std::cout << "QubitEngine (C++) listening on " << server_address << std::endl;
 
-    std::cout << "Stopping gRPC server..." << std::endl;
-    server->Shutdown();
+  // Register signals
+  std::signal(SIGINT, signalHandler);
+  std::signal(SIGTERM, signalHandler);
+
+  // Wait loop
+  while (!shutdown_requested) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  }
+
+  std::cout << "Stopping gRPC server..." << std::endl;
+  server->Shutdown();
 }
 
 int main() {
-    RunServer();
-    return 0;
+  RunServer();
+  return 0;
 }

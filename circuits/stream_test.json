@@ -1,0 +1,41 @@
+{
+    "name": "Phase 3 Streaming Test",
+    "qubits": 3,
+    "ops": [
+        {
+            "gate": "H",
+            "target": 0
+        },
+        {
+            "gate": "H",
+            "target": 1
+        },
+        {
+            "gate": "TOFFOLI",
+            "control": 0,
+            "control2": 1,
+            "target": 2
+        },
+        {
+            "gate": "S",
+            "target": 0
+        },
+        {
+            "gate": "RY",
+            "target": 1,
+            "angle": 1.5708
+        },
+        {
+            "gate": "M",
+            "target": 0
+        },
+        {
+            "gate": "M",
+            "target": 1
+        },
+        {
+            "gate": "M",
+            "target": 2
+        }
+    ]
+}

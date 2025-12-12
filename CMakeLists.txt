@@ -9,12 +9,13 @@ find_package(gRPC REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 
-# 1. Include Directories (Source + Generated)
+# 1. Include Directories
 include_directories(backend/src)
 include_directories(backend/src/generated)
 
 # 2. Find Sources
 file(GLOB_RECURSE ENGINE_SRCS "backend/src/*.cpp")
+# We will manually compile protos in makefile or docker, so just find them
 file(GLOB_RECURSE PROTO_SRCS "backend/src/generated/*.cc")
 
 add_executable(qubit_engine 

@@ -1,0 +1,23 @@
+{
+    "name": "Bell State Entanglement",
+    "qubits": 2,
+    "ops": [
+        {
+            "gate": "H",
+            "target": 0
+        },
+        {
+            "gate": "CNOT",
+            "control": 0,
+            "target": 1
+        },
+        {
+            "gate": "M",
+            "target": 0
+        },
+        {
+            "gate": "M",
+            "target": 1
+        }
+    ]
+}

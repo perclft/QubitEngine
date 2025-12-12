@@ -27,7 +27,13 @@ const (
 	GateOperation_HADAMARD GateOperation_GateType = 0
 	GateOperation_PAULI_X  GateOperation_GateType = 1
 	GateOperation_CNOT     GateOperation_GateType = 2
-	GateOperation_MEASURE  GateOperation_GateType = 3 // New Operation
+	GateOperation_MEASURE  GateOperation_GateType = 3
+	// New Gates
+	GateOperation_TOFFOLI    GateOperation_GateType = 4
+	GateOperation_PHASE_S    GateOperation_GateType = 5 // S Gate (Z90)
+	GateOperation_PHASE_T    GateOperation_GateType = 6 // T Gate (Z45)
+	GateOperation_ROTATION_Y GateOperation_GateType = 7
+	GateOperation_ROTATION_Z GateOperation_GateType = 8
 )
 
 // Enum value maps for GateOperation_GateType.
@@ -37,12 +43,22 @@ var (
 		1: "PAULI_X",
 		2: "CNOT",
 		3: "MEASURE",
+		4: "TOFFOLI",
+		5: "PHASE_S",
+		6: "PHASE_T",
+		7: "ROTATION_Y",
+		8: "ROTATION_Z",
 	}
 	GateOperation_GateType_value = map[string]int32{
-		"HADAMARD": 0,
-		"PAULI_X":  1,
-		"CNOT":     2,
-		"MEASURE":  3,
+		"HADAMARD":   0,
+		"PAULI_X":    1,
+		"CNOT":       2,
+		"MEASURE":    3,
+		"TOFFOLI":    4,
+		"PHASE_S":    5,
+		"PHASE_T":    6,
+		"ROTATION_Y": 7,
+		"ROTATION_Z": 8,
 	}
 )
 
@@ -132,8 +148,12 @@ type GateOperation struct {
 	ControlQubit uint32                 `protobuf:"varint,3,opt,name=control_qubit,json=controlQubit,proto3" json:"control_qubit,omitempty"`
 	// Optional: Register to store the classical result (useful for complex circuits)
 	ClassicalRegister uint32 `protobuf:"varint,4,opt,name=classical_register,json=classicalRegister,proto3" json:"classical_register,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// For Rotations
+	Angle float64 `protobuf:"fixed64,5,opt,name=angle,proto3" json:"angle,omitempty"` // Rotation angle in radians
+	// For Toffoli (3rd qubit)
+	SecondControlQubit uint32 `protobuf:"varint,6,opt,name=second_control_qubit,json=secondControlQubit,proto3" json:"second_control_qubit,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *GateOperation) Reset() {
@@ -194,10 +214,25 @@ func (x *GateOperation) GetClassicalRegister() uint32 {
 	return 0
 }
 
+func (x *GateOperation) GetAngle() float64 {
+	if x != nil {
+		return x.Angle
+	}
+	return 0
+}
+
+func (x *GateOperation) GetSecondControlQubit() uint32 {
+	if x != nil {
+		return x.SecondControlQubit
+	}
+	return 0
+}
+
 type StateResponse struct {
-	state       protoimpl.MessageState         `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The full state vector of size 2^num_qubits
 	StateVector []*StateResponse_ComplexNumber `protobuf:"bytes,1,rep,name=state_vector,json=stateVector,proto3" json:"state_vector,omitempty"`
-	// New: Return measured classical bits (e.g., Qubit 0 -> 1)
+	// Return measured classical bits (e.g., Qubit 0 -> 1)
 	ClassicalResults map[uint32]bool `protobuf:"bytes,2,rep,name=classical_results,json=classicalResults,proto3" json:"classical_results,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
@@ -251,7 +286,7 @@ type Measurement struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	QubitIndex    uint32                 `protobuf:"varint,1,opt,name=qubit_index,json=qubitIndex,proto3" json:"qubit_index,omitempty"`
 	Result        bool                   `protobuf:"varint,2,opt,name=result,proto3" json:"result,omitempty"`
-	Probability   float64                `protobuf:"fixed64,3,opt,name=probability,proto3" json:"probability,omitempty"`
+	Probability   float64                `protobuf:"fixed64,3,opt,name=probability,proto3" json:"probability,omitempty"` // Probability of the measured result
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -308,9 +343,10 @@ func (x *Measurement) GetProbability() float64 {
 }
 
 type StateResponse_ComplexNumber struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Real          float64                `protobuf:"fixed64,1,opt,name=real,proto3" json:"real,omitempty"`
-	Imag          float64                `protobuf:"fixed64,2,opt,name=imag,proto3" json:"imag,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Note: Using 'double' is standard for quantum state vectors.
+	Real          float64 `protobuf:"fixed64,1,opt,name=real,proto3" json:"real,omitempty"`
+	Imag          float64 `protobuf:"fixed64,2,opt,name=imag,proto3" json:"imag,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -369,17 +405,26 @@ const file_quantum_proto_rawDesc = "" +
 	"num_qubits\x18\x01 \x01(\x05R\tnumQubits\x12;\n" +
 	"\n" +
 	"operations\x18\x02 \x03(\v2\x1b.qubit_engine.GateOperationR\n" +
-	"operations\"\xfe\x01\n" +
+	"operations\"\x8e\x03\n" +
 	"\rGateOperation\x128\n" +
 	"\x04type\x18\x01 \x01(\x0e2$.qubit_engine.GateOperation.GateTypeR\x04type\x12!\n" +
 	"\ftarget_qubit\x18\x02 \x01(\rR\vtargetQubit\x12#\n" +
 	"\rcontrol_qubit\x18\x03 \x01(\rR\fcontrolQubit\x12-\n" +
-	"\x12classical_register\x18\x04 \x01(\rR\x11classicalRegister\"<\n" +
+	"\x12classical_register\x18\x04 \x01(\rR\x11classicalRegister\x12\x14\n" +
+	"\x05angle\x18\x05 \x01(\x01R\x05angle\x120\n" +
+	"\x14second_control_qubit\x18\x06 \x01(\rR\x12secondControlQubit\"\x83\x01\n" +
 	"\bGateType\x12\f\n" +
 	"\bHADAMARD\x10\x00\x12\v\n" +
 	"\aPAULI_X\x10\x01\x12\b\n" +
 	"\x04CNOT\x10\x02\x12\v\n" +
-	"\aMEASURE\x10\x03\"\xbb\x02\n" +
+	"\aMEASURE\x10\x03\x12\v\n" +
+	"\aTOFFOLI\x10\x04\x12\v\n" +
+	"\aPHASE_S\x10\x05\x12\v\n" +
+	"\aPHASE_T\x10\x06\x12\x0e\n" +
+	"\n" +
+	"ROTATION_Y\x10\a\x12\x0e\n" +
+	"\n" +
+	"ROTATION_Z\x10\b\"\xbb\x02\n" +
 	"\rStateResponse\x12L\n" +
 	"\fstate_vector\x18\x01 \x03(\v2).qubit_engine.StateResponse.ComplexNumberR\vstateVector\x12^\n" +
 	"\x11classical_results\x18\x02 \x03(\v21.qubit_engine.StateResponse.ClassicalResultsEntryR\x10classicalResults\x1a7\n" +
@@ -393,11 +438,12 @@ const file_quantum_proto_rawDesc = "" +
 	"\vqubit_index\x18\x01 \x01(\rR\n" +
 	"qubitIndex\x12\x16\n" +
 	"\x06result\x18\x02 \x01(\bR\x06result\x12 \n" +
-	"\vprobability\x18\x03 \x01(\x01R\vprobability2\xa8\x01\n" +
+	"\vprobability\x18\x03 \x01(\x01R\vprobability2\xaa\x01\n" +
 	"\x0eQuantumCompute\x12I\n" +
 	"\n" +
-	"RunCircuit\x12\x1c.qubit_engine.CircuitRequest\x1a\x1b.qubit_engine.StateResponse\"\x00\x12K\n" +
-	"\vStreamGates\x12\x1b.qubit_engine.GateOperation\x1a\x19.qubit_engine.Measurement\"\x00(\x010\x01B7Z5github.com/perclft/QubitEngine/cli/internal/generatedb\x06proto3"
+	"RunCircuit\x12\x1c.qubit_engine.CircuitRequest\x1a\x1b.qubit_engine.StateResponse\"\x00\x12M\n" +
+	"\vStreamGates\x12\x1b.qubit_engine.GateOperation\x1a\x1b.qubit_engine.StateResponse\"\x00(\x010\x01BU\n" +
+	"\x17com.perclft.qubitengineP\x01Z5github.com/perclft/QubitEngine/cli/internal/generated\xf8\x01\x01b\x06proto3"
 
 var (
 	file_quantum_proto_rawDescOnce sync.Once
@@ -430,7 +476,7 @@ var file_quantum_proto_depIdxs = []int32{
 	1, // 4: qubit_engine.QuantumCompute.RunCircuit:input_type -> qubit_engine.CircuitRequest
 	2, // 5: qubit_engine.QuantumCompute.StreamGates:input_type -> qubit_engine.GateOperation
 	3, // 6: qubit_engine.QuantumCompute.RunCircuit:output_type -> qubit_engine.StateResponse
-	4, // 7: qubit_engine.QuantumCompute.StreamGates:output_type -> qubit_engine.Measurement
+	3, // 7: qubit_engine.QuantumCompute.StreamGates:output_type -> qubit_engine.StateResponse
 	6, // [6:8] is the sub-list for method output_type
 	4, // [4:6] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name

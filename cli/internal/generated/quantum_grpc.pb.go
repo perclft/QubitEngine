@@ -27,8 +27,11 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type QuantumComputeClient interface {
+	// Synchronous run for small to medium circuits.
 	RunCircuit(ctx context.Context, in *CircuitRequest, opts ...grpc.CallOption) (*StateResponse, error)
-	StreamGates(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[GateOperation, Measurement], error)
+	// Streaming method for large or interactive circuits.
+	// Sends a stream of gates and receives a stream of FULL STATE VECTORS.
+	StreamGates(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[GateOperation, StateResponse], error)
 }
 
 type quantumComputeClient struct {
@@ -49,25 +52,28 @@ func (c *quantumComputeClient) RunCircuit(ctx context.Context, in *CircuitReques
 	return out, nil
 }
 
-func (c *quantumComputeClient) StreamGates(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[GateOperation, Measurement], error) {
+func (c *quantumComputeClient) StreamGates(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[GateOperation, StateResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &QuantumCompute_ServiceDesc.Streams[0], QuantumCompute_StreamGates_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[GateOperation, Measurement]{ClientStream: stream}
+	x := &grpc.GenericClientStream[GateOperation, StateResponse]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type QuantumCompute_StreamGatesClient = grpc.BidiStreamingClient[GateOperation, Measurement]
+type QuantumCompute_StreamGatesClient = grpc.BidiStreamingClient[GateOperation, StateResponse]
 
 // QuantumComputeServer is the server API for QuantumCompute service.
 // All implementations must embed UnimplementedQuantumComputeServer
 // for forward compatibility.
 type QuantumComputeServer interface {
+	// Synchronous run for small to medium circuits.
 	RunCircuit(context.Context, *CircuitRequest) (*StateResponse, error)
-	StreamGates(grpc.BidiStreamingServer[GateOperation, Measurement]) error
+	// Streaming method for large or interactive circuits.
+	// Sends a stream of gates and receives a stream of FULL STATE VECTORS.
+	StreamGates(grpc.BidiStreamingServer[GateOperation, StateResponse]) error
 	mustEmbedUnimplementedQuantumComputeServer()
 }
 
@@ -81,7 +87,7 @@ type UnimplementedQuantumComputeServer struct{}
 func (UnimplementedQuantumComputeServer) RunCircuit(context.Context, *CircuitRequest) (*StateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RunCircuit not implemented")
 }
-func (UnimplementedQuantumComputeServer) StreamGates(grpc.BidiStreamingServer[GateOperation, Measurement]) error {
+func (UnimplementedQuantumComputeServer) StreamGates(grpc.BidiStreamingServer[GateOperation, StateResponse]) error {
 	return status.Error(codes.Unimplemented, "method StreamGates not implemented")
 }
 func (UnimplementedQuantumComputeServer) mustEmbedUnimplementedQuantumComputeServer() {}
@@ -124,11 +130,11 @@ func _QuantumCompute_RunCircuit_Handler(srv interface{}, ctx context.Context, de
 }
 
 func _QuantumCompute_StreamGates_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(QuantumComputeServer).StreamGates(&grpc.GenericServerStream[GateOperation, Measurement]{ServerStream: stream})
+	return srv.(QuantumComputeServer).StreamGates(&grpc.GenericServerStream[GateOperation, StateResponse]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type QuantumCompute_StreamGatesServer = grpc.BidiStreamingServer[GateOperation, Measurement]
+type QuantumCompute_StreamGatesServer = grpc.BidiStreamingServer[GateOperation, StateResponse]
 
 // QuantumCompute_ServiceDesc is the grpc.ServiceDesc for QuantumCompute service.
 // It's only intended for direct use with grpc.RegisterService,

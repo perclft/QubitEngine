@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: qubit-engine
-  namespace: quantum-system  # Adjust if you use 'default'
+  namespace: quantum-system # Adjust if you use 'default'
   labels:
     app: qubit-engine
 spec:
@@ -15,32 +15,42 @@ spec:
       labels:
         app: qubit-engine
     spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
-      - name: engine
-        image: qubit-engine:prod
-        imagePullPolicy: IfNotPresent
-        ports:
-        - containerPort: 50051
-          name: grpc-port
-        
-        # Native gRPC Health Checking
-        # (Your C++ code must enable the standard Health service for this to pass)
-        readinessProbe:
-          tcpSocket:
-            port: 50051
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        livenessProbe:
-          tcpSocket:
-            port: 50051
-          initialDelaySeconds: 15
-          periodSeconds: 20
+        - name: engine
+          image: qubit-engine:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 50051
+              name: grpc-port
 
-        # Resources: Quantum sims are CPU intensive
-        resources:
-          requests:
-            cpu: "500m"
-            memory: "256Mi"
-          limits:
-            cpu: "2000m" 
-            memory: "1Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: false # Needs write access to /tmp usually? No, stateless. Let's try true or omit. Best to leave false for now to avoid complexity unless user asked for strict read-only. We will drop caps though.
+
+          # Native gRPC Health Checking
+          # (Your C++ code must enable the standard Health service for this to pass)
+          readinessProbe:
+            tcpSocket:
+              port: 50051
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 50051
+            initialDelaySeconds: 15
+            periodSeconds: 20
+
+          # Resources: Quantum sims are CPU intensive
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"

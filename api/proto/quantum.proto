@@ -19,8 +19,8 @@ service QuantumCompute {
   rpc RunCircuit (CircuitRequest) returns (StateResponse) {}
   
   // Streaming method for large or interactive circuits.
-  // Sends a stream of gates and receives a stream of measurements/results.
-  rpc StreamGates (stream GateOperation) returns (stream Measurement) {}
+  // Sends a stream of gates and receives a stream of FULL STATE VECTORS.
+  rpc StreamGates (stream GateOperation) returns (stream StateResponse) {}
 }
 
 // ------------------------------------------------------------------
@@ -37,13 +37,25 @@ message GateOperation {
     HADAMARD = 0;
     PAULI_X = 1;
     CNOT = 2;
-    MEASURE = 3; // New Operation
+    MEASURE = 3;
+    // New Gates
+    TOFFOLI = 4;
+    PHASE_S = 5; // S Gate (Z90)
+    PHASE_T = 6; // T Gate (Z45)
+    ROTATION_Y = 7;
+    ROTATION_Z = 8;
   }
   GateType type = 1;
   uint32 target_qubit = 2;
   uint32 control_qubit = 3;
   // Optional: Register to store the classical result (useful for complex circuits)
   uint32 classical_register = 4;
+  
+  // For Rotations
+  double angle = 5; // Rotation angle in radians
+  
+  // For Toffoli (3rd qubit)
+  uint32 second_control_qubit = 6;
 }
 
 message StateResponse {
@@ -55,7 +67,7 @@ message StateResponse {
   // The full state vector of size 2^num_qubits
   repeated ComplexNumber state_vector = 1;
 
-  // New: Return measured classical bits (e.g., Qubit 0 -> 1)
+  // Return measured classical bits (e.g., Qubit 0 -> 1)
   map<uint32, bool> classical_results = 2;
 }
 
