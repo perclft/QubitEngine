@@ -40,6 +40,18 @@
 
 ---
 
+## 🎬 Demo
+
+<p align="center">
+  <img src="docs/videos/art_studio_demo.webp" alt="Quantum Art Studio Demo" width="800" />
+</p>
+
+<p align="center">
+  <em>Quantum Art Studio — Create stunning visualizations from quantum computations</em>
+</p>
+
+---
+
 ## Quick Start
 
 ### Prerequisites
