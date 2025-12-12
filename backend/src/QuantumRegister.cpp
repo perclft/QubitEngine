@@ -238,3 +238,31 @@ void QuantumRegister::applyRotationZ(size_t target, double angle) {
 const std::vector<Complex> &QuantumRegister::getStateVector() const {
   return state;
 }
+void QuantumRegister::applyDepolarizingNoise(double p) {
+  if (p <= 0.0)
+    return;
+
+  // We iterate through each qubit and probabilistically apply a Pauli error.
+  // This simulates a "Depolarizing Channel" in a Monte Carlo wavefunction
+  // trajectory.
+  thread_local std::mt19937 gen(std::random_device{}());
+  std::uniform_real_distribution<> dis(0.0, 1.0);
+
+  for (size_t q = 0; q < num_qubits; ++q) {
+    if (dis(gen) < p) {
+      // Error Occurred!
+      // 1/3 chance of X, Y, or Z
+      double type = dis(gen);
+      if (type < 0.3333) {
+        applyX(q);
+      } else if (type < 0.6666) {
+        // Y = i * X * Z. We can just use RotationY(pi) which is Y (ignoring
+        // global phase)
+        applyRotationY(q, M_PI);
+      } else {
+        // Z
+        applyRotationZ(q, M_PI);
+      }
+    }
+  }
+}

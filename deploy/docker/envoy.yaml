@@ -58,5 +58,5 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                      address: host.docker.internal
+                      address: engine
                       port_value: 50051

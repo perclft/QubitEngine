@@ -31,6 +31,9 @@ public:
   void applyRotationY(size_t target, double angle);
   void applyRotationZ(size_t target, double angle);
 
+  // Phase 9: Noise
+  void applyDepolarizingNoise(double probability);
+
   bool measure(size_t target_qubit);
 
   const std::vector<Complex> &getStateVector() const;

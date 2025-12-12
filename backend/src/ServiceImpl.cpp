@@ -4,6 +4,7 @@
 #include <cstdint> // FIX: Added for uint32_t
 #include <iostream>
 #include <sys/sysinfo.h>
+#include <unistd.h> // For gethostname
 
 using grpc::ServerContext;
 using grpc::Status;
@@ -30,8 +31,9 @@ bool hasEnoughMemory(int num_qubits) {
 }
 
 // Helper to map GateOperation to QuantumRegister calls
-void applyGate(QuantumRegister &qreg, const qubit_engine::GateOperation &op,
-               qubit_engine::StateResponse *response) {
+void QubitEngineServiceImpl::applyGate(QuantumRegister &qreg,
+                                       const qubit_engine::GateOperation &op,
+                                       qubit_engine::StateResponse *response) {
   switch (op.type()) {
   case qubit_engine::GateOperation::HADAMARD:
     qreg.applyHadamard(op.target_qubit());
@@ -72,14 +74,22 @@ void applyGate(QuantumRegister &qreg, const qubit_engine::GateOperation &op,
 }
 
 // Helper to serialize state vector
-void serializeState(const QuantumRegister &qreg,
-                    qubit_engine::StateResponse *response) {
+void QubitEngineServiceImpl::serializeState(
+    const QuantumRegister &qreg, qubit_engine::StateResponse *response) {
   response->clear_state_vector();
   const auto &state = qreg.getStateVector();
   for (const auto &amp : state) {
     auto *c = response->add_state_vector();
     c->set_real(amp.real());
     c->set_imag(amp.imag());
+  }
+
+  // Populate Server ID (Pod Hostname)
+  char hostname[1024];
+  if (gethostname(hostname, 1024) == 0) {
+    response->set_server_id(hostname);
+  } else {
+    response->set_server_id("unknown-host");
   }
 }
 

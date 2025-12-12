@@ -34,10 +34,11 @@ func main() {
 	serverAddr := flag.String("server", "localhost:50051", "Engine Address")
 	fileArg := flag.String("file", "", "Path to circuit JSON file")
 	streamMode := flag.Bool("stream", false, "Enable Real-Time Streaming Visualization")
+	vizMode := flag.Bool("viz", false, "Enable Server-Side Visualization Stream")
 	flag.Parse()
 
 	if *fileArg == "" {
-		fmt.Println("❌ Usage: qctl -file <circuit.json> [-server host:port] [-stream]")
+		fmt.Println("❌ Usage: qctl -file <circuit.json> [-server host:port] [-stream] [-viz]")
 		os.Exit(1)
 	}
 
@@ -104,6 +105,8 @@ func main() {
 
 	if *streamMode {
 		runStreaming(ctx, c, pbOps)
+	} else if *vizMode {
+		runVisualize(ctx, c, circuit.Qubits, pbOps)
 	} else {
 		runStandard(ctx, c, circuit.Qubits, pbOps)
 	}
@@ -122,6 +125,36 @@ func runStandard(ctx context.Context, c pb.QuantumComputeClient, qubits int32, o
 
 	fmt.Printf("✅ Done in %s\n", duration)
 	printResults(res)
+}
+
+func runVisualize(ctx context.Context, c pb.QuantumComputeClient, qubits int32, ops []*pb.GateOperation) {
+	fmt.Println("🎥 Requesting Visualization Stream...")
+
+	req := &pb.CircuitRequest{
+		NumQubits:  qubits,
+		Operations: ops,
+	}
+
+	stream, err := c.VisualizeCircuit(ctx, req)
+	if err != nil {
+		log.Fatalf("Visualize init failed: %v", err)
+	}
+
+	step := 1
+	for {
+		res, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatalf("Visualize stream failed: %v", err)
+		}
+
+		fmt.Printf("\n--- [Step %d] Visual State ---\n", step)
+		printStateVector(res.StateVector)
+		step++
+	}
+	fmt.Println("\n✅ Visualization Completed.")
 }
 
 func runStreaming(ctx context.Context, c pb.QuantumComputeClient, ops []*pb.GateOperation) {

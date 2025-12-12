@@ -2,6 +2,8 @@
 #include <api/proto/quantum.grpc.pb.h>
 #include <grpcpp/grpcpp.h>
 
+class QuantumRegister;
+
 class QubitEngineServiceImpl final
     : public qubit_engine::QuantumCompute::Service {
 public:
@@ -17,4 +19,10 @@ public:
   grpc::Status VisualizeCircuit(
       grpc::ServerContext *context, const qubit_engine::CircuitRequest *request,
       grpc::ServerWriter<qubit_engine::StateResponse> *writer) override;
+
+private:
+  void applyGate(QuantumRegister &qreg, const qubit_engine::GateOperation &op,
+                 qubit_engine::StateResponse *response);
+  void serializeState(const QuantumRegister &qreg,
+                      qubit_engine::StateResponse *response);
 };

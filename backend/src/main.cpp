@@ -28,6 +28,7 @@ void RunServer() {
 
   std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
   std::cout << "QubitEngine (C++) listening on " << server_address << std::endl;
+  std::cout << "QubitEngine v2 (Debug) - VisualizeCircuit enabled" << std::endl;
 
   // Register signals
   std::signal(SIGINT, signalHandler);

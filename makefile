@@ -46,11 +46,10 @@ docker-build:
 web-proto:
 	@echo "Generating Web Clients..."
 	@mkdir -p web/src/generated
+	@rm -rf web/src/generated/*
 	$(PROTOC) -I $(PROTO_DIR) \
-		--js_out=import_style=commonjs,binary:web/src/generated \
-		--grpc-web_out=import_style=typescript,mode=grpcwebtext:web/src/generated \
-		--plugin=protoc-gen-grpc-web=./bin/protoc-gen-grpc-web \
-		--plugin=protoc-gen-js=./web/node_modules/.bin/protoc-gen-js \
+		--ts_out=web/src/generated \
+		--plugin=protoc-gen-ts=./web/node_modules/.bin/protoc-gen-ts \
 		$(PROTO_DIR)/quantum.proto
 
 # Run the full stack (Engine + Envoy + Web)

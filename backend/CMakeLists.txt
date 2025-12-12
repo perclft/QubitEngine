@@ -53,6 +53,7 @@ target_include_directories(qubit_engine PUBLIC
 add_executable(qubit_engine 
     backend/src/QuantumRegister.cpp
     backend/src/ServiceImpl.cpp
+    backend/src/ServiceImpl_Visualize.cpp
     backend/src/main.cpp
     
     # Generated sources (.cc) must be included here!

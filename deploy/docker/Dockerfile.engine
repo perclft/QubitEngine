@@ -29,6 +29,8 @@ RUN echo 'target_link_libraries(qubit_engine PUBLIC grpc++ protobuf gflags glog 
 RUN mkdir -p backend/src/generated && \
     /usr/bin/protoc -I . --cpp_out=backend/src/generated --grpc_out=backend/src/generated \
     --plugin=protoc-gen-grpc=/usr/bin/grpc_cpp_plugin api/proto/quantum.proto && \
+    echo "--- GENERATED HEADER START ---" && \
+    exit 0 && \
     mkdir -p /usr/local/include/generated/api/proto/ && \
     cp backend/src/generated/api/proto/*pb.h /usr/local/include/generated/api/proto/
 

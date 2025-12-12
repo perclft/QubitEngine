@@ -2,7 +2,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 COPY . .
 # Note: In a real prod setup we would run 'npm run build'.
 # For this 'Live Dev' verification we might strictly want the build artifact.

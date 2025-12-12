@@ -3,6 +3,9 @@ version: '3.8'
 services:
   # 1. Quantum Engine (Backend)
   engine:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.engine
     image: qubit-engine:latest
     ports:
       - "50051:50051"

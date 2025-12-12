@@ -1,40 +1,236 @@
 # QubitEngine
 
-Infrastructure for the Quantum-Ready Future. I built it to solve the deployment, scaling, and memory-management challenges that will exist when real quantum hardware becomes accessible via API.
+**Infrastructure for the Quantum-Ready Future.** A high-performance, distributed quantum circuit simulator designed for state vector evolution on classical hardware.
 
-is a high-performance, distributed quantum circuit simulator designed for state vector evolution on classical hardware. It implements a decoupled microservices architecture, separating the compute-intensive physics kernel (C++20) from the control plane (Go) via a strict gRPC contract.
-This system is engineered for horizontal scalability, utilizing OpenMP for shared-memory parallelization within nodes and Kubernetes for distributed load balancing across nodes.
+![QubitEngine Dashboard](docs/images/dashboard.png)
 
-# System Architecture
-The project follows a cloud-native design pattern:
-# Compute Engine (Backend):
-A C++20 application that manages the Hilbert space state vector. It handles unitary gate applications (Hadamard, Pauli-X, CNOT) and non-unitary measurement operations (wavefunction collapse).
+## Overview
 
-# Control Plane (CLI):
-A Go-based command-line interface (qctl) that serializes user intent into Protocol Buffers and transmits them to the engine.
+QubitEngine implements a decoupled microservices architecture, separating the compute-intensive physics kernel (C++20) from the control plane (Go) via a strict gRPC contract. This system is engineered for horizontal scalability, utilizing OpenMP for shared-memory parallelization within nodes and Kubernetes for distributed load balancing across nodes.
 
-# Communication:
-gRPC (HTTP/2) is used for low-latency, strongly typed communication between components.
+### Key Features
 
-# Infrastructure:
-The system is containerized (Docker) and designed to run as a stateless ReplicaSet on Kubernetes.
+| Feature | Description |
+|---------|-------------|
+| **Live Visualization** | Real-time 3D Bloch Sphere visualization with streaming state updates |
+| **Quantum Audio Synthesis** | Sonification of quantum states (phase → pitch, amplitude → volume) |
+| **Depolarizing Noise** | Configurable quantum noise simulation for realistic decoherence |
+| **Visual Overdrive Mode** | Post-processing effects (Bloom, Chromatic Aberration, Vignette) |
+| **Parallel Execution** | Gate operations parallelized using OpenMP SIMD instructions |
+| **Cluster Scalability** | Horizontal scaling with Kubernetes (3+ replicas) |
+| **Security Hardening** | Non-root containers, resource limits, health probes |
 
-# Key Features
+---
 
-Parallel Execution: Gate operations are parallelized across CPU cores using OpenMP SIMD instructions.
-Non-Unitary Simulation: Supports probabilistic measurement and true wavefunction collapse logic (Born rule implementation).
-Memory Safety: Implements hardware-aware pre-flight checks to reject circuits that exceed available physical RAM, preventing OOM crashes.
-Fault Tolerance: Designed with Kubernetes Liveness and Readiness probes to ensure automatic recovery from deadlocks or failures.
+## System Architecture
 
-# Prerequisites
-Docker (20.10+)Kubernetes Cluster (Minikube, Kind, or Docker Desktop)Go (1.23+)MakeBuild
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         QubitEngine System                          │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌─────────────┐    gRPC-Web    ┌─────────────┐    gRPC    ┌──────┐│
+│  │ React + 3D  │◄──────────────►│   Envoy     │◄──────────►│Engine││
+│  │  Dashboard  │     :8080      │   Proxy     │    :50051  │ (C++)││
+│  └─────────────┘                └─────────────┘            └──────┘│
+│       :5173                                                        │
+│                                                                     │
+│  Features:                      Features:                Features: │
+│  • Bloch Sphere (Three.js)      • gRPC-Web Bridge        • State   │
+│  • Generative Canvas            • Load Balancing           Vector  │
+│  • Quantum Audio                                         • Gates   │
+│  • Visual Overdrive                                      • Noise   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
-# Instructions 
-The project uses a Makefile to automate the build pipeline.1. Build Docker ImagesThis command compiles the C++ engine and Go CLI into optimized, multi-stage Docker images (based on Alpine Linux)
+### Components
 
-make docker-build
+- **Compute Engine (C++20)**: Manages Hilbert space state vectors. Handles unitary gate applications (H, X, Y, Z, CNOT, Toffoli, Phase, Rotation) and non-unitary measurement operations.
+- **Control Plane (Go CLI)**: `qctl` serializes user intent into Protocol Buffers for transmission to the engine.
+- **Web Dashboard (React + Three.js)**: Real-time 3D visualization with audio synthesis and post-processing effects.
+- **Envoy Proxy**: Bridges gRPC-Web (browser) to native gRPC (backend).
 
-# 2. Local Development Build (Optional)If you wish to build binaries locally without Docker:Bash# Generate Protobuf code
+---
+
+## Quick Start
+
+### Prerequisites
+
+- Docker (20.10+)
+- Docker Compose v2
+
+### Running with Docker Compose
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/QubitEngine.git
+cd QubitEngine
+
+# Build and start all services
+docker compose -f deploy/docker/docker-compose.yaml up --build
+
+# Access the dashboard
+open http://localhost:5173
+```
+
+### Services
+
+| Service | Port | Description |
+|---------|------|-------------|
+| Web Dashboard | 5173 | React frontend with 3D visualization |
+| Envoy Proxy | 8080 | gRPC-Web to gRPC bridge |
+| Quantum Engine | 50051 | C++ compute backend |
+
+---
+
+## Features in Detail
+
+### 🌀 Live Bloch Sphere Visualization
+
+The dashboard displays a real-time 3D Bloch sphere that animates as the quantum state evolves. The state vector is rendered with:
+- **Neon trails** showing the path of quantum evolution
+- **Dynamic coloring** based on quantum phase
+- **Smooth interpolation** between states
+
+### 🔊 Quantum Audio Synthesis
+
+Enable the "Quantum Audio" checkbox to hear the quantum state:
+- **Amplitude → Volume**: Higher probability = louder tone
+- **Phase → Pitch**: Phase rotation creates a sci-fi "warble" effect
+- **Test Button**: Verify browser audio is working
+
+### 🎨 Visual Overdrive Mode
+
+Toggle advanced post-processing effects:
+- **Bloom**: Glowing neon aesthetic
+- **Chromatic Aberration**: Prismatic edge effects
+- **Noise**: Film grain overlay
+- **Vignette**: Cinematic darkened edges
+
+> ⚠️ **Warning**: Visual Overdrive is GPU-intensive. Disable if experiencing lag.
+
+### 📡 Depolarizing Noise
+
+Simulate quantum decoherence with the "Entropy" slider:
+- Range: 0.0 (pure) to 0.5 (maximum noise)
+- Applies random Pauli errors (X, Y, Z) after each gate
+- Watch the Bloch vector jitter erratically under noise
+
+---
+
+## CLI Usage
+
+### Using JSON Circuit Files
+
+```bash
+# Build the CLI
+make build-go
+
+# Run a circuit from JSON
+./bin/qctl -file circuits/bell.json
+```
+
+### Example Circuit (bell.json)
+
+```json
+{
+  "name": "Bell State Entanglement",
+  "qubits": 2,
+  "ops": [
+    { "gate": "H", "target": 0 },
+    { "gate": "CNOT", "control": 0, "target": 1 },
+    { "gate": "M", "target": 0 },
+    { "gate": "M", "target": 1 }
+  ]
+}
+```
+
+### Streaming Mode
+
+```bash
+./bin/qctl -file circuits/stream_test.json -stream
+```
+
+---
+
+## Kubernetes Deployment
+
+### Deploy to Cluster
+
+```bash
+# Create namespace and deploy
+kubectl apply -f deploy/k8s/namespace.yaml
+kubectl apply -f deploy/k8s/engine-deployment.yaml
+kubectl apply -f deploy/k8s/engine-service.yaml
+
+# Verify pods (3 replicas)
+kubectl get pods -n qubit-system
+
+# Example output:
+# NAME                           READY   STATUS    RESTARTS   AGE
+# qubit-engine-5fdcfcfc96-8kmnm   1/1     Running   0          5m
+# qubit-engine-5fdcfcfc96-9mr9w   1/1     Running   0          5m
+# qubit-engine-5fdcfcfc96-chqkn   1/1     Running   0          5m
+```
+
+### Cluster Scalability
+
+The dashboard displays "Computed By: [pod-name]" to show which replica processed each simulation. Requests are round-robin load balanced across engines.
+
+---
+
+## Project Structure
+
+```
+.
+├── api/
+│   └── proto/               # Protocol Buffer definitions (gRPC contract)
+├── backend/
+│   ├── src/                 # C++ source (QuantumRegister, ServiceImpl)
+│   └── include/             # Header files
+├── cli/
+│   └── cmd/qctl/            # Go CLI entry point
+├── web/
+│   ├── src/
+│   │   ├── components/      # React components (BlochSphere, QuantumAudio)
+│   │   └── generated/       # TypeScript protobuf clients
+│   └── package.json
+├── deploy/
+│   ├── docker/              # Dockerfiles, docker-compose.yaml, envoy.yaml
+│   └── k8s/                 # Kubernetes manifests
+├── circuits/                # Example circuit JSON files
+└── Makefile                 # Build automation
+```
+
+---
+
+## Performance & Limitations
+
+### State Vector Memory
+
+The memory requirement scales exponentially: **16 × 2^N bytes**
+
+| Qubits | Memory Required |
+|--------|-----------------|
+| 20     | ~16 MB          |
+| 25     | ~512 MB         |
+| 28     | ~4 GB           |
+| 30     | ~16 GB          |
+
+### Hard Limits
+
+- **Maximum Qubits**: 30 (enforced to protect host system)
+- **Thread Safety**: Uses `thread_local` RNG for concurrent measurement operations
+
+---
+
+## Development
+
+### Local Build (Without Docker)
+
+```bash
+# Generate Protobuf code
 make proto
 
 # Build C++ Engine (Requires CMake & GCC 11+)
@@ -42,62 +238,18 @@ make build-cpp
 
 # Build Go CLI
 make build-go
+```
 
-# Usage
-Running Locally (Docker)
-Start the Engine
-Run the simulation engine in a background container.
+### Web Development
 
-docker network create qubit-net
-docker run -d --net qubit-net --name qubit-engine -p 50051:50051 qubit-engine:latest
+```bash
+cd web
+npm install --legacy-peer-deps
+npm run dev
+```
 
-# Run a Circuit. Use the qctl client to submit a job. The client connects to the engine, sends the circuit definition, and prints the resulting state vector and measurement bits.
+---
 
-docker run --rm --net qubit-net qctl:latest -server qubit-engine:50051
+## License
 
-Expected Output:PlaintextSending circuit: Bell State + Measurement...
-
---- Classical Measurement Results ---
-Qubit 0 collapsed to: |1>
-Qubit 1 collapsed to: |1>
-
---- Final Wavefunction (Collapsed) ---
-State |3>: (1.000 + 0.000i)
-
-
-Kubernetes DeploymentFor production-grade deployment, use the provided manifests to deploy a load-balanced cluster.1. Deploy the ClusterThis creates a Namespace, a Deployment (3 Replicas), and a LoadBalancer Service.
-
-kubectl apply -f deploy/k8s/namespace.yaml
-kubectl apply -f deploy/k8s/engine-deployment.yaml
-kubectl apply -f deploy/k8s/engine-service.yaml
-
-# 2. Verify StatusEnsure all 3 replicas are Running.
-
-kubectl get pods -n qubit-system
-
-# 3. Send Distributed RequestsPoint the local client to the Kubernetes Service. Requests will be round-robin load balanced across the available engines.
-
-./bin/qctl -server localhost:50051
-
-# Project StructurePlaintext.
-├── api
-│   └── proto            # Protocol Buffer definitions (gRPC contract)
-├── backend              # C++ Compute Engine
-│   ├── src              # Source code (QuantumRegister, ServiceImpl)
-│   ├── include          # Header files
-│   └── tests            # GoogleTest unit tests
-├── cli                  # Go Control Plane
-│   ├── cmd              # Entry point for qctl
-│   └── internal         # Generated gRPC client code
-├── deploy
-│   ├── docker           # Multi-stage Dockerfiles
-│   └── k8s              # Kubernetes Manifests (Deployment, Service)
-└── makefile             # Automation scripts
-
-# Performance & Limitations
-
-State Vector Size: The memory requirement scales exponentially ($16 \times 2^N$ bytes).20 Qubits: ~16 MB28 Qubits: ~4 GB30 Qubits: ~16 GB
-
-# Hard Limits: The engine enforces a hard limit of 30 qubits to protect the host system.
-
-# LicenseThis project is licensed under the MIT License. See the LICENSE file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

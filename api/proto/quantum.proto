@@ -35,6 +35,8 @@ service QuantumCompute {
 message CircuitRequest {
   int32 num_qubits = 1;
   repeated GateOperation operations = 2;
+  // Probability of a depolarizing error occurring per step (0.0 - 1.0)
+  double noise_probability = 3;
 }
 
 message GateOperation {
@@ -74,6 +76,9 @@ message StateResponse {
 
   // Return measured classical bits (e.g., Qubit 0 -> 1)
   map<uint32, bool> classical_results = 2;
+
+  // Identity of the server (Hostname/Pod ID) that processed this step
+  string server_id = 3;
 }
 
 message Measurement {
