@@ -1,0 +1,142 @@
+syntax = "proto3";
+
+package qubit_engine.crypto;
+
+option go_package = "github.com/perclft/QubitEngine/modules/crypto/generated";
+
+// ------------------------------------------------------------------
+// Quantum Cryptography Service
+// BB84 QKD Protocol and quantum-safe key distribution
+// ------------------------------------------------------------------
+
+service QuantumCrypto {
+    // Initialize BB84 key exchange as Alice (sender)
+    rpc StartBB84Alice(BB84AliceRequest) returns (BB84AliceState);
+    
+    // Initialize BB84 key exchange as Bob (receiver)
+    rpc StartBB84Bob(BB84BobRequest) returns (BB84BobState);
+    
+    // Complete BB84 by reconciling bases
+    rpc ReconcileBB84(ReconcileRequest) returns (BB84Key);
+    
+    // Generate quantum random key
+    rpc GenerateQuantumKey(KeyRequest) returns (QuantumKey);
+    
+    // Encrypt message with quantum key
+    rpc QuantumEncrypt(EncryptRequest) returns (EncryptedMessage);
+    
+    // Decrypt message with quantum key
+    rpc QuantumDecrypt(DecryptRequest) returns (DecryptedMessage);
+    
+    // Detect eavesdropping in BB84
+    rpc DetectEavesdropping(EavesdropRequest) returns (EavesdropResult);
+}
+
+// ------------------------------------------------------------------
+// BB84 Protocol
+// ------------------------------------------------------------------
+
+enum Basis {
+    BASIS_RECTILINEAR = 0;    // |0⟩, |1⟩ (Z basis)
+    BASIS_DIAGONAL = 1;       // |+⟩, |−⟩ (X basis)
+}
+
+message BB84AliceRequest {
+    int32 num_bits = 1;       // Number of qubits to send
+    string session_id = 2;
+}
+
+message BB84AliceState {
+    string session_id = 1;
+    repeated int32 bits = 2;      // Alice's random bits
+    repeated Basis bases = 3;     // Alice's random basis choices
+    bytes quantum_states = 4;     // Encoded quantum states (simulated)
+}
+
+message BB84BobRequest {
+    string session_id = 1;
+    bytes quantum_states = 2;     // Received from Alice
+}
+
+message BB84BobState {
+    string session_id = 1;
+    repeated Basis bases = 2;     // Bob's random basis choices
+    repeated int32 measurements = 3; // Bob's measurement results
+}
+
+message ReconcileRequest {
+    string session_id = 1;
+    repeated Basis alice_bases = 2;
+    repeated Basis bob_bases = 3;
+    repeated int32 alice_bits = 4;
+    repeated int32 bob_measurements = 5;
+}
+
+message BB84Key {
+    string session_id = 1;
+    bytes shared_key = 2;         // The resulting shared secret
+    int32 original_bits = 3;      // How many bits we started with
+    int32 sifted_bits = 4;        // How many bits survived sifting
+    double error_rate = 5;        // Estimated error rate
+    bool secure = 6;              // True if error rate is acceptable
+}
+
+// ------------------------------------------------------------------
+// Quantum Key Generation
+// ------------------------------------------------------------------
+
+message KeyRequest {
+    int32 key_length_bits = 1;
+    string algorithm = 2;         // "qrng", "bb84", "e91"
+}
+
+message QuantumKey {
+    bytes key = 1;
+    string algorithm = 2;
+    int64 generated_at = 3;
+    string entropy_source = 4;
+}
+
+// ------------------------------------------------------------------
+// Quantum Encryption
+// ------------------------------------------------------------------
+
+message EncryptRequest {
+    bytes plaintext = 1;
+    bytes key = 2;
+    string algorithm = 3;         // "otp", "aes-qrng"
+}
+
+message EncryptedMessage {
+    bytes ciphertext = 1;
+    bytes nonce = 2;
+    string algorithm = 3;
+}
+
+message DecryptRequest {
+    bytes ciphertext = 1;
+    bytes key = 2;
+    bytes nonce = 3;
+    string algorithm = 4;
+}
+
+message DecryptedMessage {
+    bytes plaintext = 1;
+    bool valid = 2;
+}
+
+// ------------------------------------------------------------------
+// Eavesdropping Detection
+// ------------------------------------------------------------------
+
+message EavesdropRequest {
+    string session_id = 1;
+    repeated int32 alice_check_bits = 2;
+    repeated int32 bob_check_bits = 3;
+}
+
+message EavesdropResult {
+    double error_rate = 1;
+    bool eavesdropper_detected = 2;
+    string recommendation = 3;    // "proceed", "abort", "retry"
+}

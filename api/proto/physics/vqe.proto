@@ -1,0 +1,151 @@
+syntax = "proto3";
+
+package qubit_engine.physics;
+
+option go_package = "github.com/perclft/QubitEngine/modules/physics/generated";
+
+import "api/proto/quantum.proto";
+
+// ------------------------------------------------------------------
+// VQE (Variational Quantum Eigensolver) Service
+// Quantum Chemistry: Find ground state energy of molecular Hamiltonians
+// ------------------------------------------------------------------
+
+service VQESolver {
+    // Run VQE optimization to find ground state
+    rpc FindGroundState(VQERequest) returns (stream VQEIteration);
+    
+    // Get predefined molecule configurations
+    rpc GetMoleculeLibrary(Empty) returns (MoleculeLibrary);
+    
+    // Build a custom Hamiltonian
+    rpc BuildHamiltonian(MoleculeConfig) returns (Hamiltonian);
+    
+    // Evaluate expectation value for a given ansatz
+    rpc EvaluateExpectation(ExpectationRequest) returns (ExpectationResult);
+}
+
+// ------------------------------------------------------------------
+// Molecule Configuration
+// ------------------------------------------------------------------
+
+message Empty {}
+
+message MoleculeConfig {
+    string name = 1;              // e.g. "H2", "LiH", "HeH+"
+    repeated Atom atoms = 2;      // Atom positions
+    int32 charge = 3;             // Molecular charge
+    int32 multiplicity = 4;       // Spin multiplicity (1=singlet, 2=doublet, etc.)
+    string basis_set = 5;         // e.g. "sto-3g", "6-31g"
+}
+
+message Atom {
+    string element = 1;           // e.g. "H", "Li", "He"
+    double x = 2;                 // Position in Angstroms
+    double y = 3;
+    double z = 4;
+}
+
+// ------------------------------------------------------------------
+// Hamiltonian Representation (Pauli String Sum)
+// H = Σ c_i * P_i where P_i is a Pauli string (tensor product of I, X, Y, Z)
+// ------------------------------------------------------------------
+
+message Hamiltonian {
+    string molecule_name = 1;
+    int32 num_qubits = 2;         // Number of qubits needed
+    repeated PauliTerm terms = 3; // Sum of Pauli terms
+    double nuclear_repulsion = 4; // Nuclear repulsion energy (constant offset)
+}
+
+message PauliTerm {
+    double coefficient = 1;       // Real coefficient
+    repeated PauliOperator operators = 2;
+}
+
+message PauliOperator {
+    int32 qubit = 1;
+    PauliType type = 2;
+}
+
+enum PauliType {
+    PAULI_I = 0;
+    PAULI_X = 1;
+    PAULI_Y = 2;
+    PAULI_Z = 3;
+}
+
+// ------------------------------------------------------------------
+// VQE Request/Response
+// ------------------------------------------------------------------
+
+enum AnsatzType {
+    ANSATZ_UCCSD = 0;             // Unitary Coupled Cluster Singles and Doubles
+    ANSATZ_HARDWARE_EFFICIENT = 1; // Hardware efficient ansatz
+    ANSATZ_RY = 2;                // Simple RY rotation layers
+}
+
+enum OptimizerType {
+    OPTIMIZER_COBYLA = 0;
+    OPTIMIZER_SPSA = 1;
+    OPTIMIZER_ADAM = 2;
+    OPTIMIZER_GRADIENT_DESCENT = 3;
+}
+
+message VQERequest {
+    oneof target {
+        MoleculeConfig molecule = 1;
+        Hamiltonian hamiltonian = 2;
+    }
+    AnsatzType ansatz = 3;
+    OptimizerType optimizer = 4;
+    int32 max_iterations = 5;
+    double convergence_threshold = 6;
+    repeated double initial_parameters = 7; // Optional starting point
+    int32 shots_per_evaluation = 8;
+}
+
+message VQEIteration {
+    int32 iteration = 1;
+    double energy = 2;            // Current energy estimate
+    double energy_variance = 3;   // Statistical uncertainty
+    repeated double parameters = 4;
+    double gradient_norm = 5;     // For gradient-based optimizers
+    bool converged = 6;
+    string status = 7;            // "running", "converged", "max_iterations"
+}
+
+// ------------------------------------------------------------------
+// Expectation Value Evaluation
+// ------------------------------------------------------------------
+
+message ExpectationRequest {
+    Hamiltonian hamiltonian = 1;
+    repeated double ansatz_parameters = 2;
+    AnsatzType ansatz = 3;
+    int32 shots = 4;
+}
+
+message ExpectationResult {
+    double expectation_value = 1;
+    double variance = 2;
+    int32 total_shots = 3;
+    map<string, double> term_contributions = 4; // Per-term breakdown
+}
+
+// ------------------------------------------------------------------
+// Molecule Library
+// ------------------------------------------------------------------
+
+message MoleculeLibrary {
+    repeated MoleculePreset presets = 1;
+}
+
+message MoleculePreset {
+    string id = 1;                // e.g. "H2_equilibrium"
+    string name = 2;              // e.g. "Hydrogen Molecule (equilibrium)"
+    string formula = 3;           // e.g. "H2"
+    MoleculeConfig config = 4;
+    double reference_energy = 5;  // Known ground state energy (Hartree)
+    string description = 6;
+}

@@ -1,0 +1,137 @@
+syntax = "proto3";
+
+package qubit_engine.finance;
+
+option go_package = "github.com/perclft/QubitEngine/modules/finance/generated";
+
+// ------------------------------------------------------------------
+// Quantum Finance Service
+// Monte Carlo simulations and option pricing
+// ------------------------------------------------------------------
+
+service QuantumFinance {
+    // Price European options using quantum Monte Carlo
+    rpc PriceEuropeanOption(OptionRequest) returns (OptionPrice);
+    
+    // Price American options with early exercise
+    rpc PriceAmericanOption(AmericanOptionRequest) returns (OptionPrice);
+    
+    // Run portfolio optimization
+    rpc OptimizePortfolio(PortfolioRequest) returns (OptimalPortfolio);
+    
+    // Value at Risk calculation
+    rpc CalculateVaR(VaRRequest) returns (VaRResult);
+    
+    // Simulate stock price paths
+    rpc SimulatePricePaths(SimulationRequest) returns (stream PricePath);
+}
+
+// ------------------------------------------------------------------
+// Option Types
+// ------------------------------------------------------------------
+
+enum OptionType {
+    OPTION_CALL = 0;
+    OPTION_PUT = 1;
+}
+
+message OptionRequest {
+    OptionType type = 1;
+    double spot_price = 2;        // Current stock price
+    double strike_price = 3;      // Exercise price
+    double risk_free_rate = 4;    // Annual risk-free rate (e.g., 0.05)
+    double volatility = 5;        // Annual volatility (e.g., 0.2)
+    double time_to_expiry = 6;    // Years
+    double dividend_yield = 7;    // Optional continuous dividend
+    int32 num_simulations = 8;    // Monte Carlo paths
+}
+
+message AmericanOptionRequest {
+    OptionRequest base = 1;
+    int32 exercise_dates = 2;     // Number of potential exercise dates
+}
+
+message OptionPrice {
+    double price = 1;             // Option value
+    double delta = 2;             // dV/dS
+    double gamma = 3;             // d²V/dS²
+    double theta = 4;             // dV/dt
+    double vega = 5;              // dV/dσ
+    double rho = 6;               // dV/dr
+    
+    double black_scholes = 7;     // Closed-form BS for comparison
+    double monte_carlo = 8;       // MC estimate
+    double std_error = 9;         // Monte Carlo standard error
+    int32 simulations_used = 10;
+}
+
+// ------------------------------------------------------------------
+// Portfolio Optimization
+// ------------------------------------------------------------------
+
+message Asset {
+    string symbol = 1;
+    double expected_return = 2;   // Annual
+    double volatility = 3;        // Annual
+    repeated double correlations = 4; // With other assets
+}
+
+message PortfolioRequest {
+    repeated Asset assets = 1;
+    double target_return = 2;     // Desired annual return
+    double risk_tolerance = 3;    // 0-1 scale
+    double min_weight = 4;        // Minimum allocation per asset
+    double max_weight = 5;        // Maximum allocation per asset
+}
+
+message AssetAllocation {
+    string symbol = 1;
+    double weight = 2;            // 0-1 (percentage of portfolio)
+}
+
+message OptimalPortfolio {
+    repeated AssetAllocation allocations = 1;
+    double expected_return = 2;
+    double volatility = 3;
+    double sharpe_ratio = 4;
+    double var_95 = 5;            // 95% Value at Risk
+}
+
+// ------------------------------------------------------------------
+// Value at Risk
+// ------------------------------------------------------------------
+
+message VaRRequest {
+    double portfolio_value = 1;
+    double volatility = 2;
+    double confidence = 3;        // e.g., 0.95 for 95%
+    int32 holding_period = 4;     // Days
+    int32 simulations = 5;
+}
+
+message VaRResult {
+    double var_parametric = 1;    // Assuming normal distribution
+    double var_historical = 2;    // From simulated paths
+    double cvar = 3;              // Conditional VaR (Expected Shortfall)
+    double confidence = 4;
+}
+
+// ------------------------------------------------------------------
+// Price Simulation
+// ------------------------------------------------------------------
+
+message SimulationRequest {
+    double initial_price = 1;
+    double drift = 2;             // Annual drift (mu)
+    double volatility = 3;        // Annual volatility (sigma)
+    int32 days = 4;
+    int32 paths = 5;
+}
+
+message PricePath {
+    int32 path_id = 1;
+    repeated double prices = 2;   // Daily prices
+    double final_price = 3;
+    double max_price = 4;
+    double min_price = 5;
+}

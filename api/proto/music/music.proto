@@ -1,0 +1,163 @@
+syntax = "proto3";
+
+package qubit_engine.music;
+
+option go_package = "github.com/perclft/QubitEngine/modules/music/generated";
+
+// ------------------------------------------------------------------
+// Quantum Music Composer Service
+// Generate music using quantum superposition and entanglement
+// ------------------------------------------------------------------
+
+service QuantumComposer {
+    // Generate a melodic sequence using quantum randomness
+    rpc GenerateMelody(MelodyRequest) returns (Melody);
+    
+    // Generate a chord progression
+    rpc GenerateChordProgression(ChordRequest) returns (ChordProgression);
+    
+    // Create a full composition
+    rpc ComposeTrack(CompositionRequest) returns (stream CompositionEvent);
+    
+    // Export to MIDI
+    rpc ExportMIDI(ExportRequest) returns (MIDIFile);
+    
+    // Generate rhythm pattern
+    rpc GenerateRhythm(RhythmRequest) returns (RhythmPattern);
+}
+
+// ------------------------------------------------------------------
+// Musical Elements
+// ------------------------------------------------------------------
+
+enum Scale {
+    SCALE_MAJOR = 0;
+    SCALE_MINOR = 1;
+    SCALE_DORIAN = 2;
+    SCALE_PHRYGIAN = 3;
+    SCALE_LYDIAN = 4;
+    SCALE_MIXOLYDIAN = 5;
+    SCALE_AEOLIAN = 6;
+    SCALE_LOCRIAN = 7;
+    SCALE_PENTATONIC = 8;
+    SCALE_BLUES = 9;
+    SCALE_CHROMATIC = 10;
+}
+
+enum MoodType {
+    MOOD_HAPPY = 0;
+    MOOD_SAD = 1;
+    MOOD_MYSTERIOUS = 2;
+    MOOD_ENERGETIC = 3;
+    MOOD_CALM = 4;
+    MOOD_EPIC = 5;
+    MOOD_DARK = 6;
+}
+
+message Note {
+    int32 pitch = 1;          // MIDI note number (0-127)
+    double duration = 2;      // In beats
+    double velocity = 3;      // Volume (0.0-1.0)
+    double start_time = 4;    // Start time in beats
+}
+
+// ------------------------------------------------------------------
+// Melody Generation
+// ------------------------------------------------------------------
+
+message MelodyRequest {
+    Scale scale = 1;
+    int32 root_note = 2;      // MIDI note for root (e.g., 60 = C4)
+    int32 num_notes = 3;
+    double tempo = 4;         // BPM
+    MoodType mood = 5;
+    int32 octave_range = 6;   // How many octaves to span
+}
+
+message Melody {
+    repeated Note notes = 1;
+    Scale scale = 2;
+    int32 root_note = 3;
+    double duration_beats = 4;
+}
+
+// ------------------------------------------------------------------
+// Chord Progression
+// ------------------------------------------------------------------
+
+message ChordRequest {
+    Scale scale = 1;
+    int32 root_note = 2;
+    int32 num_chords = 3;
+    MoodType mood = 4;
+}
+
+message Chord {
+    repeated int32 notes = 1; // MIDI note numbers
+    string name = 2;          // e.g., "Cmaj7", "Am"
+    double duration = 3;
+}
+
+message ChordProgression {
+    repeated Chord chords = 1;
+    string progression_name = 2; // e.g., "I-V-vi-IV"
+}
+
+// ------------------------------------------------------------------
+// Full Composition
+// ------------------------------------------------------------------
+
+message CompositionRequest {
+    string style = 1;         // "ambient", "classical", "electronic"
+    double duration_seconds = 2;
+    MoodType mood = 3;
+    int32 tracks = 4;         // Number of parallel tracks
+    double tempo = 5;
+}
+
+message CompositionEvent {
+    int32 track = 1;
+    Note note = 2;
+    string event_type = 3;    // "note_on", "note_off", "tempo_change"
+}
+
+// ------------------------------------------------------------------
+// MIDI Export
+// ------------------------------------------------------------------
+
+message ExportRequest {
+    oneof source {
+        Melody melody = 1;
+        ChordProgression chords = 2;
+    }
+    string filename = 3;
+}
+
+message MIDIFile {
+    bytes data = 1;
+    string filename = 2;
+    int32 num_tracks = 3;
+    double duration_seconds = 4;
+}
+
+// ------------------------------------------------------------------
+// Rhythm
+// ------------------------------------------------------------------
+
+message RhythmRequest {
+    int32 beats_per_bar = 1;  // 4 for 4/4 time
+    int32 num_bars = 2;
+    string style = 3;         // "rock", "jazz", "electronic"
+    double tempo = 4;
+}
+
+message RhythmPattern {
+    repeated BeatEvent events = 1;
+    int32 beats_per_bar = 2;
+}
+
+message BeatEvent {
+    double time = 1;
+    int32 instrument = 2;     // 0=kick, 1=snare, 2=hihat, etc.
+    double velocity = 3;
+}

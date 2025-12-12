@@ -1,0 +1,142 @@
+syntax = "proto3";
+
+package qubit_engine.gaming;
+
+option go_package = "github.com/perclft/QubitEngine/modules/gaming/generated";
+
+// ------------------------------------------------------------------
+// Quantum Gaming Service
+// True randomness and superposition-based game mechanics
+// ------------------------------------------------------------------
+
+service QuantumGaming {
+    // Generate truly random numbers using quantum measurement
+    rpc GenerateRandom(RandomRequest) returns (RandomResponse);
+    
+    // Generate random bytes for cryptographic purposes
+    rpc GenerateRandomBytes(RandomBytesRequest) returns (RandomBytesResponse);
+    
+    // Create a superposition state for game mechanics
+    rpc CreateSuperposition(SuperpositionRequest) returns (SuperpositionState);
+    
+    // Collapse a superposition to determine outcome
+    rpc CollapseState(CollapsRequest) returns (CollapseResult);
+    
+    // Quantum coin flip with optional bias
+    rpc QuantumCoinFlip(CoinFlipRequest) returns (CoinFlipResult);
+    
+    // Quantum dice roll (any number of sides)
+    rpc QuantumDiceRoll(DiceRequest) returns (DiceResult);
+    
+    // Generate a random deck shuffle
+    rpc ShuffleDeck(ShuffleRequest) returns (ShuffledDeck);
+}
+
+// ------------------------------------------------------------------
+// Random Number Generation
+// ------------------------------------------------------------------
+
+message RandomRequest {
+    int32 count = 1;              // How many random numbers
+    double min = 2;               // Minimum value (inclusive)
+    double max = 3;               // Maximum value (inclusive)
+    bool integers_only = 4;       // If true, return integers only
+}
+
+message RandomResponse {
+    repeated double values = 1;
+    string quantum_source = 2;    // Which quantum circuit generated this
+    int64 timestamp = 3;
+}
+
+message RandomBytesRequest {
+    int32 num_bytes = 1;          // Number of random bytes
+}
+
+message RandomBytesResponse {
+    bytes data = 1;
+    string entropy_source = 2;
+}
+
+// ------------------------------------------------------------------
+// Superposition State (for Schrödinger's game elements)
+// ------------------------------------------------------------------
+
+enum GameOutcome {
+    OUTCOME_UNKNOWN = 0;
+    OUTCOME_WIN = 1;
+    OUTCOME_LOSE = 2;
+    OUTCOME_DRAW = 3;
+    OUTCOME_BONUS = 4;
+    OUTCOME_JACKPOT = 5;
+}
+
+message SuperpositionRequest {
+    string state_id = 1;          // Unique identifier for this superposition
+    repeated OutcomeProbability outcomes = 2;
+    int32 observation_qubits = 3; // Number of qubits to use
+}
+
+message OutcomeProbability {
+    GameOutcome outcome = 1;
+    double probability = 2;       // 0.0 to 1.0 (normalized automatically)
+    int32 value = 3;              // Optional numeric value
+}
+
+message SuperpositionState {
+    string state_id = 1;
+    repeated OutcomeProbability possible_outcomes = 2;
+    bool is_collapsed = 3;
+    int64 created_at = 4;
+    int64 expires_at = 5;         // Auto-collapse time
+}
+
+message CollapsRequest {
+    string state_id = 1;
+    string observer_id = 2;       // Who is observing (for audit)
+}
+
+message CollapseResult {
+    string state_id = 1;
+    GameOutcome outcome = 2;
+    int32 outcome_value = 3;
+    double probability_was = 4;   // What was the probability of this outcome
+    int64 collapsed_at = 5;
+}
+
+// ------------------------------------------------------------------
+// Quantum Games
+// ------------------------------------------------------------------
+
+message CoinFlipRequest {
+    int32 num_flips = 1;          // Number of coins
+    double bias = 2;              // 0.5 = fair, 0.0-1.0 = probability of heads
+}
+
+message CoinFlipResult {
+    repeated bool results = 1;    // true = heads, false = tails
+    int32 heads_count = 2;
+    int32 tails_count = 3;
+}
+
+message DiceRequest {
+    int32 num_dice = 1;
+    int32 sides = 2;              // 6 for d6, 20 for d20, etc.
+}
+
+message DiceResult {
+    repeated int32 rolls = 1;
+    int32 sum = 2;
+    int32 min_roll = 3;
+    int32 max_roll = 4;
+}
+
+message ShuffleRequest {
+    int32 deck_size = 1;          // 52 for standard deck
+    string deck_type = 2;         // "standard", "tarot", "custom"
+}
+
+message ShuffledDeck {
+    repeated int32 card_order = 1; // Indices in shuffled order
+    string shuffle_proof = 2;     // Hash for verification
+}

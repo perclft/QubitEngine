@@ -1,0 +1,201 @@
+syntax = "proto3";
+
+package qubit_engine.education;
+
+option go_package = "github.com/perclft/QubitEngine/modules/education/generated";
+
+// ------------------------------------------------------------------
+// Quantum Education Service
+// Interactive learning, quizzes, and circuit library
+// ------------------------------------------------------------------
+
+service QuantumEducation {
+    // Get a lesson on a quantum topic
+    rpc GetLesson(LessonRequest) returns (Lesson);
+    
+    // List available lessons
+    rpc ListLessons(Empty) returns (LessonCatalog);
+    
+    // Start a quiz
+    rpc StartQuiz(QuizRequest) returns (Quiz);
+    
+    // Submit quiz answer
+    rpc SubmitAnswer(AnswerSubmission) returns (AnswerResult);
+    
+    // Get circuit from library
+    rpc GetCircuit(CircuitRequest) returns (LibraryCircuit);
+    
+    // List circuit library
+    rpc ListCircuits(CircuitFilter) returns (CircuitCatalog);
+    
+    // Simulate a circuit for learning
+    rpc SimulateCircuit(SimulateRequest) returns (SimulationResult);
+}
+
+// ------------------------------------------------------------------
+// Lessons
+// ------------------------------------------------------------------
+
+message Empty {}
+
+enum Topic {
+    TOPIC_SUPERPOSITION = 0;
+    TOPIC_ENTANGLEMENT = 1;
+    TOPIC_GATES = 2;
+    TOPIC_MEASUREMENT = 3;
+    TOPIC_ALGORITHMS = 4;
+    TOPIC_QFT = 5;
+    TOPIC_GROVER = 6;
+    TOPIC_SHOR = 7;
+    TOPIC_VQE = 8;
+    TOPIC_QAOA = 9;
+}
+
+enum Difficulty {
+    DIFFICULTY_BEGINNER = 0;
+    DIFFICULTY_INTERMEDIATE = 1;
+    DIFFICULTY_ADVANCED = 2;
+    DIFFICULTY_EXPERT = 3;
+}
+
+message LessonRequest {
+    Topic topic = 1;
+    Difficulty difficulty = 2;
+}
+
+message Lesson {
+    string id = 1;
+    Topic topic = 2;
+    string title = 3;
+    string content_markdown = 4;
+    repeated string key_concepts = 5;
+    repeated string circuit_examples = 6;  // Circuit IDs to demonstrate
+    string next_lesson_id = 7;
+    int32 estimated_minutes = 8;
+}
+
+message LessonCatalog {
+    repeated LessonSummary lessons = 1;
+}
+
+message LessonSummary {
+    string id = 1;
+    Topic topic = 2;
+    string title = 3;
+    Difficulty difficulty = 4;
+    int32 estimated_minutes = 5;
+}
+
+// ------------------------------------------------------------------
+// Quizzes
+// ------------------------------------------------------------------
+
+message QuizRequest {
+    Topic topic = 1;
+    Difficulty difficulty = 2;
+    int32 num_questions = 3;
+}
+
+message Quiz {
+    string quiz_id = 1;
+    repeated Question questions = 2;
+    int32 time_limit_seconds = 3;
+}
+
+enum QuestionType {
+    QUESTION_MULTIPLE_CHOICE = 0;
+    QUESTION_TRUE_FALSE = 1;
+    QUESTION_CIRCUIT_OUTPUT = 2;
+    QUESTION_FILL_BLANK = 3;
+}
+
+message Question {
+    string question_id = 1;
+    QuestionType type = 2;
+    string text = 3;
+    repeated string options = 4;  // For multiple choice
+    string circuit_id = 5;        // For circuit-based questions
+    int32 points = 6;
+}
+
+message AnswerSubmission {
+    string quiz_id = 1;
+    string question_id = 2;
+    string answer = 3;            // Index for MC, "true"/"false", etc.
+}
+
+message AnswerResult {
+    bool correct = 1;
+    string correct_answer = 2;
+    string explanation = 3;
+    int32 points_earned = 4;
+    int32 current_score = 5;
+    int32 questions_remaining = 6;
+}
+
+// ------------------------------------------------------------------
+// Circuit Library
+// ------------------------------------------------------------------
+
+message CircuitRequest {
+    string circuit_id = 1;
+}
+
+message CircuitFilter {
+    Topic topic = 1;
+    Difficulty difficulty = 2;
+    int32 max_qubits = 3;
+}
+
+message LibraryCircuit {
+    string id = 1;
+    string name = 2;
+    string description = 3;
+    Topic topic = 4;
+    Difficulty difficulty = 5;
+    int32 num_qubits = 6;
+    repeated GateStep gates = 7;
+    string expected_output = 8;   // e.g., "Bell state |Φ+⟩"
+}
+
+message GateStep {
+    string gate = 1;              // "H", "CNOT", "RZ", etc.
+    repeated int32 qubits = 2;    // Target qubits
+    double parameter = 3;         // For parametric gates
+}
+
+message CircuitCatalog {
+    repeated CircuitSummary circuits = 1;
+}
+
+message CircuitSummary {
+    string id = 1;
+    string name = 2;
+    Topic topic = 3;
+    int32 num_qubits = 4;
+    int32 num_gates = 5;
+}
+
+// ------------------------------------------------------------------
+// Interactive Simulation
+// ------------------------------------------------------------------
+
+message SimulateRequest {
+    string circuit_id = 1;        // From library
+    bool show_intermediate = 2;   // Show state after each gate
+}
+
+message SimulationResult {
+    repeated StateSnapshot snapshots = 1;
+    string final_state = 2;       // LaTeX representation
+    repeated double probabilities = 3;
+    string explanation = 4;       // Educational explanation
+}
+
+message StateSnapshot {
+    int32 step = 1;
+    string gate_applied = 2;
+    string state_latex = 3;
+    repeated double amplitudes_real = 4;
+    repeated double amplitudes_imag = 5;
+}
