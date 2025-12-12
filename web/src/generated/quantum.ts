@@ -173,6 +173,65 @@ export interface Measurement {
      */
     probability: number; // Probability of the measured result
 }
+// ------------------------------------------------------------------
+// VQE / Chemistry Messages
+// ------------------------------------------------------------------
+
+/**
+ * @generated from protobuf message qubit_engine.VQERequest
+ */
+export interface VQERequest {
+    /**
+     * @generated from protobuf field: qubit_engine.VQERequest.Molecule molecule = 1
+     */
+    molecule: VQERequest_Molecule;
+    /**
+     * @generated from protobuf field: int32 max_iterations = 2
+     */
+    maxIterations: number;
+    /**
+     * @generated from protobuf field: double learning_rate = 3
+     */
+    learningRate: number; // For Gradient Descent
+}
+/**
+ * @generated from protobuf enum qubit_engine.VQERequest.Molecule
+ */
+export enum VQERequest_Molecule {
+    /**
+     * Hydrogen molecule
+     *
+     * @generated from protobuf enum value: H2 = 0;
+     */
+    H2 = 0,
+    /**
+     * Lithium Hydride
+     *
+     * @generated from protobuf enum value: LiH = 1;
+     */
+    LiH = 1
+}
+/**
+ * @generated from protobuf message qubit_engine.VQEResponse
+ */
+export interface VQEResponse {
+    /**
+     * @generated from protobuf field: int32 iteration = 1
+     */
+    iteration: number;
+    /**
+     * @generated from protobuf field: double energy = 2
+     */
+    energy: number; // Expected energy in Hartrees
+    /**
+     * @generated from protobuf field: repeated double parameters = 3
+     */
+    parameters: number[]; // Current ansatz parameters (angles)
+    /**
+     * @generated from protobuf field: bool converged = 4
+     */
+    converged: boolean;
+}
 // @generated message type with reflection information, may provide speed optimized methods
 class CircuitRequest$Type extends MessageType<CircuitRequest> {
     constructor() {
@@ -520,11 +579,154 @@ class Measurement$Type extends MessageType<Measurement> {
  * @generated MessageType for protobuf message qubit_engine.Measurement
  */
 export const Measurement = new Measurement$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class VQERequest$Type extends MessageType<VQERequest> {
+    constructor() {
+        super("qubit_engine.VQERequest", [
+            { no: 1, name: "molecule", kind: "enum", T: () => ["qubit_engine.VQERequest.Molecule", VQERequest_Molecule] },
+            { no: 2, name: "max_iterations", kind: "scalar", T: 5 /*ScalarType.INT32*/ },
+            { no: 3, name: "learning_rate", kind: "scalar", T: 1 /*ScalarType.DOUBLE*/ }
+        ]);
+    }
+    create(value?: PartialMessage<VQERequest>): VQERequest {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.molecule = 0;
+        message.maxIterations = 0;
+        message.learningRate = 0;
+        if (value !== undefined)
+            reflectionMergePartial<VQERequest>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: VQERequest): VQERequest {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* qubit_engine.VQERequest.Molecule molecule */ 1:
+                    message.molecule = reader.int32();
+                    break;
+                case /* int32 max_iterations */ 2:
+                    message.maxIterations = reader.int32();
+                    break;
+                case /* double learning_rate */ 3:
+                    message.learningRate = reader.double();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: VQERequest, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* qubit_engine.VQERequest.Molecule molecule = 1; */
+        if (message.molecule !== 0)
+            writer.tag(1, WireType.Varint).int32(message.molecule);
+        /* int32 max_iterations = 2; */
+        if (message.maxIterations !== 0)
+            writer.tag(2, WireType.Varint).int32(message.maxIterations);
+        /* double learning_rate = 3; */
+        if (message.learningRate !== 0)
+            writer.tag(3, WireType.Bit64).double(message.learningRate);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message qubit_engine.VQERequest
+ */
+export const VQERequest = new VQERequest$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class VQEResponse$Type extends MessageType<VQEResponse> {
+    constructor() {
+        super("qubit_engine.VQEResponse", [
+            { no: 1, name: "iteration", kind: "scalar", T: 5 /*ScalarType.INT32*/ },
+            { no: 2, name: "energy", kind: "scalar", T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 3, name: "parameters", kind: "scalar", repeat: 1 /*RepeatType.PACKED*/, T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 4, name: "converged", kind: "scalar", T: 8 /*ScalarType.BOOL*/ }
+        ]);
+    }
+    create(value?: PartialMessage<VQEResponse>): VQEResponse {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.iteration = 0;
+        message.energy = 0;
+        message.parameters = [];
+        message.converged = false;
+        if (value !== undefined)
+            reflectionMergePartial<VQEResponse>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: VQEResponse): VQEResponse {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* int32 iteration */ 1:
+                    message.iteration = reader.int32();
+                    break;
+                case /* double energy */ 2:
+                    message.energy = reader.double();
+                    break;
+                case /* repeated double parameters */ 3:
+                    if (wireType === WireType.LengthDelimited)
+                        for (let e = reader.int32() + reader.pos; reader.pos < e;)
+                            message.parameters.push(reader.double());
+                    else
+                        message.parameters.push(reader.double());
+                    break;
+                case /* bool converged */ 4:
+                    message.converged = reader.bool();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: VQEResponse, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* int32 iteration = 1; */
+        if (message.iteration !== 0)
+            writer.tag(1, WireType.Varint).int32(message.iteration);
+        /* double energy = 2; */
+        if (message.energy !== 0)
+            writer.tag(2, WireType.Bit64).double(message.energy);
+        /* repeated double parameters = 3; */
+        if (message.parameters.length) {
+            writer.tag(3, WireType.LengthDelimited).fork();
+            for (let i = 0; i < message.parameters.length; i++)
+                writer.double(message.parameters[i]);
+            writer.join();
+        }
+        /* bool converged = 4; */
+        if (message.converged !== false)
+            writer.tag(4, WireType.Varint).bool(message.converged);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message qubit_engine.VQEResponse
+ */
+export const VQEResponse = new VQEResponse$Type();
 /**
  * @generated ServiceType for protobuf service qubit_engine.QuantumCompute
  */
 export const QuantumCompute = new ServiceType("qubit_engine.QuantumCompute", [
     { name: "RunCircuit", options: {}, I: CircuitRequest, O: StateResponse },
     { name: "StreamGates", serverStreaming: true, clientStreaming: true, options: {}, I: GateOperation, O: StateResponse },
-    { name: "VisualizeCircuit", serverStreaming: true, options: {}, I: CircuitRequest, O: StateResponse }
+    { name: "VisualizeCircuit", serverStreaming: true, options: {}, I: CircuitRequest, O: StateResponse },
+    { name: "RunVQE", serverStreaming: true, options: {}, I: VQERequest, O: VQEResponse }
 ]);

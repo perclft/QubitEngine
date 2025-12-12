@@ -89,6 +89,52 @@ func (GateOperation_GateType) EnumDescriptor() ([]byte, []int) {
 	return file_quantum_proto_rawDescGZIP(), []int{1, 0}
 }
 
+type VQERequest_Molecule int32
+
+const (
+	VQERequest_H2  VQERequest_Molecule = 0 // Hydrogen molecule
+	VQERequest_LiH VQERequest_Molecule = 1 // Lithium Hydride
+)
+
+// Enum value maps for VQERequest_Molecule.
+var (
+	VQERequest_Molecule_name = map[int32]string{
+		0: "H2",
+		1: "LiH",
+	}
+	VQERequest_Molecule_value = map[string]int32{
+		"H2":  0,
+		"LiH": 1,
+	}
+)
+
+func (x VQERequest_Molecule) Enum() *VQERequest_Molecule {
+	p := new(VQERequest_Molecule)
+	*p = x
+	return p
+}
+
+func (x VQERequest_Molecule) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (VQERequest_Molecule) Descriptor() protoreflect.EnumDescriptor {
+	return file_quantum_proto_enumTypes[1].Descriptor()
+}
+
+func (VQERequest_Molecule) Type() protoreflect.EnumType {
+	return &file_quantum_proto_enumTypes[1]
+}
+
+func (x VQERequest_Molecule) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use VQERequest_Molecule.Descriptor instead.
+func (VQERequest_Molecule) EnumDescriptor() ([]byte, []int) {
+	return file_quantum_proto_rawDescGZIP(), []int{4, 0}
+}
+
 type CircuitRequest struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	NumQubits  int32                  `protobuf:"varint,1,opt,name=num_qubits,json=numQubits,proto3" json:"num_qubits,omitempty"`
@@ -360,6 +406,134 @@ func (x *Measurement) GetProbability() float64 {
 	return 0
 }
 
+type VQERequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Molecule      VQERequest_Molecule    `protobuf:"varint,1,opt,name=molecule,proto3,enum=qubit_engine.VQERequest_Molecule" json:"molecule,omitempty"`
+	MaxIterations int32                  `protobuf:"varint,2,opt,name=max_iterations,json=maxIterations,proto3" json:"max_iterations,omitempty"`
+	LearningRate  float64                `protobuf:"fixed64,3,opt,name=learning_rate,json=learningRate,proto3" json:"learning_rate,omitempty"` // For Gradient Descent
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VQERequest) Reset() {
+	*x = VQERequest{}
+	mi := &file_quantum_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VQERequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VQERequest) ProtoMessage() {}
+
+func (x *VQERequest) ProtoReflect() protoreflect.Message {
+	mi := &file_quantum_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VQERequest.ProtoReflect.Descriptor instead.
+func (*VQERequest) Descriptor() ([]byte, []int) {
+	return file_quantum_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *VQERequest) GetMolecule() VQERequest_Molecule {
+	if x != nil {
+		return x.Molecule
+	}
+	return VQERequest_H2
+}
+
+func (x *VQERequest) GetMaxIterations() int32 {
+	if x != nil {
+		return x.MaxIterations
+	}
+	return 0
+}
+
+func (x *VQERequest) GetLearningRate() float64 {
+	if x != nil {
+		return x.LearningRate
+	}
+	return 0
+}
+
+type VQEResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Iteration     int32                  `protobuf:"varint,1,opt,name=iteration,proto3" json:"iteration,omitempty"`
+	Energy        float64                `protobuf:"fixed64,2,opt,name=energy,proto3" json:"energy,omitempty"`                // Expected energy in Hartrees
+	Parameters    []float64              `protobuf:"fixed64,3,rep,packed,name=parameters,proto3" json:"parameters,omitempty"` // Current ansatz parameters (angles)
+	Converged     bool                   `protobuf:"varint,4,opt,name=converged,proto3" json:"converged,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VQEResponse) Reset() {
+	*x = VQEResponse{}
+	mi := &file_quantum_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VQEResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VQEResponse) ProtoMessage() {}
+
+func (x *VQEResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_quantum_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VQEResponse.ProtoReflect.Descriptor instead.
+func (*VQEResponse) Descriptor() ([]byte, []int) {
+	return file_quantum_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *VQEResponse) GetIteration() int32 {
+	if x != nil {
+		return x.Iteration
+	}
+	return 0
+}
+
+func (x *VQEResponse) GetEnergy() float64 {
+	if x != nil {
+		return x.Energy
+	}
+	return 0
+}
+
+func (x *VQEResponse) GetParameters() []float64 {
+	if x != nil {
+		return x.Parameters
+	}
+	return nil
+}
+
+func (x *VQEResponse) GetConverged() bool {
+	if x != nil {
+		return x.Converged
+	}
+	return false
+}
+
 type StateResponse_ComplexNumber struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Note: Using 'double' is standard for quantum state vectors.
@@ -371,7 +545,7 @@ type StateResponse_ComplexNumber struct {
 
 func (x *StateResponse_ComplexNumber) Reset() {
 	*x = StateResponse_ComplexNumber{}
-	mi := &file_quantum_proto_msgTypes[4]
+	mi := &file_quantum_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -383,7 +557,7 @@ func (x *StateResponse_ComplexNumber) String() string {
 func (*StateResponse_ComplexNumber) ProtoMessage() {}
 
 func (x *StateResponse_ComplexNumber) ProtoReflect() protoreflect.Message {
-	mi := &file_quantum_proto_msgTypes[4]
+	mi := &file_quantum_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -458,12 +632,28 @@ const file_quantum_proto_rawDesc = "" +
 	"\vqubit_index\x18\x01 \x01(\rR\n" +
 	"qubitIndex\x12\x16\n" +
 	"\x06result\x18\x02 \x01(\bR\x06result\x12 \n" +
-	"\vprobability\x18\x03 \x01(\x01R\vprobability2\xfd\x01\n" +
+	"\vprobability\x18\x03 \x01(\x01R\vprobability\"\xb4\x01\n" +
+	"\n" +
+	"VQERequest\x12=\n" +
+	"\bmolecule\x18\x01 \x01(\x0e2!.qubit_engine.VQERequest.MoleculeR\bmolecule\x12%\n" +
+	"\x0emax_iterations\x18\x02 \x01(\x05R\rmaxIterations\x12#\n" +
+	"\rlearning_rate\x18\x03 \x01(\x01R\flearningRate\"\x1b\n" +
+	"\bMolecule\x12\x06\n" +
+	"\x02H2\x10\x00\x12\a\n" +
+	"\x03LiH\x10\x01\"\x81\x01\n" +
+	"\vVQEResponse\x12\x1c\n" +
+	"\titeration\x18\x01 \x01(\x05R\titeration\x12\x16\n" +
+	"\x06energy\x18\x02 \x01(\x01R\x06energy\x12\x1e\n" +
+	"\n" +
+	"parameters\x18\x03 \x03(\x01R\n" +
+	"parameters\x12\x1c\n" +
+	"\tconverged\x18\x04 \x01(\bR\tconverged2\xc0\x02\n" +
 	"\x0eQuantumCompute\x12I\n" +
 	"\n" +
 	"RunCircuit\x12\x1c.qubit_engine.CircuitRequest\x1a\x1b.qubit_engine.StateResponse\"\x00\x12M\n" +
 	"\vStreamGates\x12\x1b.qubit_engine.GateOperation\x1a\x1b.qubit_engine.StateResponse\"\x00(\x010\x01\x12Q\n" +
-	"\x10VisualizeCircuit\x12\x1c.qubit_engine.CircuitRequest\x1a\x1b.qubit_engine.StateResponse\"\x000\x01BU\n" +
+	"\x10VisualizeCircuit\x12\x1c.qubit_engine.CircuitRequest\x1a\x1b.qubit_engine.StateResponse\"\x000\x01\x12A\n" +
+	"\x06RunVQE\x12\x18.qubit_engine.VQERequest\x1a\x19.qubit_engine.VQEResponse\"\x000\x01BU\n" +
 	"\x17com.perclft.qubitengineP\x01Z5github.com/perclft/QubitEngine/cli/internal/generated\xf8\x01\x01b\x06proto3"
 
 var (
@@ -478,33 +668,39 @@ func file_quantum_proto_rawDescGZIP() []byte {
 	return file_quantum_proto_rawDescData
 }
 
-var file_quantum_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_quantum_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_quantum_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_quantum_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_quantum_proto_goTypes = []any{
 	(GateOperation_GateType)(0),         // 0: qubit_engine.GateOperation.GateType
-	(*CircuitRequest)(nil),              // 1: qubit_engine.CircuitRequest
-	(*GateOperation)(nil),               // 2: qubit_engine.GateOperation
-	(*StateResponse)(nil),               // 3: qubit_engine.StateResponse
-	(*Measurement)(nil),                 // 4: qubit_engine.Measurement
-	(*StateResponse_ComplexNumber)(nil), // 5: qubit_engine.StateResponse.ComplexNumber
-	nil,                                 // 6: qubit_engine.StateResponse.ClassicalResultsEntry
+	(VQERequest_Molecule)(0),            // 1: qubit_engine.VQERequest.Molecule
+	(*CircuitRequest)(nil),              // 2: qubit_engine.CircuitRequest
+	(*GateOperation)(nil),               // 3: qubit_engine.GateOperation
+	(*StateResponse)(nil),               // 4: qubit_engine.StateResponse
+	(*Measurement)(nil),                 // 5: qubit_engine.Measurement
+	(*VQERequest)(nil),                  // 6: qubit_engine.VQERequest
+	(*VQEResponse)(nil),                 // 7: qubit_engine.VQEResponse
+	(*StateResponse_ComplexNumber)(nil), // 8: qubit_engine.StateResponse.ComplexNumber
+	nil,                                 // 9: qubit_engine.StateResponse.ClassicalResultsEntry
 }
 var file_quantum_proto_depIdxs = []int32{
-	2, // 0: qubit_engine.CircuitRequest.operations:type_name -> qubit_engine.GateOperation
+	3, // 0: qubit_engine.CircuitRequest.operations:type_name -> qubit_engine.GateOperation
 	0, // 1: qubit_engine.GateOperation.type:type_name -> qubit_engine.GateOperation.GateType
-	5, // 2: qubit_engine.StateResponse.state_vector:type_name -> qubit_engine.StateResponse.ComplexNumber
-	6, // 3: qubit_engine.StateResponse.classical_results:type_name -> qubit_engine.StateResponse.ClassicalResultsEntry
-	1, // 4: qubit_engine.QuantumCompute.RunCircuit:input_type -> qubit_engine.CircuitRequest
-	2, // 5: qubit_engine.QuantumCompute.StreamGates:input_type -> qubit_engine.GateOperation
-	1, // 6: qubit_engine.QuantumCompute.VisualizeCircuit:input_type -> qubit_engine.CircuitRequest
-	3, // 7: qubit_engine.QuantumCompute.RunCircuit:output_type -> qubit_engine.StateResponse
-	3, // 8: qubit_engine.QuantumCompute.StreamGates:output_type -> qubit_engine.StateResponse
-	3, // 9: qubit_engine.QuantumCompute.VisualizeCircuit:output_type -> qubit_engine.StateResponse
-	7, // [7:10] is the sub-list for method output_type
-	4, // [4:7] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	8, // 2: qubit_engine.StateResponse.state_vector:type_name -> qubit_engine.StateResponse.ComplexNumber
+	9, // 3: qubit_engine.StateResponse.classical_results:type_name -> qubit_engine.StateResponse.ClassicalResultsEntry
+	1, // 4: qubit_engine.VQERequest.molecule:type_name -> qubit_engine.VQERequest.Molecule
+	2, // 5: qubit_engine.QuantumCompute.RunCircuit:input_type -> qubit_engine.CircuitRequest
+	3, // 6: qubit_engine.QuantumCompute.StreamGates:input_type -> qubit_engine.GateOperation
+	2, // 7: qubit_engine.QuantumCompute.VisualizeCircuit:input_type -> qubit_engine.CircuitRequest
+	6, // 8: qubit_engine.QuantumCompute.RunVQE:input_type -> qubit_engine.VQERequest
+	4, // 9: qubit_engine.QuantumCompute.RunCircuit:output_type -> qubit_engine.StateResponse
+	4, // 10: qubit_engine.QuantumCompute.StreamGates:output_type -> qubit_engine.StateResponse
+	4, // 11: qubit_engine.QuantumCompute.VisualizeCircuit:output_type -> qubit_engine.StateResponse
+	7, // 12: qubit_engine.QuantumCompute.RunVQE:output_type -> qubit_engine.VQEResponse
+	9, // [9:13] is the sub-list for method output_type
+	5, // [5:9] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_quantum_proto_init() }
@@ -517,8 +713,8 @@ func file_quantum_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_quantum_proto_rawDesc), len(file_quantum_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   6,
+			NumEnums:      2,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -8,7 +8,7 @@ find_package(Protobuf REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 
-#set(PROTO_FILE ${CMAKE_SOURCE_DIR}/api/proto/quantum.proto)
+set(PROTO_FILE ${CMAKE_SOURCE_DIR}/api/proto/quantum.proto)
 # The output must be within the CMAKE_CURRENT_BINARY_DIR (build folder) or a source folder.
 # Since your source files are outside the build folder, using a dedicated source directory is clean.
 set(PROTO_OUT ${CMAKE_SOURCE_DIR}/backend/src/generated)

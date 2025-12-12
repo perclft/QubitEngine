@@ -6,6 +6,7 @@ import { GenerativeCanvas } from './components/GenerativeCanvas';
 import { QuantumAudio } from './components/QuantumAudio';
 import { ArtStudio } from './components/ArtStudio';
 import { QuantumBB84 } from './components/crypto/QuantumBB84';
+import { QuantumChemistry } from './components/chemistry/QuantumChemistry';
 import { QuantumComputeClient } from './generated/quantum.client';
 import { CircuitRequest, GateOperation, GateOperation_GateType } from './generated/quantum';
 import { GrpcWebFetchTransport } from '@protobuf-ts/grpcweb-transport';
@@ -22,7 +23,7 @@ const transport = new GrpcWebFetchTransport({
 const client = new QuantumComputeClient(transport);
 
 // View types
-type ViewMode = 'dashboard' | 'artStudio' | 'crypto';
+type ViewMode = 'dashboard' | 'artStudio' | 'crypto' | 'chemistry';
 
 function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
@@ -137,6 +138,30 @@ function App() {
     return <QuantumBB84 onBack={() => setViewMode('dashboard')} />;
   }
 
+  // If Chemistry mode, render it
+  if (viewMode === 'chemistry') {
+    return (
+      <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
+        <button
+          onClick={() => setViewMode('dashboard')}
+          style={{
+            position: 'absolute',
+            top: '20px',
+            right: '20px',
+            zIndex: 1000,
+            padding: '10px',
+            background: '#333',
+            color: 'white',
+            border: '1px solid #555'
+          }}
+        >
+          Exit Chemistry Sim
+        </button>
+        <QuantumChemistry />
+      </div>
+    );
+  }
+
   return (
     <div className="App">
       <div className="ui-overlay">
@@ -216,6 +241,20 @@ function App() {
             }}
           >
             🔐 Crypto
+          </button>
+          <button
+            onClick={() => setViewMode('chemistry')}
+            style={{
+              background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+              color: 'white',
+              border: 'none',
+              padding: '10px 20px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontWeight: '600'
+            }}
+          >
+            🧪 VQE Lab
           </button>
         </div>
       </div>

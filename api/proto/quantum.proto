@@ -26,6 +26,9 @@ service QuantumCompute {
   // gRPC-Web does not support bidirectional streaming.
   // This executes a circuit and streams back the state after EACH step.
   rpc VisualizeCircuit (CircuitRequest) returns (stream StateResponse) {}
+
+  // VQE Simulation for Quantum Chemistry
+  rpc RunVQE (VQERequest) returns (stream VQEResponse) {}
 }
 
 // ------------------------------------------------------------------
@@ -85,4 +88,25 @@ message Measurement {
   uint32 qubit_index = 1;
   bool result = 2;
   double probability = 3; // Probability of the measured result
+}
+
+// ------------------------------------------------------------------
+// VQE / Chemistry Messages
+// ------------------------------------------------------------------
+
+message VQERequest {
+    enum Molecule {
+        H2 = 0;   // Hydrogen molecule
+        LiH = 1;  // Lithium Hydride
+    }
+    Molecule molecule = 1;
+    int32 max_iterations = 2;
+    double learning_rate = 3; // For Gradient Descent
+}
+
+message VQEResponse {
+    int32 iteration = 1;
+    double energy = 2;        // Expected energy in Hartrees
+    repeated double parameters = 3; // Current ansatz parameters (angles)
+    bool converged = 4;
 }

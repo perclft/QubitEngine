@@ -22,6 +22,7 @@ const (
 	QuantumCompute_RunCircuit_FullMethodName       = "/qubit_engine.QuantumCompute/RunCircuit"
 	QuantumCompute_StreamGates_FullMethodName      = "/qubit_engine.QuantumCompute/StreamGates"
 	QuantumCompute_VisualizeCircuit_FullMethodName = "/qubit_engine.QuantumCompute/VisualizeCircuit"
+	QuantumCompute_RunVQE_FullMethodName           = "/qubit_engine.QuantumCompute/RunVQE"
 )
 
 // QuantumComputeClient is the client API for QuantumCompute service.
@@ -37,6 +38,8 @@ type QuantumComputeClient interface {
 	// gRPC-Web does not support bidirectional streaming.
 	// This executes a circuit and streams back the state after EACH step.
 	VisualizeCircuit(ctx context.Context, in *CircuitRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StateResponse], error)
+	// VQE Simulation for Quantum Chemistry
+	RunVQE(ctx context.Context, in *VQERequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[VQEResponse], error)
 }
 
 type quantumComputeClient struct {
@@ -89,6 +92,25 @@ func (c *quantumComputeClient) VisualizeCircuit(ctx context.Context, in *Circuit
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type QuantumCompute_VisualizeCircuitClient = grpc.ServerStreamingClient[StateResponse]
 
+func (c *quantumComputeClient) RunVQE(ctx context.Context, in *VQERequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[VQEResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &QuantumCompute_ServiceDesc.Streams[2], QuantumCompute_RunVQE_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[VQERequest, VQEResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type QuantumCompute_RunVQEClient = grpc.ServerStreamingClient[VQEResponse]
+
 // QuantumComputeServer is the server API for QuantumCompute service.
 // All implementations must embed UnimplementedQuantumComputeServer
 // for forward compatibility.
@@ -102,6 +124,8 @@ type QuantumComputeServer interface {
 	// gRPC-Web does not support bidirectional streaming.
 	// This executes a circuit and streams back the state after EACH step.
 	VisualizeCircuit(*CircuitRequest, grpc.ServerStreamingServer[StateResponse]) error
+	// VQE Simulation for Quantum Chemistry
+	RunVQE(*VQERequest, grpc.ServerStreamingServer[VQEResponse]) error
 	mustEmbedUnimplementedQuantumComputeServer()
 }
 
@@ -120,6 +144,9 @@ func (UnimplementedQuantumComputeServer) StreamGates(grpc.BidiStreamingServer[Ga
 }
 func (UnimplementedQuantumComputeServer) VisualizeCircuit(*CircuitRequest, grpc.ServerStreamingServer[StateResponse]) error {
 	return status.Error(codes.Unimplemented, "method VisualizeCircuit not implemented")
+}
+func (UnimplementedQuantumComputeServer) RunVQE(*VQERequest, grpc.ServerStreamingServer[VQEResponse]) error {
+	return status.Error(codes.Unimplemented, "method RunVQE not implemented")
 }
 func (UnimplementedQuantumComputeServer) mustEmbedUnimplementedQuantumComputeServer() {}
 func (UnimplementedQuantumComputeServer) testEmbeddedByValue()                        {}
@@ -178,6 +205,17 @@ func _QuantumCompute_VisualizeCircuit_Handler(srv interface{}, stream grpc.Serve
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type QuantumCompute_VisualizeCircuitServer = grpc.ServerStreamingServer[StateResponse]
 
+func _QuantumCompute_RunVQE_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(VQERequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(QuantumComputeServer).RunVQE(m, &grpc.GenericServerStream[VQERequest, VQEResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type QuantumCompute_RunVQEServer = grpc.ServerStreamingServer[VQEResponse]
+
 // QuantumCompute_ServiceDesc is the grpc.ServiceDesc for QuantumCompute service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -200,6 +238,11 @@ var QuantumCompute_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "VisualizeCircuit",
 			Handler:       _QuantumCompute_VisualizeCircuit_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "RunVQE",
+			Handler:       _QuantumCompute_RunVQE_Handler,
 			ServerStreams: true,
 		},
 	},

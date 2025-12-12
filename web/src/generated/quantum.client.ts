@@ -4,6 +4,8 @@
 import type { RpcTransport } from "@protobuf-ts/runtime-rpc";
 import type { ServiceInfo } from "@protobuf-ts/runtime-rpc";
 import { QuantumCompute } from "./quantum";
+import type { VQEResponse } from "./quantum";
+import type { VQERequest } from "./quantum";
 import type { ServerStreamingCall } from "@protobuf-ts/runtime-rpc";
 import type { GateOperation } from "./quantum";
 import type { DuplexStreamingCall } from "@protobuf-ts/runtime-rpc";
@@ -41,6 +43,12 @@ export interface IQuantumComputeClient {
      * @generated from protobuf rpc: VisualizeCircuit
      */
     visualizeCircuit(input: CircuitRequest, options?: RpcOptions): ServerStreamingCall<CircuitRequest, StateResponse>;
+    /**
+     * VQE Simulation for Quantum Chemistry
+     *
+     * @generated from protobuf rpc: RunVQE
+     */
+    runVQE(input: VQERequest, options?: RpcOptions): ServerStreamingCall<VQERequest, VQEResponse>;
 }
 // ------------------------------------------------------------------
 // Service Definition
@@ -84,5 +92,14 @@ export class QuantumComputeClient implements IQuantumComputeClient, ServiceInfo 
     visualizeCircuit(input: CircuitRequest, options?: RpcOptions): ServerStreamingCall<CircuitRequest, StateResponse> {
         const method = this.methods[2], opt = this._transport.mergeOptions(options);
         return stackIntercept<CircuitRequest, StateResponse>("serverStreaming", this._transport, method, opt, input);
+    }
+    /**
+     * VQE Simulation for Quantum Chemistry
+     *
+     * @generated from protobuf rpc: RunVQE
+     */
+    runVQE(input: VQERequest, options?: RpcOptions): ServerStreamingCall<VQERequest, VQEResponse> {
+        const method = this.methods[3], opt = this._transport.mergeOptions(options);
+        return stackIntercept<VQERequest, VQEResponse>("serverStreaming", this._transport, method, opt, input);
     }
 }

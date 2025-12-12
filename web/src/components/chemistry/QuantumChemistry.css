@@ -1,0 +1,75 @@
+.chemistry-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    background: #050510;
+    color: #fff;
+    font-family: 'Roboto Mono', monospace;
+}
+
+.chem-sidebar {
+    width: 300px;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+.chem-controls button {
+    background: linear-gradient(45deg, #00ffff, #0088ff);
+    border: none;
+    padding: 10px 20px;
+    color: #000;
+    font-weight: bold;
+    cursor: pointer;
+    font-family: inherit;
+    margin-bottom: 20px;
+    width: 100%;
+}
+
+.chem-controls button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.chem-logs {
+    flex: 1;
+    font-size: 0.8rem;
+    color: #aaa;
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 10px;
+    margin-bottom: 20px;
+}
+
+.energy-stat {
+    text-align: center;
+    border: 1px solid #00ffff;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.er-val {
+    display: block;
+    font-size: 2rem;
+    color: #00ffff;
+    text-shadow: 0 0 10px #00ffff;
+}
+
+.chem-viz {
+    flex: 1;
+    position: relative;
+}
+
+.graph-overlay {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    height: 100px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid #333;
+    pointer-events: none;
+}

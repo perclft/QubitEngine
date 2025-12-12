@@ -36,5 +36,8 @@ public:
 
   bool measure(size_t target_qubit);
 
+  // Phase 19: VQE Support
+  double expectationValue(const std::string &pauli_string);
+
   const std::vector<Complex> &getStateVector() const;
 };

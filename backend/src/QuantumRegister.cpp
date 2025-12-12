@@ -266,3 +266,40 @@ void QuantumRegister::applyDepolarizingNoise(double p) {
     }
   }
 }
+
+// Phase 19: VQE Expectation Value
+double QuantumRegister::expectationValue(const std::string &pauli) {
+  if (pauli.length() != num_qubits) {
+    throw std::invalid_argument(
+        "Pauli string length must match number of qubits");
+  }
+
+  double total_expectation = 0.0;
+  size_t dim = state.size();
+
+#pragma omp parallel for reduction(+ : total_expectation)
+  for (size_t i = 0; i < dim; ++i) {
+    size_t j = i;
+    Complex phase = 1.0;
+
+    for (size_t q = 0; q < num_qubits; ++q) {
+      char op = pauli[q];
+      bool bit_set = (i >> q) & 1;
+
+      if (op == 'X') {
+        j ^= (1ULL << q);
+      } else if (op == 'Y') {
+        j ^= (1ULL << q);
+        phase *= (bit_set ? Complex(0, -1) : Complex(0, 1));
+      } else if (op == 'Z') {
+        if (bit_set)
+          phase *= -1.0;
+      }
+    }
+
+    Complex contribution = std::conj(state[i]) * phase * state[j];
+    total_expectation += contribution.real();
+  }
+
+  return total_expectation;
+}

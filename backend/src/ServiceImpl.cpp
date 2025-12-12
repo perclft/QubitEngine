@@ -189,3 +189,126 @@ grpc::Status QubitEngineServiceImpl::StreamGates(
 
   return grpc::Status::OK;
 }
+
+// -----------------------------------------------------------------
+// Phase 19: VQE Implementation
+// -----------------------------------------------------------------
+#include "MolecularHamiltonian.hpp"
+#include <random>
+
+grpc::Status QubitEngineServiceImpl::RunVQE(
+    grpc::ServerContext *context, const qubit_engine::VQERequest *request,
+    grpc::ServerWriter<qubit_engine::VQEResponse> *writer) {
+
+  std::cout << "Starting VQE Optimization..." << std::endl;
+
+  // 1. Setup
+  auto molType = (request->molecule() == qubit_engine::VQERequest::LiH)
+                     ? MolecularHamiltonian::LiH
+                     : MolecularHamiltonian::H2;
+
+  int num_qubits = MolecularHamiltonian::getNumQubits(molType);
+  auto hamiltonian = MolecularHamiltonian::getHamiltonian(molType);
+
+  // Ansatz Parameters (Ry angles for H2 Hardware Efficient Ansatz)
+  // Simple ansatz: Ry(theta) on all qubits + CNOT ladder + Ry(phi)
+  // For H2 (2 qubits), minimal useful ansatz is Ry(0), Ry(1), CNOT(0,1), Ry(0),
+  // Ry(1) Let's use 4 parameters for a 2-qubit system [Ry0, Ry1, Ry0_2, Ry1_2]
+  // or even simpler: just Ry on each, entangle, Ry on each.
+
+  std::vector<double> params(4, 0.0); // Initialize with 0
+  // Random init might be better, but 0 is a valid start for Ry.
+
+  // Hyperparameters
+  double learning_rate =
+      request->learning_rate() > 0 ? request->learning_rate() : 0.1;
+  int max_iters = request->max_iterations();
+
+  // SPSA (Simultaneous Perturbation Stochastic Approximation) constants
+  double c = 0.05; // Perturbation size
+  double gamma = 0.101;
+  double alpha = 0.602;
+  double A = max_iters * 0.1;
+  double a = 0.2; // Gradient Step Size scaling
+
+  for (int k = 0; k < max_iters; k++) {
+    // Update SPSA decay params
+    double ak = a / std::pow(k + 1 + A, alpha);
+    double ck = c / std::pow(k + 1, gamma);
+
+    // Perturbation Vector Delta (+1 or -1 Bernoulli)
+    std::vector<double> delta(params.size());
+    thread_local std::mt19937 gen(std::random_device{}());
+    std::bernoulli_distribution dist(0.5);
+    for (size_t i = 0; i < params.size(); ++i)
+      delta[i] = dist(gen) ? 1.0 : -1.0;
+
+    // Evaluate E(params + ck*delta)
+    auto evalEnergy = [&](const std::vector<double> &p) -> double {
+      QuantumRegister qreg(num_qubits);
+
+      // --- ANSATZ CIRCUIT (Hardware Efficient) ---
+      // Layer 1: Ry rotations
+      qreg.applyRotationY(0, p[0]);
+      qreg.applyRotationY(1, p[1]);
+
+      // Entanglement
+      qreg.applyCNOT(0, 1);
+
+      // Layer 2: Ry rotations
+      qreg.applyRotationY(0, p[2]);
+      qreg.applyRotationY(1, p[3]);
+      // -------------------------------------------
+
+      // Measure Hamiltonian
+      double energy = 0.0;
+      for (const auto &term : hamiltonian) {
+        energy += term.coefficient * qreg.expectationValue(term.pauli_string);
+      }
+      return energy;
+    };
+
+    std::vector<double> p_plus = params;
+    std::vector<double> p_minus = params;
+    for (size_t i = 0; i < params.size(); ++i) {
+      p_plus[i] += ck * delta[i];
+      p_minus[i] -= ck * delta[i];
+    }
+
+    double E_plus = evalEnergy(p_plus);
+    double E_minus = evalEnergy(p_minus);
+
+    // Gradient Estimate
+    double g_est = (E_plus - E_minus) / (2.0 * ck);
+
+    // Update Parameters
+    for (size_t i = 0; i < params.size(); ++i) {
+      params[i] -= ak * g_est * delta[i];
+    }
+
+    // Current Energy (at center) - Optional, expensive to re-eval, use average
+    double current_energy = (E_plus + E_minus) / 2.0;
+
+    // Stream Progress
+    if (k % 5 == 0 || k == max_iters - 1) { // Throttle updates
+      qubit_engine::VQEResponse resp;
+      resp.set_iteration(k);
+      resp.set_energy(current_energy);
+      for (double p : params)
+        resp.add_parameters(p);
+      resp.set_converged(false);
+
+      // Check convergence (simple threshold on ground state)
+      // H2 ground state is ~ -1.137
+      if (current_energy < -1.13) {
+        resp.set_converged(true);
+        writer->Write(resp);
+        break;
+      }
+
+      writer->Write(resp);
+    }
+  }
+
+  return grpc::Status::OK;
+}
