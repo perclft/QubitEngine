@@ -33,6 +33,29 @@ export interface CircuitRequest {
      * @generated from protobuf field: double noise_probability = 3
      */
     noiseProbability: number;
+    /**
+     * @generated from protobuf field: qubit_engine.CircuitRequest.ExecutionBackend execution_backend = 4
+     */
+    executionBackend: CircuitRequest_ExecutionBackend;
+}
+/**
+ * @generated from protobuf enum qubit_engine.CircuitRequest.ExecutionBackend
+ */
+export enum CircuitRequest_ExecutionBackend {
+    /**
+     * @generated from protobuf enum value: SIMULATOR = 0;
+     */
+    SIMULATOR = 0,
+    /**
+     * @generated from protobuf enum value: MOCK_HARDWARE = 1;
+     */
+    MOCK_HARDWARE = 1,
+    /**
+     * Future use
+     *
+     * @generated from protobuf enum value: REAL_IBM_Q = 2;
+     */
+    REAL_IBM_Q = 2
 }
 /**
  * @generated from protobuf message qubit_engine.GateOperation
@@ -238,7 +261,8 @@ class CircuitRequest$Type extends MessageType<CircuitRequest> {
         super("qubit_engine.CircuitRequest", [
             { no: 1, name: "num_qubits", kind: "scalar", T: 5 /*ScalarType.INT32*/ },
             { no: 2, name: "operations", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => GateOperation },
-            { no: 3, name: "noise_probability", kind: "scalar", T: 1 /*ScalarType.DOUBLE*/ }
+            { no: 3, name: "noise_probability", kind: "scalar", T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 4, name: "execution_backend", kind: "enum", T: () => ["qubit_engine.CircuitRequest.ExecutionBackend", CircuitRequest_ExecutionBackend] }
         ]);
     }
     create(value?: PartialMessage<CircuitRequest>): CircuitRequest {
@@ -246,6 +270,7 @@ class CircuitRequest$Type extends MessageType<CircuitRequest> {
         message.numQubits = 0;
         message.operations = [];
         message.noiseProbability = 0;
+        message.executionBackend = 0;
         if (value !== undefined)
             reflectionMergePartial<CircuitRequest>(this, message, value);
         return message;
@@ -263,6 +288,9 @@ class CircuitRequest$Type extends MessageType<CircuitRequest> {
                     break;
                 case /* double noise_probability */ 3:
                     message.noiseProbability = reader.double();
+                    break;
+                case /* qubit_engine.CircuitRequest.ExecutionBackend execution_backend */ 4:
+                    message.executionBackend = reader.int32();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -285,6 +313,9 @@ class CircuitRequest$Type extends MessageType<CircuitRequest> {
         /* double noise_probability = 3; */
         if (message.noiseProbability !== 0)
             writer.tag(3, WireType.Bit64).double(message.noiseProbability);
+        /* qubit_engine.CircuitRequest.ExecutionBackend execution_backend = 4; */
+        if (message.executionBackend !== 0)
+            writer.tag(4, WireType.Varint).int32(message.executionBackend);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

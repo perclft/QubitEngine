@@ -1,5 +1,7 @@
 #include "ServiceImpl.hpp"
 #include "QuantumRegister.hpp"
+#include "backends/MockHardwareBackend.hpp"
+#include "backends/SimulatorBackend.hpp"
 #include <cmath>
 #include <cstdint> // FIX: Added for uint32_t
 #include <iostream>
@@ -93,13 +95,29 @@ void QubitEngineServiceImpl::serializeState(
   }
 }
 
+// Factory Helper
+std::unique_ptr<IQuantumBackend>
+createBackend(qubit_engine::CircuitRequest::ExecutionBackend type,
+              int num_qubits) {
+  switch (type) {
+  case qubit_engine::CircuitRequest::MOCK_HARDWARE:
+    std::cout << "Using Mock Hardware Backend" << std::endl;
+    return std::make_unique<MockHardwareBackend>(num_qubits);
+  case qubit_engine::CircuitRequest::REAL_IBM_Q:
+    throw std::runtime_error("Real IBM Q Backend not yet implemented");
+  case qubit_engine::CircuitRequest::SIMULATOR:
+  default:
+    std::cout << "Using Local Simulator Backend" << std::endl;
+    return std::make_unique<SimulatorBackend>(num_qubits);
+  }
+}
+
 grpc::Status
 QubitEngineServiceImpl::RunCircuit(grpc::ServerContext *context,
                                    const qubit_engine::CircuitRequest *request,
                                    qubit_engine::StateResponse *response) {
 
   std::cout << "DEBUG: RunCircuit method invoked!" << std::endl;
-  std::cerr << "DEBUG: RunCircuit method invoked (stderr)!" << std::endl;
 
   int n = request->num_qubits();
 
@@ -109,29 +127,30 @@ QubitEngineServiceImpl::RunCircuit(grpc::ServerContext *context,
                         "Qubits must be between 1 and 30");
   }
 
-  // 2. DYNAMIC MEMORY CHECK
+  // 2. DYNAMIC MEMORY CHECK (Only for Simulator really, but good safety)
   if (!hasEnoughMemory(n)) {
-    std::string err =
-        "Insufficient Server Memory for " + std::to_string(n) + " qubits.";
-    std::cerr << "ResourceExhausted: " << err << std::endl;
-    return grpc::Status(grpc::StatusCode::RESOURCE_EXHAUSTED, err);
+    return grpc::Status(grpc::StatusCode::RESOURCE_EXHAUSTED,
+                        "Insufficient Server Memory for " + std::to_string(n) +
+                            " qubits.");
   }
 
   try {
-    QuantumRegister qreg(static_cast<size_t>(n));
+    // Instantiate Backend
+    auto backend = createBackend(request->execution_backend(), n);
 
+    // Apply Gates
     for (const auto &op : request->operations()) {
-      applyGate(qreg, op, response);
+      try {
+        backend->applyGate(op);
+      } catch (const std::exception &e) {
+        // If backend fails on a gate (e.g. out of bounds)
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, e.what());
+      }
     }
 
-    serializeState(qreg, response);
+    // Get Result
+    backend->getResult(response);
 
-  } catch (const std::out_of_range &e) {
-    return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
-                        std::string("Index Error: ") + e.what());
-  } catch (const std::invalid_argument &e) {
-    return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
-                        std::string("Logic Error: ") + e.what());
   } catch (const std::exception &e) {
     return grpc::Status(grpc::StatusCode::INTERNAL,
                         std::string("Internal Engine Error: ") + e.what());

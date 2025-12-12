@@ -40,6 +40,13 @@ message CircuitRequest {
   repeated GateOperation operations = 2;
   // Probability of a depolarizing error occurring per step (0.0 - 1.0)
   double noise_probability = 3;
+
+  enum ExecutionBackend {
+    SIMULATOR = 0;
+    MOCK_HARDWARE = 1;
+    REAL_IBM_Q = 2; // Future use
+  }
+  ExecutionBackend execution_backend = 4;
 }
 
 message GateOperation {

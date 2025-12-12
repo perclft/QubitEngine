@@ -10,8 +10,9 @@ import { QuantumChemistry } from './components/chemistry/QuantumChemistry';
 import { CircuitLibrary } from './components/education/CircuitLibrary';
 import { QuizMode } from './components/education/QuizMode';
 import { TutorialOverlay } from './components/education/TutorialOverlay';
+import { CircuitComposer } from './components/composer/CircuitComposer';
 import { QuantumComputeClient } from './generated/quantum.client';
-import { CircuitRequest, GateOperation, GateOperation_GateType } from './generated/quantum';
+import { CircuitRequest, GateOperation, GateOperation_GateType, CircuitRequest_ExecutionBackend } from './generated/quantum';
 import { GrpcWebFetchTransport } from '@protobuf-ts/grpcweb-transport';
 import './App.css';
 
@@ -26,10 +27,11 @@ const transport = new GrpcWebFetchTransport({
 const client = new QuantumComputeClient(transport);
 
 // View types
-type ViewMode = 'dashboard' | 'artStudio' | 'crypto' | 'chemistry';
+type ViewMode = 'dashboard' | 'artStudio' | 'crypto' | 'chemistry' | 'composer';
 
 function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
+  const [backendType, setBackendType] = useState<CircuitRequest_ExecutionBackend>(CircuitRequest_ExecutionBackend.SIMULATOR);
   const [q0State, setQ0State] = useState({ real: 1, imag: 0 }); // |0>
   const [amplitude1, setAmplitude1] = useState({ real: 0, imag: 0 }); // Coeff of |1> for Qubit 0
   const [status, setStatus] = useState('Idle');
@@ -44,7 +46,7 @@ function App() {
   const [showTutorial, setShowTutorial] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const runSimulation = async () => {
+  const runSimulation = async (customReq?: CircuitRequest) => {
     // Create abort controller for this run
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
@@ -55,25 +57,30 @@ function App() {
     setStepCount(0);
 
     try {
-      // 1. Build Circuit Request (Standard Test: Hadamard + Phase)
-      const op1 = GateOperation.create({
-        type: GateOperation_GateType.HADAMARD,
-        targetQubit: 0
-      });
+      let req = customReq;
 
-      const op2 = GateOperation.create({
-        type: GateOperation_GateType.PHASE_S,
-        targetQubit: 0
-      });
+      if (!req) {
+        // 1. Build Circuit Request (Standard Test: Hadamard + Phase)
+        const op1 = GateOperation.create({
+          type: GateOperation_GateType.HADAMARD,
+          targetQubit: 0
+        });
 
-      const ops = [op1];
-      for (let i = 0; i < 50; i++) ops.push(op2); // Spin it longer for audio effect
+        const op2 = GateOperation.create({
+          type: GateOperation_GateType.PHASE_S,
+          targetQubit: 0
+        });
 
-      const req = CircuitRequest.create({
-        numQubits: 1,
-        operations: ops,
-        noiseProbability: noiseProb
-      });
+        const ops = [op1];
+        for (let i = 0; i < 50; i++) ops.push(op2); // Spin it longer for audio effect
+
+        req = CircuitRequest.create({
+          numQubits: 1,
+          operations: ops,
+          noiseProbability: noiseProb,
+          executionBackend: backendType
+        });
+      }
 
       // 2. Start Stream
       const streamCall = client.visualizeCircuit(req);
@@ -168,6 +175,27 @@ function App() {
     );
   }
 
+  // If Composer mode, render it
+  if (viewMode === 'composer') {
+    return (
+      <CircuitComposer
+        onBack={() => setViewMode('dashboard')}
+        onRun={(req) => {
+          setViewMode('dashboard'); // Switch back to see viz
+          // Inject backend preference from Main UI into the request (if not set)
+          // Actually the composer creates a new request. We should merge or ensure backend is set.
+          // Composer logic sets numQubits and Ops.
+          // We should add backendType and noiseProb from App state to it!
+          req.executionBackend = backendType;
+          req.noiseProbability = noiseProb;
+
+          // Small timeout to allow render to switch back to dashboard before running
+          setTimeout(() => runSimulation(req), 100);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="App">
       <div className="ui-overlay">
@@ -208,9 +236,26 @@ function App() {
           </label>
         </div>
 
+        {/* Backend Selector */}
+        <div style={{ margin: '10px 0', borderTop: '1px solid #333', paddingTop: '10px' }}>
+          <label style={{ marginRight: '10px', color: '#aaa' }}>Execution Target:</label>
+          <select
+            value={backendType}
+            onChange={(e) => setBackendType(parseInt(e.target.value))}
+            style={{
+              background: '#1f2937', color: 'white', border: '1px solid #4b5563',
+              padding: '5px', borderRadius: '4px'
+            }}
+          >
+            <option value={CircuitRequest_ExecutionBackend.SIMULATOR}>Local Simulator (Instant)</option>
+            <option value={CircuitRequest_ExecutionBackend.MOCK_HARDWARE}>Mock QPU (Queued)</option>
+            <option value={CircuitRequest_ExecutionBackend.REAL_IBM_Q}>IBM Quantum (Disabled)</option>
+          </select>
+        </div>
+
         {serverId && <p style={{ color: '#00ffff' }}>Computed By: {serverId}</p>}
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <button onClick={runSimulation} disabled={isRunning}>
+          <button onClick={() => runSimulation()} disabled={isRunning}>
             {isRunning ? 'Running...' : 'Run 1-Qubit Simulation'}
           </button>
           <button
@@ -261,6 +306,20 @@ function App() {
             }}
           >
             🧪 VQE Lab
+          </button>
+          <button
+            onClick={() => setViewMode('composer')}
+            style={{
+              background: 'linear-gradient(135deg, #ec4899, #db2777)',
+              color: 'white',
+              border: 'none',
+              padding: '10px 20px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontWeight: '600'
+            }}
+          >
+            🎹 Composer
           </button>
         </div>
 
