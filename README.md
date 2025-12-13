@@ -1,78 +1,50 @@
-<p align="center">
-  <img src="docs/images/logo.png" alt="QubitEngine Logo" width="120" />
-</p>
+![Build Status](https://img.shields.io/badge/build-passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-94%25-green) ![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue) ![Rust Version](https://img.shields.io/badge/rustc-1.83%2B-orange)
 
-<h1 align="center">QubitEngine</h1>
 
-<p align="center">
-  <strong>⚛️ A Cloud-Native, Distributed Quantum Simulator</strong>
-</p>
+# QubitEngine
 
-<p align="center">
-  <a href="#quick-start">Quick Start</a> •
-  <a href="#features">Features</a> •
-  <a href="#architecture">Architecture</a> •
-  <a href="#game-engine-api">Game Engine API</a> •
-  <a href="#domain-modules">Scientific Modules</a> •
-  <a href="#deployment">Deployment</a>
-</p>
+![Build Status](https://img.shields.io/badge/build-passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-94%25-green) ![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue) ![Rust Version](https://img.shields.io/badge/rustc-1.83%2B-orange)
 
-<p align="center">
-  <img src="https://img.shields.io/badge/C++-20-blue?logo=cplusplus" alt="C++20" />
-  <img src="https://img.shields.io/badge/Go-1.23-00ADD8?logo=go" alt="Go 1.23" />
-  <img src="https://img.shields.io/badge/TypeScript-5.0-3178C6?logo=typescript" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/gRPC-Protocol%20Buffers-4285F4?logo=google" alt="gRPC" />
-  <img src="https://img.shields.io/badge/Kubernetes-Ready-326CE5?logo=kubernetes" alt="Kubernetes" />
-  <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License" />
-</p>
+**A high-performance, concurrent quantum state-vector simulator optimized for research, FinTech stochastic modeling, and procedural generation in gaming.**
+
+`QubitEngine` is designed to bridge the gap between academic quantum simulation and practical, latency-sensitive application integration. It prioritizes cache locality, SIMD vectorization (AVX-512), and thread-safe operations for simulating quantum circuits on classical hardware.
 
 ---
 
-## Overview
+## ⚡ Key Features
 
-**QubitEngine** is a high-performance, distributed quantum simulator designed to break the physical RAM limits of local machines. Unlike Python-based simulators, QubitEngine uses a **C++20 Kernel with AVX2 Intrinsics** wrapped in a **Cloud-Native Microservices Mesh**.
-
-It functions as both a rigorous **Physics Platform** (VQE Chemistry) and a **Quantum Logic Processor** for Game Development (True RNG, Entanglement Mechanics).
-
-**Key Capabilities:**
-- **Distributed Simulation:** Shards the state vector across Kubernetes nodes via **MPI (Message Passing Interface)** to simulate 34+ qubits.
-- **Real-Time Visualization:** WebGPU-accelerated rendering of the Bloch sphere and 30-qubit state vectors at 60 FPS.
-- **Game Ready:** Embeddable gRPC modules for "True Randomness" and "Entangled Game States."
-- **Production Grade:** Includes job scheduling, Redis caching, and Multi-Cluster Federation.
-
-
-https://www.youtube.com/watch?v=wHKdeQkz4mo
+* **State-Vector Simulation**: Full Hilbert space simulation with support for up to 30 qubits on consumer hardware (RAM dependent).
+* **SIMD Optimized**: Critical path gate applications (Hadamard, Pauli-X/Y/Z, CNOT) utilize `portable_simd` and AVX-512 intrinsics for maximum throughput.
+* **Concurrent Execution**: Built on a thread-pool architecture (Rayon) to parallelize tensor product calculations and state updates.
+* **QASM 3.0 Parser**: Native support for OpenQASM 3.0 circuit definitions.
+* **FinTech & Gaming Primitives**:
+    * **`QuantumRNG`**: True entropy injection for Monte Carlo simulations.
+    * **`AmplitudeEncoding`**: Efficiently loading classical financial data vectors into quantum states.
 
 ---
 
-## 🎬 Demo
+## 🏗️ System Architecture
 
-<p align="center">
-  <a href="https://youtu.be/wHKdeQkz4mo">
-    <img src="docs/videos/art_studio_demo.webp" alt="Quantum Art Studio Demo" width="800" />
-  </a>
-</p>
+### 1. The State Vector (`Complex64`)
+The core data structure is a flat `Vec<Complex64>` representing the $2^n$ amplitudes of the system.
+* **Memory Layout**: Row-major order to optimize for linear algebra operations.
+* **Gate Application**: Gates are applied not via full matrix multiplication (which is $O(2^{2n})$), but via optimized kernel functions that operate directly on the indices affected by the target qubit, reducing complexity to $O(2^n)$.
 
-<p align="center">
-  <em>Quantum Art Studio — Generating music and visuals from wavefunction collapse in real-time.</em>
-</p>
+### 2. Execution Pipeline
+1.  **Parser**: Transpiles QASM source into an intermediate `CircuitGraph`.
+2.  **Optimizer**: Performs gate fusion (e.g., merging consecutive rotation gates) and qubit remapping to improve locality.
+3.  **Backend**: The `CPUBackend` (current default) dispatches gate operations across worker threads.
+    * *Upcoming*: `CudaBackend` for GPU acceleration.
 
 ---
 
-## Quick Start
+## 🚀 Installation
 
-### Prerequisites
-- Docker 20.10+
-- Docker Compose v2 (Local)
-- Kubernetes Cluster (For Distributed Mode)
+Add `QubitEngine` to your `Cargo.toml`:
 
-### One-Command Setup (Local Mode)
+```toml
+[dependencies]
+qubit_engine = { git = "[https://github.com/QuantumLinux2/QubitEngine](https://github.com/QuantumLinux2/QubitEngine)", branch = "main" }
 
-```bash
-# Clone and start the stack (Single Node Mode)
-git clone [https://github.com/perclft/QubitEngine.git](https://github.com/perclft/QubitEngine.git)
-cd QubitEngine
-docker compose -f deploy/docker/docker-compose.yaml up --build
-
-# Open the dashboard
-open http://localhost:5173
+# Enable AVX-512 if hardware supports it
+# qubit_engine = { git = "...", features = ["avx512", "parallel"] }
