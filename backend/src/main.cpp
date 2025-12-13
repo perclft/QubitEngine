@@ -43,7 +43,37 @@ void RunServer() {
   server->Shutdown();
 }
 
-int main() {
-  RunServer();
+#include <mpi.h> // Phase 23: OpenMPI
+
+// ... (existing code)
+
+int main(int argc, char **argv) {
+  // Initialize MPI
+  MPI_Init(&argc, &argv);
+
+  int world_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
+  int world_size;
+  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+  if (world_rank == 0) {
+    std::cout << "MPI Initialized with size: " << world_size << std::endl;
+    RunServer();
+  } else {
+    // Worker nodes wait for instructions (or just run loop if architected that
+    // way) For now, let's just have rank 0 run the server and others wait or
+    // exit. In a real distributed kernel, the server would dispatch commands to
+    // workers. We'll keep them alive to receive MPI calls.
+    std::cout << "Worker Node " << world_rank << " started." << std::endl;
+
+    // Simple keep-alive for workers until Shutdown
+    // Real implementation would have a receive loop here
+    while (!shutdown_requested) {
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+  }
+
+  MPI_Finalize();
   return 0;
 }

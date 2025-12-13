@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libprotobuf-dev libgrpc-dev libgrpc++-dev protobuf-compiler-grpc \
     libssl-dev zlib1g-dev libc-ares-dev libgflags-dev libgoogle-glog-dev \
     ca-certificates wget libstdc++6 zlib1g libssl3 \
+    libopenmpi-dev openmpi-bin \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Go (for generating stubs)
@@ -22,6 +23,9 @@ COPY api/ api/
 COPY backend/ backend/
 COPY CMakeLists.txt .
 
+# DEBUG: Check if MPI files exist
+RUN ls -R /usr/lib/x86_64-linux-gnu/openmpi/include || echo "MPI Dir Not Found"
+
 # CRITICAL FIX (Glibc): Link against the reflection library
 RUN echo 'target_link_libraries(qubit_engine PUBLIC grpc++ protobuf gflags glog grpc++_reflection)' >> CMakeLists.txt
 
@@ -34,7 +38,9 @@ RUN mkdir -p backend/src/generated && \
     mkdir -p /usr/local/include/generated/api/proto/ && \
     cp backend/src/generated/api/proto/*pb.h /usr/local/include/generated/api/proto/
 
-RUN cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-I/usr/local/include/generated" . && \
+RUN cmake -B build -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_CXX_COMPILER=mpic++ \
+    -DCMAKE_CXX_FLAGS="-I/usr/local/include/generated" . && \
     cmake --build build --config Release && \
     chmod +x /build/build/qubit_engine
 
@@ -47,6 +53,7 @@ COPY --from=builder /build/build/qubit_engine /usr/local/bin/qubit_engine
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libstdc++6 libgrpc++1.51 libprotobuf32 libssl3 zlib1g libc-ares2 \
     libgflags2.2 libgoogle-glog0v6 \
+    libopenmpi3 openmpi-bin \
     && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 50051

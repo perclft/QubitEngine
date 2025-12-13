@@ -1,0 +1,11 @@
+apiVersion: v2
+name: qubit-engine
+description: A Hyperscale Distributed Quantum Simulation Engine on Kubernetes
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+maintainers:
+  - name: DevOps Team
+    email: devops@qubit-engine.io
+dependencies:
+  # potential future dependencies like redis or postgres

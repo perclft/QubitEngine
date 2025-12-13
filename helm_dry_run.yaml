@@ -1,0 +1,337 @@
+---
+# Source: qubit-engine/templates/network-policy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: qubit-release-qubit-engine-default-deny
+  labels:
+    helm.sh/chart: qubit-engine-0.1.0
+    app.kubernetes.io/name: qubit-engine
+    app.kubernetes.io/instance: qubit-release
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  # Default Deny All (Implicit when empty list)
+---
+# Source: qubit-engine/templates/network-policy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: qubit-release-qubit-engine-allow-frontend-backend
+  labels:
+    helm.sh/chart: qubit-engine-0.1.0
+    app.kubernetes.io/name: qubit-engine
+    app.kubernetes.io/instance: qubit-release
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: backend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: frontend
+    ports:
+    - protocol: TCP
+      port: 50051 # gRPC
+---
+# Source: qubit-engine/templates/network-policy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: qubit-release-qubit-engine-allow-mpi-intra
+  labels:
+    helm.sh/chart: qubit-engine-0.1.0
+    app.kubernetes.io/name: qubit-engine
+    app.kubernetes.io/instance: qubit-release
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: backend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: backend
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: backend
+  # Allow DNS Resolution (Critical for internal discovery)
+  - ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+---
+# Source: qubit-engine/templates/service.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: qubit-release-qubit-engine
+  labels:
+    helm.sh/chart: qubit-engine-0.1.0
+    app.kubernetes.io/name: qubit-engine
+    app.kubernetes.io/instance: qubit-release
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    iam.gke.io/gcp-service-account: qubit-engine-sa@my-project.iam.gserviceaccount.com
+---
+# Source: qubit-engine/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: qubit-release-qubit-engine-backend-headless
+  labels:
+    helm.sh/chart: qubit-engine-0.1.0
+    app.kubernetes.io/name: qubit-engine
+    app.kubernetes.io/instance: qubit-release
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: backend
+spec:
+  ports:
+  - port: 50051
+    name: grpc
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: qubit-engine
+    app.kubernetes.io/instance: qubit-release
+    app.kubernetes.io/component: backend
+---
+# Source: qubit-engine/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: qubit-release-qubit-engine-frontend-service
+  labels:
+    helm.sh/chart: qubit-engine-0.1.0
+    app.kubernetes.io/name: qubit-engine
+    app.kubernetes.io/instance: qubit-release
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: frontend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app.kubernetes.io/name: qubit-engine
+    app.kubernetes.io/instance: qubit-release
+    app.kubernetes.io/component: frontend
+---
+# Source: qubit-engine/templates/deployment-frontend.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qubit-release-qubit-engine-frontend
+  labels:
+    helm.sh/chart: qubit-engine-0.1.0
+    app.kubernetes.io/name: qubit-engine
+    app.kubernetes.io/instance: qubit-release
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: qubit-engine
+      app.kubernetes.io/instance: qubit-release
+      app.kubernetes.io/component: frontend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: qubit-engine
+        app.kubernetes.io/instance: qubit-release
+        app.kubernetes.io/component: frontend
+    spec:
+      containers:
+        - name: qubit-engine-frontend
+          image: "qubit-engine/frontend:latest"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          # No secrets needed here, mostly public static assets.
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+            requests:
+              cpu: 500m
+              memory: 1Gi 
+            # Reusing default resources for simplicity, would tune in prod
+---
+# Source: qubit-engine/templates/statefulset-backend.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: qubit-release-qubit-engine-backend
+  labels:
+    helm.sh/chart: qubit-engine-0.1.0
+    app.kubernetes.io/name: qubit-engine
+    app.kubernetes.io/instance: qubit-release
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: backend
+spec:
+  serviceName: qubit-release-qubit-engine-backend-headless
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: qubit-engine
+      app.kubernetes.io/instance: qubit-release
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: qubit-engine
+        app.kubernetes.io/instance: qubit-release
+        app.kubernetes.io/component: backend
+    spec:
+      securityContext:
+        fsGroup: 1000
+        readOnlyRootFilesystem: true
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: qubit-engine
+          securityContext:
+            fsGroup: 1000
+            readOnlyRootFilesystem: true
+            runAsGroup: 1000
+            runAsNonRoot: true
+            runAsUser: 1000
+          image: "qubit-engine/backend:latest"
+          imagePullPolicy: IfNotPresent
+          command: ["mpirun"]
+          # Oversubscribe needed even in K8s if mapping 1 proc per pod explicitly? 
+          # Actually, we likely run 1 proc per pod. 
+          # For K8s MPI Operator style: Launcher pod runs mpirun, worker pods run orted.
+          # For simple StatefulSet manual clustering:
+          # We might just run the binary in 'server' mode and let mpirun be external?
+          # Wait, our architecture is Hybrid. Pod 0 is Server. Pod N is Worker.
+          # They need to form a cluster.
+          # Command override to handle Identity check
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              # Determine Identity based on hostname (StatefulSet ordinal)
+              HOSTNAME=$(hostname)
+              if [[ $HOSTNAME =~ -0$ ]]; then
+                echo "I am the LEADER (Rank 0). Starting Server..."
+                # In real MPI K8s, we need a HostFile containing all pod IPs.
+                # For this MVP, we will assume a static list or DNS discovery.
+                # This is a simplification for the 'Cloud' simulation.
+                /usr/local/bin/qubit_engine
+              else
+                echo "I am a WORKER. Waiting for MPI signals..."
+                /usr/local/bin/qubit_engine
+              fi
+          ports:
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+            - name: mpi
+              containerPort: 22 # If using SSH-based MPI, otherwise need TCP ports range
+              protocol: TCP
+          env:
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # Load Secret from ExternalSecret -> Secret Volume/Env
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: qubit-backend-secrets
+                  key: api-key
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+            requests:
+              cpu: 500m
+              memory: 1Gi
+---
+# Source: qubit-engine/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: qubit-release-qubit-engine
+  labels:
+    helm.sh/chart: qubit-engine-0.1.0
+    app.kubernetes.io/name: qubit-engine
+    app.kubernetes.io/instance: qubit-release
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains";
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - "qubit.example.com"
+      secretName: qubit-engine-tls
+  rules:
+    - host: "qubit.example.com"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: qubit-release-qubit-engine-frontend-service
+                port:
+                  number: 80
+---
+# Source: qubit-engine/templates/external-secret.yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: qubit-backend-secrets
+spec:
+  refreshInterval: "1h"
+  secretStoreRef:
+    name: aws-secretsmanager # Assumes ClusterSecretStore exists
+    kind: ClusterSecretStore
+  target:
+    name: qubit-backend-secrets
+    creationPolicy: Owner
+  data:
+  - secretKey: api-key
+    remoteRef:
+      key: prod/qubit-engine/backend
+      property: api-key

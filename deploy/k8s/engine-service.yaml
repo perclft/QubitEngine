@@ -5,7 +5,7 @@ metadata:
   namespace: quantum-system
 spec:
   selector:
-    app: qubit-engine
+    app: mpi-worker
   type: ClusterIP
   ports:
     - protocol: TCP

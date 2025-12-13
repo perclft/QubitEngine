@@ -1,0 +1,78 @@
+# Default values for qubit-engine.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+global:
+  environment: production
+  cloudProvider: aws # aws, gcp, azure
+
+backend:
+  replicaCount: 2 # Minimum for distributed simulation
+  image:
+    repository: qubit-engine/backend
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: "latest"
+
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    readOnlyRootFilesystem: true
+
+frontend:
+  replicaCount: 2
+  image:
+    repository: qubit-engine/frontend
+    pullPolicy: IfNotPresent
+    tag: "latest"
+  service:
+    type: ClusterIP
+    port: 80
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # STRICT HSTS
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains";
+  hosts:
+    - host: qubit.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: qubit-engine-tls
+      hosts:
+        - qubit.example.com
+
+# SECURITY: Network Policies (Zero Trust)
+networkPolicy:
+  enabled: true
+  # Whitelist Ingress Controller CIDRs if known, or allow all from Ingress Namespace
+  ingressNamespaceLabel: "ingress-nginx"
+
+# SECURITY: External Secrets
+externalSecrets:
+  enabled: true
+  backendSecretName: "qubit-backend-secrets"
+  # AWS/GCP Secret Manager Key Name
+  remoteKey: "prod/qubit-engine/backend"
+
+serviceAccount:
+  create: true
+  annotations:
+    # Workload Identity (GKE) or IRSA (EKS)
+    iam.gke.io/gcp-service-account: "qubit-engine-sa@my-project.iam.gserviceaccount.com"

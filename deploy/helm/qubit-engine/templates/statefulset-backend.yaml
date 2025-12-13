@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "qubit-engine.fullname" . }}-backend
+  labels:
+    {{- include "qubit-engine.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  serviceName: {{ include "qubit-engine.fullname" . }}-backend-headless
+  replicas: {{ .Values.backend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "qubit-engine.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        {{- include "qubit-engine.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.backend.securityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.backend.securityContext | nindent 12 }}
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          command: ["mpirun"]
+          # Oversubscribe needed even in K8s if mapping 1 proc per pod explicitly? 
+          # Actually, we likely run 1 proc per pod. 
+          # For K8s MPI Operator style: Launcher pod runs mpirun, worker pods run orted.
+          # For simple StatefulSet manual clustering:
+          # We might just run the binary in 'server' mode and let mpirun be external?
+          # Wait, our architecture is Hybrid. Pod 0 is Server. Pod N is Worker.
+          # They need to form a cluster.
+          # Command override to handle Identity check
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              # Determine Identity based on hostname (StatefulSet ordinal)
+              HOSTNAME=$(hostname)
+              if [[ $HOSTNAME =~ -0$ ]]; then
+                echo "I am the LEADER (Rank 0). Starting Server..."
+                # In real MPI K8s, we need a HostFile containing all pod IPs.
+                # For this MVP, we will assume a static list or DNS discovery.
+                # This is a simplification for the 'Cloud' simulation.
+                /usr/local/bin/qubit_engine
+              else
+                echo "I am a WORKER. Waiting for MPI signals..."
+                /usr/local/bin/qubit_engine
+              fi
+          ports:
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+            - name: mpi
+              containerPort: 22 # If using SSH-based MPI, otherwise need TCP ports range
+              protocol: TCP
+          env:
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # Load Secret from ExternalSecret -> Secret Volume/Env
+            {{- if .Values.externalSecrets.enabled }}
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecrets.backendSecretName }}
+                  key: api-key
+            {{- end }}
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}

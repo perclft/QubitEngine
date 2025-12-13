@@ -88,11 +88,18 @@ void QubitEngineServiceImpl::serializeState(
 
   // Populate Server ID (Pod Hostname)
   char hostname[1024];
+  std::string id_str = "unknown-host";
   if (gethostname(hostname, 1024) == 0) {
-    response->set_server_id(hostname);
-  } else {
-    response->set_server_id("unknown-host");
+    id_str = std::string(hostname);
   }
+
+  // Phase 23: Distributed Info
+  if (qreg.getSize() > 1) {
+    id_str += " (MPI Rank " + std::to_string(qreg.getRank()) + "/" +
+              std::to_string(qreg.getSize()) + ")";
+  }
+
+  response->set_server_id(id_str);
 }
 
 // Factory Helper

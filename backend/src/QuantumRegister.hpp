@@ -17,6 +17,14 @@ private:
     }
   }
 
+  // Distributed Computing (MPI)
+  int mpi_rank = 0;
+  int mpi_size = 1;
+  size_t local_size;
+
+  bool isLocalQubit(size_t qubit_index) const;
+  size_t getGlobalPairRank(size_t qubit_index) const;
+
 public:
   explicit QuantumRegister(size_t n);
 
@@ -40,4 +48,11 @@ public:
   double expectationValue(const std::string &pauli_string);
 
   const std::vector<Complex> &getStateVector() const;
+
+  // MPI Synchronization Helper
+  void syncState();
+
+  // Phase 23: Information
+  int getRank() const { return mpi_rank; }
+  int getSize() const { return mpi_size; }
 };

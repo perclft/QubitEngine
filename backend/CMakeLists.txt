@@ -7,6 +7,7 @@ find_package(gRPC REQUIRED)
 find_package(Protobuf REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
+find_package(MPI REQUIRED) # Phase 23
 
 set(PROTO_FILE ${CMAKE_SOURCE_DIR}/api/proto/quantum.proto)
 # The output must be within the CMAKE_CURRENT_BINARY_DIR (build folder) or a source folder.
@@ -62,6 +63,7 @@ add_executable(qubit_engine
 )
 
 # 4. Link Libraries (Existing)
+# If using mpic++, we might not strictly need MPI::MPI_CXX, but keeping it is good for transitive deps.
 target_link_libraries(qubit_engine
     PRIVATE
     gRPC::grpc++
@@ -71,5 +73,9 @@ target_link_libraries(qubit_engine
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
+    MPI::MPI_CXX # Link MPI
+    dl
+    Threads::Threads
+    MPI::MPI_CXX # Link MPI
     dl
 )
