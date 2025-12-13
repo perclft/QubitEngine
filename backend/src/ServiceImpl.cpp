@@ -1,5 +1,6 @@
 #include "ServiceImpl.hpp"
 #include "QuantumRegister.hpp"
+#include "backends/CloudBackend.hpp"
 #include "backends/MockHardwareBackend.hpp"
 #include "backends/SimulatorBackend.hpp"
 #include <cmath>
@@ -110,8 +111,12 @@ createBackend(qubit_engine::CircuitRequest::ExecutionBackend type,
   case qubit_engine::CircuitRequest::MOCK_HARDWARE:
     std::cout << "Using Mock Hardware Backend" << std::endl;
     return std::make_unique<MockHardwareBackend>(num_qubits);
+#include "backends/CloudBackend.hpp"
+
+    // ... inside switch ...
   case qubit_engine::CircuitRequest::REAL_IBM_Q:
-    throw std::runtime_error("Real IBM Q Backend not yet implemented");
+    std::cout << "Using Cloud Quantum Backend" << std::endl;
+    return std::make_unique<CloudBackend>(num_qubits);
   case qubit_engine::CircuitRequest::SIMULATOR:
   default:
     std::cout << "Using Local Simulator Backend" << std::endl;
