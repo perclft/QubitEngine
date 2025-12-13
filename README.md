@@ -40,6 +40,9 @@ It functions as both a rigorous **Physics Platform** (VQE Chemistry) and a **Qua
 - **Game Ready:** Embeddable gRPC modules for "True Randomness" and "Entangled Game States."
 - **Production Grade:** Includes job scheduling, Redis caching, and Multi-Cluster Federation.
 
+
+https://www.youtube.com/watch?v=wHKdeQkz4mo
+
 ---
 
 ## 🎬 Demo
