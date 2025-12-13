@@ -12,6 +12,7 @@ import (
 	"time"
 
 	pb "github.com/perclft/QubitEngine/cli/internal/generated"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

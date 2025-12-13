@@ -21,6 +21,55 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type CircuitRequest_ExecutionBackend int32
+
+const (
+	CircuitRequest_SIMULATOR     CircuitRequest_ExecutionBackend = 0
+	CircuitRequest_MOCK_HARDWARE CircuitRequest_ExecutionBackend = 1
+	CircuitRequest_REAL_IBM_Q    CircuitRequest_ExecutionBackend = 2 // Future use
+)
+
+// Enum value maps for CircuitRequest_ExecutionBackend.
+var (
+	CircuitRequest_ExecutionBackend_name = map[int32]string{
+		0: "SIMULATOR",
+		1: "MOCK_HARDWARE",
+		2: "REAL_IBM_Q",
+	}
+	CircuitRequest_ExecutionBackend_value = map[string]int32{
+		"SIMULATOR":     0,
+		"MOCK_HARDWARE": 1,
+		"REAL_IBM_Q":    2,
+	}
+)
+
+func (x CircuitRequest_ExecutionBackend) Enum() *CircuitRequest_ExecutionBackend {
+	p := new(CircuitRequest_ExecutionBackend)
+	*p = x
+	return p
+}
+
+func (x CircuitRequest_ExecutionBackend) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (CircuitRequest_ExecutionBackend) Descriptor() protoreflect.EnumDescriptor {
+	return file_quantum_proto_enumTypes[0].Descriptor()
+}
+
+func (CircuitRequest_ExecutionBackend) Type() protoreflect.EnumType {
+	return &file_quantum_proto_enumTypes[0]
+}
+
+func (x CircuitRequest_ExecutionBackend) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use CircuitRequest_ExecutionBackend.Descriptor instead.
+func (CircuitRequest_ExecutionBackend) EnumDescriptor() ([]byte, []int) {
+	return file_quantum_proto_rawDescGZIP(), []int{0, 0}
+}
+
 type GateOperation_GateType int32
 
 const (
@@ -73,11 +122,11 @@ func (x GateOperation_GateType) String() string {
 }
 
 func (GateOperation_GateType) Descriptor() protoreflect.EnumDescriptor {
-	return file_quantum_proto_enumTypes[0].Descriptor()
+	return file_quantum_proto_enumTypes[1].Descriptor()
 }
 
 func (GateOperation_GateType) Type() protoreflect.EnumType {
-	return &file_quantum_proto_enumTypes[0]
+	return &file_quantum_proto_enumTypes[1]
 }
 
 func (x GateOperation_GateType) Number() protoreflect.EnumNumber {
@@ -119,11 +168,11 @@ func (x VQERequest_Molecule) String() string {
 }
 
 func (VQERequest_Molecule) Descriptor() protoreflect.EnumDescriptor {
-	return file_quantum_proto_enumTypes[1].Descriptor()
+	return file_quantum_proto_enumTypes[2].Descriptor()
 }
 
 func (VQERequest_Molecule) Type() protoreflect.EnumType {
-	return &file_quantum_proto_enumTypes[1]
+	return &file_quantum_proto_enumTypes[2]
 }
 
 func (x VQERequest_Molecule) Number() protoreflect.EnumNumber {
@@ -140,7 +189,8 @@ type CircuitRequest struct {
 	NumQubits  int32                  `protobuf:"varint,1,opt,name=num_qubits,json=numQubits,proto3" json:"num_qubits,omitempty"`
 	Operations []*GateOperation       `protobuf:"bytes,2,rep,name=operations,proto3" json:"operations,omitempty"`
 	// Probability of a depolarizing error occurring per step (0.0 - 1.0)
-	NoiseProbability float64 `protobuf:"fixed64,3,opt,name=noise_probability,json=noiseProbability,proto3" json:"noise_probability,omitempty"`
+	NoiseProbability float64                         `protobuf:"fixed64,3,opt,name=noise_probability,json=noiseProbability,proto3" json:"noise_probability,omitempty"`
+	ExecutionBackend CircuitRequest_ExecutionBackend `protobuf:"varint,4,opt,name=execution_backend,json=executionBackend,proto3,enum=qubit_engine.CircuitRequest_ExecutionBackend" json:"execution_backend,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -194,6 +244,13 @@ func (x *CircuitRequest) GetNoiseProbability() float64 {
 		return x.NoiseProbability
 	}
 	return 0
+}
+
+func (x *CircuitRequest) GetExecutionBackend() CircuitRequest_ExecutionBackend {
+	if x != nil {
+		return x.ExecutionBackend
+	}
+	return CircuitRequest_SIMULATOR
 }
 
 type GateOperation struct {
@@ -591,14 +648,20 @@ var File_quantum_proto protoreflect.FileDescriptor
 
 const file_quantum_proto_rawDesc = "" +
 	"\n" +
-	"\rquantum.proto\x12\fqubit_engine\"\x99\x01\n" +
+	"\rquantum.proto\x12\fqubit_engine\"\xbb\x02\n" +
 	"\x0eCircuitRequest\x12\x1d\n" +
 	"\n" +
 	"num_qubits\x18\x01 \x01(\x05R\tnumQubits\x12;\n" +
 	"\n" +
 	"operations\x18\x02 \x03(\v2\x1b.qubit_engine.GateOperationR\n" +
 	"operations\x12+\n" +
-	"\x11noise_probability\x18\x03 \x01(\x01R\x10noiseProbability\"\x8e\x03\n" +
+	"\x11noise_probability\x18\x03 \x01(\x01R\x10noiseProbability\x12Z\n" +
+	"\x11execution_backend\x18\x04 \x01(\x0e2-.qubit_engine.CircuitRequest.ExecutionBackendR\x10executionBackend\"D\n" +
+	"\x10ExecutionBackend\x12\r\n" +
+	"\tSIMULATOR\x10\x00\x12\x11\n" +
+	"\rMOCK_HARDWARE\x10\x01\x12\x0e\n" +
+	"\n" +
+	"REAL_IBM_Q\x10\x02\"\x8e\x03\n" +
 	"\rGateOperation\x128\n" +
 	"\x04type\x18\x01 \x01(\x0e2$.qubit_engine.GateOperation.GateTypeR\x04type\x12!\n" +
 	"\ftarget_qubit\x18\x02 \x01(\rR\vtargetQubit\x12#\n" +
@@ -668,39 +731,41 @@ func file_quantum_proto_rawDescGZIP() []byte {
 	return file_quantum_proto_rawDescData
 }
 
-var file_quantum_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_quantum_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
 var file_quantum_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_quantum_proto_goTypes = []any{
-	(GateOperation_GateType)(0),         // 0: qubit_engine.GateOperation.GateType
-	(VQERequest_Molecule)(0),            // 1: qubit_engine.VQERequest.Molecule
-	(*CircuitRequest)(nil),              // 2: qubit_engine.CircuitRequest
-	(*GateOperation)(nil),               // 3: qubit_engine.GateOperation
-	(*StateResponse)(nil),               // 4: qubit_engine.StateResponse
-	(*Measurement)(nil),                 // 5: qubit_engine.Measurement
-	(*VQERequest)(nil),                  // 6: qubit_engine.VQERequest
-	(*VQEResponse)(nil),                 // 7: qubit_engine.VQEResponse
-	(*StateResponse_ComplexNumber)(nil), // 8: qubit_engine.StateResponse.ComplexNumber
-	nil,                                 // 9: qubit_engine.StateResponse.ClassicalResultsEntry
+	(CircuitRequest_ExecutionBackend)(0), // 0: qubit_engine.CircuitRequest.ExecutionBackend
+	(GateOperation_GateType)(0),          // 1: qubit_engine.GateOperation.GateType
+	(VQERequest_Molecule)(0),             // 2: qubit_engine.VQERequest.Molecule
+	(*CircuitRequest)(nil),               // 3: qubit_engine.CircuitRequest
+	(*GateOperation)(nil),                // 4: qubit_engine.GateOperation
+	(*StateResponse)(nil),                // 5: qubit_engine.StateResponse
+	(*Measurement)(nil),                  // 6: qubit_engine.Measurement
+	(*VQERequest)(nil),                   // 7: qubit_engine.VQERequest
+	(*VQEResponse)(nil),                  // 8: qubit_engine.VQEResponse
+	(*StateResponse_ComplexNumber)(nil),  // 9: qubit_engine.StateResponse.ComplexNumber
+	nil,                                  // 10: qubit_engine.StateResponse.ClassicalResultsEntry
 }
 var file_quantum_proto_depIdxs = []int32{
-	3, // 0: qubit_engine.CircuitRequest.operations:type_name -> qubit_engine.GateOperation
-	0, // 1: qubit_engine.GateOperation.type:type_name -> qubit_engine.GateOperation.GateType
-	8, // 2: qubit_engine.StateResponse.state_vector:type_name -> qubit_engine.StateResponse.ComplexNumber
-	9, // 3: qubit_engine.StateResponse.classical_results:type_name -> qubit_engine.StateResponse.ClassicalResultsEntry
-	1, // 4: qubit_engine.VQERequest.molecule:type_name -> qubit_engine.VQERequest.Molecule
-	2, // 5: qubit_engine.QuantumCompute.RunCircuit:input_type -> qubit_engine.CircuitRequest
-	3, // 6: qubit_engine.QuantumCompute.StreamGates:input_type -> qubit_engine.GateOperation
-	2, // 7: qubit_engine.QuantumCompute.VisualizeCircuit:input_type -> qubit_engine.CircuitRequest
-	6, // 8: qubit_engine.QuantumCompute.RunVQE:input_type -> qubit_engine.VQERequest
-	4, // 9: qubit_engine.QuantumCompute.RunCircuit:output_type -> qubit_engine.StateResponse
-	4, // 10: qubit_engine.QuantumCompute.StreamGates:output_type -> qubit_engine.StateResponse
-	4, // 11: qubit_engine.QuantumCompute.VisualizeCircuit:output_type -> qubit_engine.StateResponse
-	7, // 12: qubit_engine.QuantumCompute.RunVQE:output_type -> qubit_engine.VQEResponse
-	9, // [9:13] is the sub-list for method output_type
-	5, // [5:9] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	4,  // 0: qubit_engine.CircuitRequest.operations:type_name -> qubit_engine.GateOperation
+	0,  // 1: qubit_engine.CircuitRequest.execution_backend:type_name -> qubit_engine.CircuitRequest.ExecutionBackend
+	1,  // 2: qubit_engine.GateOperation.type:type_name -> qubit_engine.GateOperation.GateType
+	9,  // 3: qubit_engine.StateResponse.state_vector:type_name -> qubit_engine.StateResponse.ComplexNumber
+	10, // 4: qubit_engine.StateResponse.classical_results:type_name -> qubit_engine.StateResponse.ClassicalResultsEntry
+	2,  // 5: qubit_engine.VQERequest.molecule:type_name -> qubit_engine.VQERequest.Molecule
+	3,  // 6: qubit_engine.QuantumCompute.RunCircuit:input_type -> qubit_engine.CircuitRequest
+	4,  // 7: qubit_engine.QuantumCompute.StreamGates:input_type -> qubit_engine.GateOperation
+	3,  // 8: qubit_engine.QuantumCompute.VisualizeCircuit:input_type -> qubit_engine.CircuitRequest
+	7,  // 9: qubit_engine.QuantumCompute.RunVQE:input_type -> qubit_engine.VQERequest
+	5,  // 10: qubit_engine.QuantumCompute.RunCircuit:output_type -> qubit_engine.StateResponse
+	5,  // 11: qubit_engine.QuantumCompute.StreamGates:output_type -> qubit_engine.StateResponse
+	5,  // 12: qubit_engine.QuantumCompute.VisualizeCircuit:output_type -> qubit_engine.StateResponse
+	8,  // 13: qubit_engine.QuantumCompute.RunVQE:output_type -> qubit_engine.VQEResponse
+	10, // [10:14] is the sub-list for method output_type
+	6,  // [6:10] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_quantum_proto_init() }
@@ -713,7 +778,7 @@ func file_quantum_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_quantum_proto_rawDesc), len(file_quantum_proto_rawDesc)),
-			NumEnums:      2,
+			NumEnums:      3,
 			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,

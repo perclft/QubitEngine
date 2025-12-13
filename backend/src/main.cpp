@@ -1,3 +1,4 @@
+#include "QuantumMetrics.hpp"
 #include "ServiceImpl.hpp"
 #include <atomic>
 #include <csignal>
@@ -30,6 +31,9 @@ void RunServer() {
   std::cout << "QubitEngine (C++) listening on " << server_address << std::endl;
   std::cout << "QubitEngine v2 (Debug) - VisualizeCircuit enabled" << std::endl;
 
+  // Start Prometheus Metrics Exposer
+  QuantumMetrics::Instance().Start();
+
   // Register signals
   std::signal(SIGINT, signalHandler);
   std::signal(SIGTERM, signalHandler);
@@ -43,11 +47,14 @@ void RunServer() {
   server->Shutdown();
 }
 
+#ifdef MPI_ENABLED
 #include <mpi.h> // Phase 23: OpenMPI
+#endif
 
 // ... (existing code)
 
 int main(int argc, char **argv) {
+#ifdef MPI_ENABLED
   // Initialize MPI
   MPI_Init(&argc, &argv);
 
@@ -75,5 +82,8 @@ int main(int argc, char **argv) {
   }
 
   MPI_Finalize();
+#else
+  RunServer();
+#endif
   return 0;
 }

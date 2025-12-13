@@ -1,58 +1,53 @@
 #pragma once
-#include <complex>
-#include <stdexcept> // For std::out_of_range
-#include <vector>
 
+#include <vector>
+#include <complex>
+#include <cstddef>
+#include <string>
+
+// --- Fix 1: Global Type Alias (Crucial for ServiceImpl_Visualize) ---
 using Complex = std::complex<double>;
 
 class QuantumRegister {
-private:
-  std::vector<Complex> state;
-  size_t num_qubits; // Changed to size_t
-
-  // Helper to validate indices
-  void validateIndex(size_t index) const {
-    if (index >= num_qubits) {
-      throw std::out_of_range("Qubit index out of bounds");
-    }
-  }
-
-  // Distributed Computing (MPI)
-  int mpi_rank = 0;
-  int mpi_size = 1;
-  size_t local_size;
-
-  bool isLocalQubit(size_t qubit_index) const;
-  size_t getGlobalPairRank(size_t qubit_index) const;
-
 public:
-  explicit QuantumRegister(size_t n);
+    // --- Lifecycle ---
+    QuantumRegister(size_t n);
+    ~QuantumRegister();
 
-  void applyHadamard(size_t target_qubit) __attribute__((target("avx2,fma")));
-  void applyX(size_t target_qubit);
-  void applyCNOT(size_t control_qubit, size_t target_qubit);
+    // --- Core Gates ---
+    void applyHadamard(size_t target);
+    void applyX(size_t target);
+    void applyY(size_t target);
+    void applyZ(size_t target);
+    void applyCNOT(size_t control, size_t target);
 
-  // Phase 3: New Gates
-  void applyToffoli(size_t control1, size_t control2, size_t target);
-  void applyPhaseS(size_t target); // Z90
-  void applyPhaseT(size_t target); // Z45
-  void applyRotationY(size_t target, double angle);
-  void applyRotationZ(size_t target, double angle);
+    // --- Advanced Gates ---
+    void applyToffoli(size_t control1, size_t control2, size_t target);
+    void applyPhaseS(size_t target);
+    void applyPhaseT(size_t target);
+    void applyRotationY(size_t target, double angle);
+    void applyRotationZ(size_t target, double angle);
 
-  // Phase 9: Noise
-  void applyDepolarizingNoise(double probability);
+    // --- Fix 2: Noise Simulation (Restored) ---
+    void applyDepolarizingNoise(double probability);
 
-  bool measure(size_t target_qubit);
+    // --- Measurement & Analysis ---
+    int measure(size_t target);
+    std::vector<double> getProbabilities();
+    double expectationValue(const std::string& pauli_string);
 
-  // Phase 19: VQE Support
-  double expectationValue(const std::string &pauli_string);
+    // --- Distributed Helpers ---
+    int getRank() const { return local_rank; }
+    int getSize() const { return world_size; }
 
-  const std::vector<Complex> &getStateVector() const;
+    // --- Debugging ---
+    std::vector<Complex> getStateVector() const;
 
-  // MPI Synchronization Helper
-  void syncState();
+private:
+    size_t num_qubits;
+    std::vector<Complex> state;
 
-  // Phase 23: Information
-  int getRank() const { return mpi_rank; }
-  int getSize() const { return mpi_size; }
+    // Distributed State
+    int local_rank;
+    int world_size;
 };

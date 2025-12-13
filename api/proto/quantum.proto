@@ -109,6 +109,12 @@ message VQERequest {
     Molecule molecule = 1;
     int32 max_iterations = 2;
     double learning_rate = 3; // For Gradient Descent
+
+    enum OptimizerType {
+        SPSA = 0;             // Simultaneous Perturbation Stochastic Approximation
+        GRADIENT_DESCENT = 1; // Native Differentiable Simulation (Parameter Shift)
+    }
+    OptimizerType optimizer_type = 4;
 }
 
 message VQEResponse {

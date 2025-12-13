@@ -7,9 +7,14 @@ find_package(gRPC REQUIRED)
 find_package(Protobuf REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
-find_package(MPI REQUIRED) # Phase 23
+if(MPI_FOUND)
+    add_compile_definitions(MPI_ENABLED)
+endif()
 
-set(PROTO_FILE ${CMAKE_SOURCE_DIR}/api/proto/quantum.proto)
+find_package(prometheus-cpp CONFIG REQUIRED)
+find_package(pybind11 CONFIG REQUIRED)
+
+set(PROTO_FILE ${CMAKE_SOURCE_DIR}/../api/proto/quantum.proto)
 # The output must be within the CMAKE_CURRENT_BINARY_DIR (build folder) or a source folder.
 # Since your source files are outside the build folder, using a dedicated source directory is clean.
 set(PROTO_OUT ${CMAKE_SOURCE_DIR}/backend/src/generated)
@@ -27,14 +32,80 @@ file(MAKE_DIRECTORY ${GENERATED_DIR}) # Ensure the directory exists
 # Generate files into the build directory's generated subdirectory
 protobuf_generate_cpp(PROTO_SRC_GENERATED_CPP PROTO_HDR_GENERATED_CPP
     ${PROTO_FILE}
-    IMPORT_DIRS ${CMAKE_SOURCE_DIR}/api/proto
+    IMPORT_DIRS ${CMAKE_SOURCE_DIR}/../api/proto
     OUTPUT_DIRECTORY ${GENERATED_DIR}
 )
+
+# Define helper function for generating gRPC files if not present
+# Define helper function for generating gRPC files if not present
+function(grpc_generate_cpp srcs hdrs)
+    cmake_parse_arguments(grpc "" "OUTPUT_DIRECTORY;IMPORT_DIRS" "" ${ARGN})
+    set(_proto_files "${grpc_UNPARSED_ARGUMENTS}")
+    if(NOT _proto_files)
+        message(SEND_ERROR "Error: grpc_generate_cpp() called without any proto files")
+        return()
+    endif()
+
+    if(grpc_OUTPUT_DIRECTORY)
+        set(_g_output_dir "${grpc_OUTPUT_DIRECTORY}")
+    else()
+        set(_g_output_dir "${CMAKE_CURRENT_BINARY_DIR}")
+    endif()
+
+    set(_g_import_dirs)
+    if(grpc_IMPORT_DIRS)
+        # Resolve canonical path to fix protoc matching issues
+        get_filename_component(_abs_import "${grpc_IMPORT_DIRS}" REALPATH)
+        list(APPEND _g_import_dirs "-I${_abs_import}")
+    else()
+        list(APPEND _g_import_dirs "-I${CMAKE_CURRENT_SOURCE_DIR}")
+    endif()
+
+    set(${srcs})
+    set(${hdrs})
+    
+    # Locate the gRPC C++ plugin
+    if(NOT TARGET gRPC::grpc_cpp_plugin)
+        message(FATAL_ERROR "gRPC::grpc_cpp_plugin target not found!")
+    endif()
+    
+    get_target_property(gRPC_CPP_PLUGIN_EXECUTABLE gRPC::grpc_cpp_plugin IMPORTED_LOCATION_RELEASE)
+    if(NOT gRPC_CPP_PLUGIN_EXECUTABLE)
+        get_target_property(gRPC_CPP_PLUGIN_EXECUTABLE gRPC::grpc_cpp_plugin IMPORTED_LOCATION)
+    endif()
+    if(NOT gRPC_CPP_PLUGIN_EXECUTABLE)
+         message(FATAL_ERROR "Could not locate gRPC::grpc_cpp_plugin executable")
+    endif()
+
+    foreach(fil ${_proto_files})
+        get_filename_component(abs_fil ${fil} REALPATH)
+        get_filename_component(fil_we ${fil} NAME_WE)
+
+        list(APPEND ${srcs} "${_g_output_dir}/${fil_we}.grpc.pb.cc")
+        list(APPEND ${hdrs} "${_g_output_dir}/${fil_we}.grpc.pb.h")
+
+        add_custom_command(
+            OUTPUT "${_g_output_dir}/${fil_we}.grpc.pb.cc"
+                   "${_g_output_dir}/${fil_we}.grpc.pb.h"
+            COMMAND protobuf::protoc
+            ARGS --grpc_out=${_g_output_dir}
+                 --plugin=protoc-gen-grpc=${gRPC_CPP_PLUGIN_EXECUTABLE}
+                 ${_g_import_dirs}
+                 ${abs_fil}
+            DEPENDS "${abs_fil}" protobuf::protoc gRPC::grpc_cpp_plugin
+            COMMENT "Running gRPC C++ compiler on ${fil} (Import: ${_g_import_dirs})"
+            VERBATIM )
+    endforeach()
+
+    set_source_files_properties(${${srcs}} ${${hdrs}} PROPERTIES GENERATED TRUE)
+    set(${srcs} ${${srcs}} PARENT_SCOPE)
+    set(${hdrs} ${${hdrs}} PARENT_SCOPE)
+endfunction()
 
 # Generate C++ gRPC files
 grpc_generate_cpp(GRPC_SRC_GENERATED_CPP GRPC_HDR_GENERATED_CPP
     ${PROTO_FILE}
-    IMPORT_DIRS ${CMAKE_SOURCE_DIR}/api/proto
+    IMPORT_DIRS ${CMAKE_SOURCE_DIR}/../api/proto
     OUTPUT_DIRECTORY ${GENERATED_DIR}
 )
 # -----------------------------------------------------------------
@@ -42,28 +113,29 @@ grpc_generate_cpp(GRPC_SRC_GENERATED_CPP GRPC_HDR_GENERATED_CPP
 # 2. Include Directories
 # The C++ compiler needs to find the generated headers.
 # Generated headers MUST be found in the directory *before* the package name.
-target_include_directories(qubit_engine PUBLIC
-    # 1. Source code includes (e.g., backend/src/ServiceImpl.hpp)
-    backend/src
-    # 2. Generated headers are here: <GENERATED_DIR>/qubit_engine/quantum.grpc.pb.h
-    ${GENERATED_DIR} 
-)
-
 # 3. Define Executable with ALL Sources (CRITICAL FIX)
 # We must include the generated C++ source files (.cc)
 add_executable(qubit_engine 
-    backend/src/QuantumRegister.cpp
-    backend/src/ServiceImpl.cpp
-    backend/src/ServiceImpl_Visualize.cpp
-    backend/src/main.cpp
+    src/QuantumRegister.cpp
+    src/ServiceImpl.cpp
+    src/ServiceImpl_Visualize.cpp
+    src/main.cpp
     
     # Generated sources (.cc) must be included here!
     ${PROTO_SRC_GENERATED_CPP}
     ${GRPC_SRC_GENERATED_CPP}
 )
 
-# 4. Link Libraries (Existing)
-# If using mpic++, we might not strictly need MPI::MPI_CXX, but keeping it is good for transitive deps.
+# 2. Include Directories (Moved after add_executable)
+target_include_directories(qubit_engine PUBLIC
+    # 1. Source code includes (e.g., backend/src/ServiceImpl.hpp)
+    src
+    # 2. Generated headers are here: <GENERATED_DIR>/qubit_engine/quantum.grpc.pb.h
+    ${GENERATED_DIR} 
+    ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+# 4. Link Libraries
 target_link_libraries(qubit_engine
     PRIVATE
     gRPC::grpc++
@@ -73,9 +145,65 @@ target_link_libraries(qubit_engine
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
-    MPI::MPI_CXX # Link MPI
     dl
-    Threads::Threads
-    MPI::MPI_CXX # Link MPI
-    dl
+    prometheus-cpp::pull
+    prometheus-cpp::core
 )
+
+if(MPI_FOUND)
+    target_link_libraries(qubit_engine PRIVATE MPI::MPI_CXX)
+endif()
+
+# --- Python Bindings ---
+pybind11_add_module(qubit_engine_module MODULE
+    src/python_bindings.cpp
+    src/QuantumRegister.cpp
+)
+set_target_properties(qubit_engine_module PROPERTIES OUTPUT_NAME "qubit_engine")
+
+target_include_directories(qubit_engine_module PRIVATE src)
+
+# Ensure MPI if needed
+if(MPI_FOUND)
+    target_link_libraries(qubit_engine_module PRIVATE MPI::MPI_CXX)
+endif()
+
+# --- Testing ---
+enable_testing()
+find_package(GTest CONFIG REQUIRED)
+
+add_executable(tests tests/QuantumTests.cpp)
+
+# Link QubitEngine sources (excluding main.cpp) to tests or link object lib?
+# Easiest is to add sources to tests executable for now, or make a library.
+# Given main.cpp has main(), we can't link qubit_engine executable.
+# We should probably define a library for core logic.
+
+# Solution: Add core sources to tests target.
+target_sources(tests PRIVATE
+    src/QuantumRegister.cpp
+    src/ServiceImpl.cpp
+    src/ServiceImpl_Visualize.cpp
+    ${PROTO_SRC_GENERATED_CPP}
+    ${GRPC_SRC_GENERATED_CPP}
+)
+
+target_include_directories(tests PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    gRPC::grpc++
+    protobuf::libprotobuf
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    Threads::Threads
+    dl
+    prometheus-cpp::pull
+    prometheus-cpp::core
+)
+
+if(MPI_FOUND)
+    target_link_libraries(tests PRIVATE MPI::MPI_CXX)
+endif()
+
+add_test(NAME CoreTests COMMAND tests)

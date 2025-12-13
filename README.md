@@ -1,90 +1,82 @@
-QubitEngine is a low-latency simulation backend optimized for manual memory control, hardware-specific vectorization, and integration with legacy financial C++ codebases. It avoids runtime overhead by interacting directly with the raw memory buffers of state vectors.
-⚡ Key Features
- * Raw State-Vector Simulation: Direct manipulation of double _Complex arrays for maximum cache coherency.
- * AVX-512 Intrinsics: Critical gates (Hadamard, Pauli) are hand-optimized using <immintrin.h> to process 8 complex amplitudes per cycle.
- * OpenMP Parallelism: Shared-memory multiprocessing for tensor product operations across core clusters.
- * Zero-Copy Networking: Designed to feed simulation results directly into shared memory segments for IPC with FinTech trading engines.
-🏗️ System Architecture
-1. The State Vector
-The core structure is a contiguous block of aligned memory. We use posix_memalign to ensure 64-byte alignment for AVX-512 loads.
-typedef struct {
-    double complex *amplitudes; // 64-byte aligned array
-    size_t num_qubits;
-    size_t dim;                 // 2^num_qubits
-} QuantumRegister;
+<p align="center">
+  <img src="docs/images/logo.png" alt="QubitEngine Logo" width="120" />
+</p>
 
-2. Execution Pipeline
- * Gate Kernels: Specialized C functions (e.g., apply_hadamard_avx) that bypass generic matrix multiplication.
- * Scheduler: An OpenMP pragma layer that dynamically distributes state-vector chunks to threads based on cache locality.
-🚀 Build & Installation
-Prerequisites
- * GCC 11+ or Clang 14+
- * CMake 3.15+
- * CPU with AVX2 support (AVX-512 recommended)
-Building from Source
-mkdir build && cd build
-# Configure with AVX-512 optimizations enabled
-cmake -DENABLE_AVX512=ON -DENABLE_OPENMP=ON ..
-make -j$(nproc)
+<h1 align="center">QubitEngine</h1>
 
-💻 Usage Examples
-1. Basic Circuit (Bell State)
-Using the low-level C API to create \frac{|00\rangle + |11\rangle}{\sqrt{2}}:
-#include "qubit_engine.h"
-#include <stdio.h>
+<p align="center">
+  <strong>⚛️ A Cloud-Native, Distributed Quantum Simulator</strong>
+</p>
 
-int main() {
-    // Initialize 2 qubits (allocates aligned memory)
-    QuantumRegister *qreg = qreg_init(2);
+<p align="center">
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#features">Features</a> •
+  <a href="#architecture">Architecture</a> •
+  <a href="#game-engine-api">Game Engine API</a> •
+  <a href="#domain-modules">Scientific Modules</a> •
+  <a href="#deployment">Deployment</a>
+</p>
 
-    // Apply Hadamard to q[0]
-    // Uses optimized kernel: gate_h(register, target_qubit)
-    gate_h(qreg, 0);
+<p align="center">
+  <img src="https://img.shields.io/badge/C++-20-blue?logo=cplusplus" alt="C++20" />
+  <img src="https://img.shields.io/badge/Go-1.23-00ADD8?logo=go" alt="Go 1.23" />
+  <img src="https://img.shields.io/badge/TypeScript-5.0-3178C6?logo=typescript" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/gRPC-Protocol%20Buffers-4285F4?logo=google" alt="gRPC" />
+  <img src="https://img.shields.io/badge/Kubernetes-Ready-326CE5?logo=kubernetes" alt="Kubernetes" />
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License" />
+</p>
 
-    // Apply CNOT (Control q[0], Target q[1])
-    gate_cx(qreg, 0, 1);
+---
 
-    // Measure
-    // Returns a collapse outcome (0 to 3) based on probability
-    int result = qreg_measure_all(qreg); 
-    
-    printf("Measured State: |%d%d>\n", (result >> 1) & 1, result & 1);
+## Overview
 
-    qreg_free(qreg);
-    return 0;
-}
+**QubitEngine** is a high-performance, distributed quantum simulator designed to break the physical RAM limits of local machines. Unlike Python-based simulators, QubitEngine uses a **C++20 Kernel with AVX2 Intrinsics** wrapped in a **Cloud-Native Microservices Mesh**.
 
-2. High-Performance Random Number Gen
-Leveraging quantum superposition for non-deterministic entropy:
-#include "qubit_engine.h"
+It functions as both a rigorous **Physics Platform** (VQE Chemistry) and a **Quantum Logic Processor** for Game Development (True RNG, Entanglement Mechanics).
 
-int main() {
-    QuantumRegister *qreg = qreg_init(8); // 8 qubits = 256 states
-    
-    // Put all qubits into superposition (Walsh-Hadamard Transform)
-    #pragma omp parallel for
-    for (int i = 0; i < 8; i++) {
-        gate_h(qreg, i);
-    }
-    
-    // Measure to get a random byte (0-255)
-    uint8_t random_byte = (uint8_t)qreg_measure_all(qreg);
-    
-    printf("Quantum Random Byte: %u\n", random_byte);
-    qreg_free(qreg);
-}
+**Key Capabilities:**
 
-📊 Benchmarks
-Hardware: AMD Ryzen 9 7950X, 64GB DDR5, GCC -O3 -march=native
-| Qubits | Operation | Implementation | Time (avg) |
-|---|---|---|---|
-| 22 | Hadamard (Global) | C (AVX-512 + OpenMP) | 98 ms |
-| 22 | Hadamard (Global) | Python (NumPy) | 640 ms |
-| 25 | QFT | C (AVX-512) | 210 ms |
-| 28 | Dense Matrix Mul | C (BLAS Linked) | 3.8 s |
-🤝 Contributing
-We enforce strict C11 compliance and zero memory leaks.
- * Check for leaks: valgrind --leak-check=full ./tests
- * Format code: clang-format -i src/*.c
- * Submit PR.
+- **Distributed Simulation:** Shards the state vector across Kubernetes nodes via **MPI (Message Passing Interface)** to simulate 34+ qubits.
+- **Native Differentiable Simulation:** Analytical gradients (Parameter Shift Rule) computed natively in C++ for high-performance Quantum Machine Learning (QML).
+- **Python Bindings:** Direct Python interface for research and prototyping, exposing the high-performance C++ backend.
+- **Real-Time Visualization:** WebGPU-accelerated rendering of the Bloch sphere and 30-qubit state vectors at 60 FPS.
+- **Game Ready:** Embeddable gRPC modules for "True Randomness" and "Entangled Game States."
+- **Production Grade:** Includes job scheduling, Redis caching, and Multi-Cluster Federation.
 
+<https://www.youtube.com/watch?v=wHKdeQkz4mo>
+
+---
+
+## 🎬 Demo
+
+<p align="center">
+  <a href="https://youtu.be/wHKdeQkz4mo">
+    <img src="docs/videos/art_studio_demo.webp" alt="Quantum Art Studio Demo" width="800" />
+  </a>
+</p>
+
+<p align="center">
+  <em>Quantum Art Studio — Generating music and visuals from wavefunction collapse in real-time.</em>
+</p>
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- Docker 20.10+
+- Docker Compose v2 (Local)
+- Kubernetes Cluster (For Distributed Mode)
+
+### One-Command Setup (Local Mode)
+
+```bash
+# Clone and start the stack (Single Node Mode)
+git clone https://github.com/perclft/QubitEngine.git
+cd QubitEngine
+docker compose -f deploy/docker/docker-compose.yaml up --build
+
+# Open the dashboard
+open http://localhost:5173
+```

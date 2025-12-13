@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mpi-workers
+  namespace: default
+spec:
+  clusterIP: None # HEADLESS SERVICE (Critical for MPI)
+  selector:
+    app: quantum-engine
+  ports:
+    - port: 50051
+      name: grpc
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: quantum-worker
+  namespace: default
+spec:
+  serviceName: "mpi-workers"
+  replicas: 4 # Creates worker-0, worker-1, worker-2, worker-3
+  selector:
+    matchLabels:
+      app: quantum-engine
+  template:
+    metadata:
+      labels:
+        app: quantum-engine
+    spec:
+      containers:
+      - name: engine
+        # UPDATE THIS LINE with your actual Project ID
+        image: gcr.io/distributed-quantum-sim/qubit-engine:mpi 
+        command: ["/bin/sh", "-c"]
+        args: ["mpirun --allow-run-as-root --oversubscribe -np 4 /usr/local/bin/qubit_engine"]
+        resources:
+          limits:
+            memory: "1Gi"
+            cpu: "250m"
+          requests:
+              memory: "1Gi"
+              cpu: "250m"

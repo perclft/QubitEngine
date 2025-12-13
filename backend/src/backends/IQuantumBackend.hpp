@@ -1,5 +1,5 @@
 #pragma once
-#include <api/proto/quantum.grpc.pb.h>
+#include "quantum.grpc.pb.h"
 
 class IQuantumBackend {
 public:

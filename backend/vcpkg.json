@@ -4,8 +4,9 @@
   "dependencies": [
     "grpc",
     "protobuf",
-    "abseil", 
-    "gtest"
+    "abseil",
+    "gtest",
+    "prometheus-cpp"
   ],
-  "builtin-baseline": "ab2977be50c702126336e5088f4836060733c899" 
+  "builtin-baseline": "ab2977be50c702126336e5088f4836060733c899"
 }
