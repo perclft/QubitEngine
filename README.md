@@ -87,4 +87,4 @@ We enforce strict C11 compliance and zero memory leaks.
  * Check for leaks: valgrind --leak-check=full ./tests
  * Format code: clang-format -i src/*.c
  * Submit PR.
-Would you like me to generate the CMakeLists.txt file next to handle the AVX flag detection and OpenMP linking?
+
