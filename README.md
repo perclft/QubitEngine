@@ -1,4 +1,4 @@
-![Build Status](https://img.shields.io/badge/build-passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-94%25-green) ![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue) ![Rust Version](https://img.shields.io/badge/rustc-1.83%2B-orange)
+
 
 
 # QubitEngine
@@ -44,7 +44,7 @@ Add `QubitEngine` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-qubit_engine = { git = "[https://github.com/QuantumLinux2/QubitEngine](https://github.com/QuantumLinux2/QubitEngine)", branch = "main" }
+qubit_engine = { git = "[https://github.com/QubitEngine](https://github.com/QubitEngine)", branch = "main" }
 
 # Enable AVX-512 if hardware supports it
 # qubit_engine = { git = "...", features = ["avx512", "parallel"] }
