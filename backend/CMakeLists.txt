@@ -14,10 +14,10 @@ endif()
 find_package(prometheus-cpp CONFIG REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
 
-set(PROTO_FILE ${CMAKE_SOURCE_DIR}/../api/proto/quantum.proto)
+set(PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../api/proto/quantum.proto)
 # The output must be within the CMAKE_CURRENT_BINARY_DIR (build folder) or a source folder.
 # Since your source files are outside the build folder, using a dedicated source directory is clean.
-set(PROTO_OUT ${CMAKE_SOURCE_DIR}/backend/src/generated)
+set(PROTO_OUT ${CMAKE_CURRENT_SOURCE_DIR}/src/generated)
 
 # 1. Generate C++ Protobuf files (e.g., quantum.pb.h/cc)
 # NOTE: The DESTINATION parameter here is incorrect and should NOT be used with CMAKE_SOURCE_DIR
@@ -32,7 +32,7 @@ file(MAKE_DIRECTORY ${GENERATED_DIR}) # Ensure the directory exists
 # Generate files into the build directory's generated subdirectory
 protobuf_generate_cpp(PROTO_SRC_GENERATED_CPP PROTO_HDR_GENERATED_CPP
     ${PROTO_FILE}
-    IMPORT_DIRS ${CMAKE_SOURCE_DIR}/../api/proto
+    IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/../api/proto
     OUTPUT_DIRECTORY ${GENERATED_DIR}
 )
 
@@ -65,14 +65,17 @@ function(grpc_generate_cpp srcs hdrs)
     set(${hdrs})
     
     # Locate the gRPC C++ plugin
-    if(NOT TARGET gRPC::grpc_cpp_plugin)
-        message(FATAL_ERROR "gRPC::grpc_cpp_plugin target not found!")
+    if(TARGET gRPC::grpc_cpp_plugin)
+        get_target_property(gRPC_CPP_PLUGIN_EXECUTABLE gRPC::grpc_cpp_plugin IMPORTED_LOCATION_RELEASE)
+        if(NOT gRPC_CPP_PLUGIN_EXECUTABLE)
+            get_target_property(gRPC_CPP_PLUGIN_EXECUTABLE gRPC::grpc_cpp_plugin IMPORTED_LOCATION)
+        endif()
     endif()
-    
-    get_target_property(gRPC_CPP_PLUGIN_EXECUTABLE gRPC::grpc_cpp_plugin IMPORTED_LOCATION_RELEASE)
+
     if(NOT gRPC_CPP_PLUGIN_EXECUTABLE)
-        get_target_property(gRPC_CPP_PLUGIN_EXECUTABLE gRPC::grpc_cpp_plugin IMPORTED_LOCATION)
+        find_program(gRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin DOC "gRPC C++ plugin")
     endif()
+
     if(NOT gRPC_CPP_PLUGIN_EXECUTABLE)
          message(FATAL_ERROR "Could not locate gRPC::grpc_cpp_plugin executable")
     endif()
@@ -105,7 +108,7 @@ endfunction()
 # Generate C++ gRPC files
 grpc_generate_cpp(GRPC_SRC_GENERATED_CPP GRPC_HDR_GENERATED_CPP
     ${PROTO_FILE}
-    IMPORT_DIRS ${CMAKE_SOURCE_DIR}/../api/proto
+    IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/../api/proto
     OUTPUT_DIRECTORY ${GENERATED_DIR}
 )
 # -----------------------------------------------------------------
@@ -141,7 +144,10 @@ target_link_libraries(qubit_engine
     gRPC::grpc++
     gRPC::grpc
     gRPC::gpr
+    gRPC::grpc++_reflection
     protobuf::libprotobuf 
+    gflags
+    glog 
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
