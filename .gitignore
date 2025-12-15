@@ -7,6 +7,13 @@ backend/src/generated/
 *.so
 *.dylib
 *.dll
+*.exe
+*.pdb
+*.pyd
+*.lib
+*.exp
+bin/
+vcpkg/
 
 # Go Build Artifacts
 cli/bin/

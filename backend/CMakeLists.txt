@@ -151,10 +151,13 @@ target_link_libraries(qubit_engine
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
-    dl
     prometheus-cpp::pull
     prometheus-cpp::core
 )
+
+if(UNIX AND NOT APPLE)
+    target_link_libraries(qubit_engine PRIVATE dl)
+endif()
 
 if(MPI_FOUND)
     target_link_libraries(qubit_engine PRIVATE MPI::MPI_CXX)
@@ -203,10 +206,13 @@ target_link_libraries(tests PRIVATE
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
-    dl
     prometheus-cpp::pull
     prometheus-cpp::core
 )
+
+if(UNIX AND NOT APPLE)
+    target_link_libraries(tests PRIVATE dl)
+endif()
 
 if(MPI_FOUND)
     target_link_libraries(tests PRIVATE MPI::MPI_CXX)

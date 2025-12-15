@@ -6,8 +6,17 @@
 #include <cmath>
 #include <cstdint> // FIX: Added for uint32_t
 #include <iostream>
+#ifdef _WIN32
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <sys/sysctl.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#else
 #include <sys/sysinfo.h>
-#include <unistd.h> // For gethostname
+#include <unistd.h>
+#endif
 
 using grpc::ServerContext;
 using grpc::Status;
@@ -17,10 +26,31 @@ using qubit_engine::StateResponse;
 
 // HELPER: Check if the server has enough free RAM for the requested qubits
 bool hasEnoughMemory(int num_qubits) {
+  unsigned long long available_ram = 0;
+
+#ifdef _WIN32
+  MEMORYSTATUSEX memInfo;
+  memInfo.dwLength = sizeof(MEMORYSTATUSEX);
+  GlobalMemoryStatusEx(&memInfo);
+  available_ram = memInfo.ullAvailPhys;
+#elif defined(__APPLE__)
+  // macOS: Use sysctl to get hardware memory size (total, not free, but close
+  // approximation for capacity check) Getting actual *free* memory on macOS is
+  // complex (mach_vm_statistics). For safety, we'll check against total system
+  // memory or a safe fraction.
+  int mib[2];
+  mib[0] = CTL_HW;
+  mib[1] = HW_MEMSIZE;
+  int64_t physical_memory = 0;
+  size_t length = sizeof(int64_t);
+  sysctl(mib, 2, &physical_memory, &length, NULL, 0);
+  available_ram = physical_memory; // Approximation: Check against total
+#else
+  // Linux
   struct sysinfo memInfo;
   sysinfo(&memInfo);
-
-  long long available_ram = memInfo.freeram * memInfo.mem_unit;
+  available_ram = memInfo.freeram * memInfo.mem_unit;
+#endif
 
   // Memory needed = 2^N * sizeof(complex<double>) (16 bytes)
   // 1ULL ensures we do 64-bit arithmetic
