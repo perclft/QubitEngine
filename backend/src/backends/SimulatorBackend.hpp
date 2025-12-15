@@ -1,7 +1,11 @@
 #pragma once
 #include "../QuantumRegister.hpp"
 #include "IQuantumBackend.hpp"
+#ifdef _WIN32
+#include <winsock2.h>
+#else
 #include <unistd.h> // for gethostname
+#endif
 
 class SimulatorBackend : public IQuantumBackend {
 private:

@@ -6,8 +6,13 @@
 #include <cmath>
 #include <cstdint> // FIX: Added for uint32_t
 #include <iostream>
+#ifdef _WIN32
+#include <windows.h>
+#include <winsock2.h>
+#else
 #include <sys/sysinfo.h>
 #include <unistd.h> // For gethostname
+#endif
 
 using grpc::ServerContext;
 using grpc::Status;
@@ -17,10 +22,17 @@ using qubit_engine::StateResponse;
 
 // HELPER: Check if the server has enough free RAM for the requested qubits
 bool hasEnoughMemory(int num_qubits) {
+#ifdef _WIN32
+  MEMORYSTATUSEX memInfo;
+  memInfo.dwLength = sizeof(MEMORYSTATUSEX);
+  GlobalMemoryStatusEx(&memInfo);
+  unsigned long long available_ram = memInfo.ullAvailPhys;
+#else
   struct sysinfo memInfo;
   sysinfo(&memInfo);
 
   long long available_ram = memInfo.freeram * memInfo.mem_unit;
+#endif
 
   // Memory needed = 2^N * sizeof(complex<double>) (16 bytes)
   // 1ULL ensures we do 64-bit arithmetic

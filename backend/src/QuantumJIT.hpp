@@ -4,6 +4,7 @@
 #ifndef QUANTUM_JIT_HPP
 #define QUANTUM_JIT_HPP
 
+#define _USE_MATH_DEFINES
 #include <cmath>
 #include <complex>
 #include <memory>
