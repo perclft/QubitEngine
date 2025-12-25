@@ -3,6 +3,11 @@ project(QubitEngine)
 
 set(CMAKE_CXX_STANDARD 17)
 
+if(APPLE)
+    # Enable optimizations for Apple Silicon M3
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -mcpu=apple-m3 -mtune=apple-m3")
+endif()
+
 find_package(gRPC REQUIRED)
 find_package(Protobuf REQUIRED)
 find_package(OpenSSL REQUIRED)
@@ -13,6 +18,8 @@ endif()
 
 find_package(prometheus-cpp CONFIG REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
+find_package(gflags CONFIG REQUIRED)
+find_package(glog CONFIG REQUIRED)
 
 set(PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../api/proto/quantum.proto)
 # The output must be within the CMAKE_CURRENT_BINARY_DIR (build folder) or a source folder.
@@ -30,11 +37,21 @@ set(GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(MAKE_DIRECTORY ${GENERATED_DIR}) # Ensure the directory exists
 
 # Generate files into the build directory's generated subdirectory
-protobuf_generate_cpp(PROTO_SRC_GENERATED_CPP PROTO_HDR_GENERATED_CPP
-    ${PROTO_FILE}
-    IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/../api/proto
-    OUTPUT_DIRECTORY ${GENERATED_DIR}
+# Manual generation to ensure output directory is respected
+add_custom_command(
+    OUTPUT "${GENERATED_DIR}/quantum.pb.cc"
+           "${GENERATED_DIR}/quantum.pb.h"
+    COMMAND protobuf::protoc
+    ARGS --cpp_out=${GENERATED_DIR}
+         -I${CMAKE_CURRENT_SOURCE_DIR}/../api/proto
+         ${PROTO_FILE}
+    DEPENDS ${PROTO_FILE} protobuf::protoc
+    COMMENT "Running C++ protocol buffer compiler on quantum.proto"
+    VERBATIM
 )
+
+set(PROTO_SRC_GENERATED_CPP "${GENERATED_DIR}/quantum.pb.cc")
+set(PROTO_HDR_GENERATED_CPP "${GENERATED_DIR}/quantum.pb.h")
 
 # Define helper function for generating gRPC files if not present
 # Define helper function for generating gRPC files if not present
@@ -116,38 +133,37 @@ grpc_generate_cpp(GRPC_SRC_GENERATED_CPP GRPC_HDR_GENERATED_CPP
 # 2. Include Directories
 # The C++ compiler needs to find the generated headers.
 # Generated headers MUST be found in the directory *before* the package name.
-# 3. Define Executable with ALL Sources (CRITICAL FIX)
-# We must include the generated C++ source files (.cc)
-add_executable(qubit_engine 
+
+# --- Physics Kernel (No Heavy Deps) ---
+add_library(QubitEnginePhysics
     src/QuantumRegister.cpp
+)
+target_include_directories(QubitEnginePhysics PUBLIC src)
+
+if(MPI_FOUND)
+    target_link_libraries(QubitEnginePhysics PUBLIC MPI::MPI_CXX)
+endif()
+
+# --- Service/Core Layer (gRPC, Logs) ---
+add_library(QubitEngineCore
     src/ServiceImpl.cpp
     src/ServiceImpl_Visualize.cpp
-    src/main.cpp
-    
-    # Generated sources (.cc) must be included here!
     ${PROTO_SRC_GENERATED_CPP}
     ${GRPC_SRC_GENERATED_CPP}
 )
 
-# 2. Include Directories (Moved after add_executable)
-target_include_directories(qubit_engine PUBLIC
-    # 1. Source code includes (e.g., backend/src/ServiceImpl.hpp)
-    src
-    # 2. Generated headers are here: <GENERATED_DIR>/qubit_engine/quantum.grpc.pb.h
-    ${GENERATED_DIR} 
-    ${CMAKE_CURRENT_BINARY_DIR}
-)
+target_include_directories(QubitEngineCore PUBLIC ${GENERATED_DIR})
 
-# 4. Link Libraries
-target_link_libraries(qubit_engine
-    PRIVATE
+target_link_libraries(QubitEngineCore
+    PUBLIC
+    QubitEnginePhysics
     gRPC::grpc++
     gRPC::grpc
     gRPC::gpr
     gRPC::grpc++_reflection
     protobuf::libprotobuf 
     gflags
-    glog 
+    glog::glog 
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
@@ -156,26 +172,20 @@ target_link_libraries(qubit_engine
 )
 
 if(UNIX AND NOT APPLE)
-    target_link_libraries(qubit_engine PRIVATE dl)
+    target_link_libraries(QubitEngineCore PUBLIC dl)
 endif()
 
-if(MPI_FOUND)
-    target_link_libraries(qubit_engine PRIVATE MPI::MPI_CXX)
-endif()
+# --- Main Executable ---
+add_executable(qubit_engine src/main.cpp)
+target_link_libraries(qubit_engine PRIVATE QubitEngineCore)
 
 # --- Python Bindings ---
 pybind11_add_module(qubit_engine_module MODULE
     src/python_bindings.cpp
-    src/QuantumRegister.cpp
 )
 set_target_properties(qubit_engine_module PROPERTIES OUTPUT_NAME "qubit_engine")
 
-target_include_directories(qubit_engine_module PRIVATE src)
-
-# Ensure MPI if needed
-if(MPI_FOUND)
-    target_link_libraries(qubit_engine_module PRIVATE MPI::MPI_CXX)
-endif()
+target_link_libraries(qubit_engine_module PRIVATE QubitEngineCore)
 
 # --- Testing ---
 enable_testing()
@@ -183,39 +193,14 @@ find_package(GTest CONFIG REQUIRED)
 
 add_executable(tests tests/QuantumTests.cpp)
 
-# Link QubitEngine sources (excluding main.cpp) to tests or link object lib?
-# Easiest is to add sources to tests executable for now, or make a library.
-# Given main.cpp has main(), we can't link qubit_engine executable.
-# We should probably define a library for core logic.
-
-# Solution: Add core sources to tests target.
-target_sources(tests PRIVATE
-    src/QuantumRegister.cpp
-    src/ServiceImpl.cpp
-    src/ServiceImpl_Visualize.cpp
-    ${PROTO_SRC_GENERATED_CPP}
-    ${GRPC_SRC_GENERATED_CPP}
-)
-
-target_include_directories(tests PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(tests PRIVATE
+    QubitEngineCore
     GTest::gtest
     GTest::gtest_main
-    gRPC::grpc++
-    protobuf::libprotobuf
-    OpenSSL::SSL
-    OpenSSL::Crypto
-    Threads::Threads
-    prometheus-cpp::pull
-    prometheus-cpp::core
 )
 
-if(UNIX AND NOT APPLE)
-    target_link_libraries(tests PRIVATE dl)
-endif()
-
-if(MPI_FOUND)
-    target_link_libraries(tests PRIVATE MPI::MPI_CXX)
-endif()
-
 add_test(NAME CoreTests COMMAND tests)
+
+# --- Benchmark ---
+add_executable(benchmark src/benchmark.cpp)
+target_link_libraries(benchmark PRIVATE QubitEngineCore)

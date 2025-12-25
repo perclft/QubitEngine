@@ -8,7 +8,7 @@
 #ifdef MPI_ENABLED
 #include <mpi.h>
 #endif
-#include <immintrin.h>
+// #include <immintrin.h>
 
 const double INV_SQRT_2 = 1.0 / std::sqrt(2.0);
 
@@ -41,12 +41,74 @@ QuantumRegister::~QuantumRegister() {}
 
 // --- Core Gates ---
 
+#if defined(__aarch64__)
+#include <arm_neon.h>
+#endif
+
+// --- Core Gates ---
+
 void QuantumRegister::applyHadamard(size_t target) {
   size_t local_dim = state.size();
   size_t stride = 1ULL << target;
 
   if (stride < local_dim) {
-    // Local AVX-style loop
+#if defined(__aarch64__)
+    // NEON Optimization for Apple Silicon
+    const float64x2_t inv_sqrt_2_vec = vmovq_n_f64(INV_SQRT_2);
+
+#pragma omp parallel for
+    for (size_t i = 0; i < local_dim; i += 2 * stride) {
+      for (size_t j = i; j < i + stride; j += 2) {
+        // Check if we can process 2 complex numbers (4 doubles) at once
+        // State is vector<Complex>, so memory is [r0, i0, r1, i1, ...]
+        // j points to Complex index.
+        // 2 Complex numbers = 4 doubles.
+
+        // We process 2 complex numbers at a time if stride >= 2
+        // If stride == 1, we process 1 complex number (2 doubles) but need
+        // careful handling.
+
+        // Case A: Stride >= 2 (Inner loop processes contiguous blocks)
+        if (stride >= 2 && (j + 2 <= i + stride)) {
+          // Load a[j], a[j+1] -> 4 doubles
+          float64_t *ptr_a = reinterpret_cast<float64_t *>(&state[j]);
+          float64_t *ptr_b = reinterpret_cast<float64_t *>(&state[j + stride]);
+
+          // Load 4 doubles (2 vectors of 2)
+          float64x2_t a0 = vld1q_f64(ptr_a);     // r0, i0
+          float64x2_t a1 = vld1q_f64(ptr_a + 2); // r1, i1
+          float64x2_t b0 = vld1q_f64(ptr_b);     // r0', i0'
+          float64x2_t b1 = vld1q_f64(ptr_b + 2); // r1', i1'
+
+          // H|0> = (a+b)/rt2, H|1> = (a-b)/rt2
+          float64x2_t sum0 = vaddq_f64(a0, b0);
+          float64x2_t diff0 = vsubq_f64(a0, b0);
+          float64x2_t sum1 = vaddq_f64(a1, b1);
+          float64x2_t diff1 = vsubq_f64(a1, b1);
+
+          // Store back
+          vst1q_f64(ptr_a, vmulq_f64(sum0, inv_sqrt_2_vec));
+          vst1q_f64(ptr_b, vmulq_f64(diff0, inv_sqrt_2_vec));
+          vst1q_f64(ptr_a + 2, vmulq_f64(sum1, inv_sqrt_2_vec));
+          vst1q_f64(ptr_b + 2, vmulq_f64(diff1, inv_sqrt_2_vec));
+        } else {
+          // Scalar fallback for boundary or small stride
+          Complex a = state[j];
+          Complex b = state[j + stride];
+          state[j] = (a + b) * INV_SQRT_2;
+          state[j + stride] = (a - b) * INV_SQRT_2;
+
+          if (j + 1 < i + stride) {
+            Complex a2 = state[j + 1];
+            Complex b2 = state[j + 1 + stride];
+            state[j + 1] = (a2 + b2) * INV_SQRT_2;
+            state[j + 1 + stride] = (a2 - b2) * INV_SQRT_2;
+          }
+        }
+      }
+    }
+#else
+    // Local AVX-style loop (Existing)
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
         Complex a = state[j];
@@ -55,19 +117,48 @@ void QuantumRegister::applyHadamard(size_t target) {
         state[j + stride] = (a - b) * INV_SQRT_2;
       }
     }
+#endif
   }
-  // MPI logic omitted for brevity, but compilation is now safe.
 }
 
 void QuantumRegister::applyX(size_t target) {
   size_t local_dim = state.size();
   size_t stride = 1ULL << target;
   if (stride < local_dim) {
+#if defined(__aarch64__)
+#pragma omp parallel for
+    for (size_t i = 0; i < local_dim; i += 2 * stride) {
+      for (size_t j = i; j < i + stride; j += 2) {
+        if (stride >= 2 && (j + 2 <= i + stride)) {
+          float64_t *ptr_a = reinterpret_cast<float64_t *>(&state[j]);
+          float64_t *ptr_b = reinterpret_cast<float64_t *>(&state[j + stride]);
+
+          // Load
+          float64x2_t a0 = vld1q_f64(ptr_a);
+          float64x2_t a1 = vld1q_f64(ptr_a + 2);
+          float64x2_t b0 = vld1q_f64(ptr_b);
+          float64x2_t b1 = vld1q_f64(ptr_b + 2);
+
+          // Swap by storing b to a and a to b
+          vst1q_f64(ptr_a, b0);
+          vst1q_f64(ptr_a + 2, b1);
+          vst1q_f64(ptr_b, a0);
+          vst1q_f64(ptr_b + 2, a1);
+        } else {
+          std::swap(state[j], state[j + stride]);
+          if (j + 1 < i + stride) {
+            std::swap(state[j + 1], state[j + 1 + stride]);
+          }
+        }
+      }
+    }
+#else
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
         std::swap(state[j], state[j + stride]);
       }
     }
+#endif
   }
 }
 
