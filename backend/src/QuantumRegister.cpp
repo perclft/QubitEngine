@@ -1,4 +1,5 @@
 #include "QuantumRegister.hpp"
+#include "MetalContext.hpp"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -162,14 +163,131 @@ void QuantumRegister::applyX(size_t target) {
   }
 }
 
+// --- GPU Memory Control ---
+void QuantumRegister::toGPU() {
+  auto &metal = MetalContext::getInstance();
+  if (!metal.isAvailable())
+    metal.initialize();
+
+  if (metal.isAvailable()) {
+    metal.uploadState(reinterpret_cast<double *>(state.data()), num_qubits);
+    on_gpu = true;
+  }
+}
+
+void QuantumRegister::toCPU() {
+  if (!on_gpu)
+    return;
+  auto &metal = MetalContext::getInstance();
+  if (metal.isAvailable()) {
+    metal.downloadState(reinterpret_cast<double *>(state.data()), num_qubits);
+    on_gpu = false;
+  }
+}
+
+void QuantumRegister::applyHadamardMetal(size_t target) {
+  auto &metal = MetalContext::getInstance();
+  if (!metal.isAvailable()) {
+    metal.initialize();
+  }
+
+  if (metal.isAvailable()) {
+    if (on_gpu) {
+      // Fast Path: Zero-Copy (Resident)
+      metal.runHadamard(num_qubits, target);
+    } else {
+      // Slow Path: Copy (One-shot)
+      metal.runHadamard(state.data(), num_qubits, target);
+    }
+  } else {
+    std::cerr << "Metal not available, using CPU." << std::endl;
+    applyHadamard(target);
+  }
+}
+
 // --- Core Gates ---
 
+// --- Y and Z Gates ---
+
 void QuantumRegister::applyY(size_t target) {
-  Complex i_unit(0, 1);
   size_t local_dim = state.size();
   size_t stride = 1ULL << target;
 
   if (stride < local_dim) {
+#if defined(__aarch64__)
+#pragma omp parallel for
+    for (size_t i = 0; i < local_dim; i += 2 * stride) {
+      for (size_t j = i; j < i + stride; j += 2) {
+        if (stride >= 2 && (j + 2 <= i + stride)) {
+          float64_t *ptr_a = reinterpret_cast<float64_t *>(&state[j]);
+          float64_t *ptr_b = reinterpret_cast<float64_t *>(&state[j + stride]);
+
+          // Load 2 complex numbers from A and B
+          // A = [ra0, ia0, ra1, ia1]
+          // B = [rb0, ib0, rb1, ib1]
+          float64x2_t a0 = vld1q_f64(ptr_a);
+          float64x2_t a1 = vld1q_f64(ptr_a + 2);
+          float64x2_t b0 = vld1q_f64(ptr_b);
+          float64x2_t b1 = vld1q_f64(ptr_b + 2);
+
+          // Apply Y:
+          // State[j]   = -i * State[j+stride]
+          // State[j+s] =  i * State[j]
+
+          // -i * (r + qi) = -i*r + q = q - ir
+          //  i * (r + qi) =  i*r - q = -q + ir
+
+          // Permute B for -i multiplication: rb -> ib, ib -> rb
+          // We need to swap real/imag parts.
+          // NEON doesn't have a direct complex swap instruction for f64x2 (it
+          // does for f32). We can interpret as uint64 to use vqtbl or just
+          // manual shuffle if needed, but standard vtrn/vswp might work.
+          // Actually, vcombine usually cleaner.
+
+          // Let's rely on standard logic:
+          // b0 = [rb0, ib0]
+          // swapped_b0 = [ib0, rb0]
+          float64x2_t swapped_b0 = vextq_f64(b0, b0, 1);
+          float64x2_t swapped_b1 = vextq_f64(b1, b1, 1);
+
+          // swapped_b0 = [ib0, rb0]
+          // We want [ib0, -rb0]
+          static const float64x2_t neg_imag = {1.0, -1.0};
+          static const float64x2_t neg_real = {-1.0, 1.0};
+
+          // Result A = -i * B = (ib - i*rb) = [ib, -rb]
+          float64x2_t res_a0 = vmulq_f64(swapped_b0, neg_imag);
+          float64x2_t res_a1 = vmulq_f64(swapped_b1, neg_imag);
+
+          // A to be moved to B position:
+          // Result B = i * A = (i*ra - ia) = [-ia, ra]
+          float64x2_t swapped_a0 = vextq_f64(a0, a0, 1);
+          float64x2_t swapped_a1 = vextq_f64(a1, a1, 1);
+
+          float64x2_t res_b0 = vmulq_f64(swapped_a0, neg_real);
+          float64x2_t res_b1 = vmulq_f64(swapped_a1, neg_real);
+
+          vst1q_f64(ptr_a, res_a0);
+          vst1q_f64(ptr_a + 2, res_a1);
+          vst1q_f64(ptr_b, res_b0);
+          vst1q_f64(ptr_b + 2, res_b1);
+        } else {
+          Complex i_unit(0, 1);
+          Complex a = state[j];
+          Complex b = state[j + stride];
+          state[j] = -i_unit * b;
+          state[j + stride] = i_unit * a;
+          if (j + 1 < i + stride) {
+            Complex a2 = state[j + 1];
+            Complex b2 = state[j + 1 + stride];
+            state[j + 1] = -i_unit * b2;
+            state[j + 1 + stride] = i_unit * a2;
+          }
+        }
+      }
+    }
+#else
+    Complex i_unit(0, 1);
 #pragma omp parallel for
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
@@ -179,6 +297,7 @@ void QuantumRegister::applyY(size_t target) {
         state[j + stride] = i_unit * a;
       }
     }
+#endif
   }
 }
 
@@ -186,14 +305,41 @@ void QuantumRegister::applyZ(size_t target) {
   size_t local_dim = state.size();
   size_t stride = 1ULL << target;
   if (stride < local_dim) {
+#if defined(__aarch64__)
+#pragma omp parallel for
+    for (size_t i = 0; i < local_dim; i += 2 * stride) {
+      for (size_t j = i; j < i + stride; j += 2) {
+        if (stride >= 2 && (j + 2 <= i + stride)) {
+          float64_t *ptr_b = reinterpret_cast<float64_t *>(&state[j + stride]);
+
+          float64x2_t b0 = vld1q_f64(ptr_b);
+          float64x2_t b1 = vld1q_f64(ptr_b + 2);
+
+          // Z|1> = -|1>
+          b0 = vnegq_f64(b0);
+          b1 = vnegq_f64(b1);
+
+          vst1q_f64(ptr_b, b0);
+          vst1q_f64(ptr_b + 2, b1);
+        } else {
+          state[j + stride] = -state[j + stride];
+          if (j + 1 < i + stride)
+            state[j + 1 + stride] = -state[j + 1 + stride];
+        }
+      }
+    }
+#else
 #pragma omp parallel for
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
         state[j + stride] = -state[j + stride];
       }
     }
+#endif
   }
 }
+
+// ... CNOT (Skipping manual NEON for now as it's complex/sparse) ...
 
 void QuantumRegister::applyCNOT(size_t control, size_t target) {
   size_t local_dim = state.size();
@@ -381,6 +527,118 @@ void QuantumRegister::applyRotationZ(size_t target, double angle) {
   Complex z1(std::cos(angle / 2.0), std::sin(angle / 2.0));
 
   if (stride < local_dim) {
+#if defined(__aarch64__)
+    double cr0 = z0.real();
+    double ci0 = z0.imag();
+    double cr1 = z1.real();
+    double ci1 = z1.imag();
+
+    // Create vectors of constants
+    float64x2_t v_cr0 = vmovq_n_f64(cr0);
+    float64x2_t v_ci0 = vmovq_n_f64(ci0);
+    float64x2_t v_cr1 = vmovq_n_f64(cr1);
+    float64x2_t v_ci1 = vmovq_n_f64(ci1);
+
+    // Helpers for complex multiplication (a+bi)*(c+di) = (ac-bd) + (ad+bc)i
+    // We need logic to handle the "sub" and "add" parts.
+
+    // Strategy:
+    // Load a = [r, i]
+    // result_real = r*cr - i*ci
+    // result_imag = r*ci + i*cr
+
+    // Using NEON:
+    // a = [r, i]
+    // a_swap = [i, r] (using vextq_f64)
+
+    // term1 = a * [cr, cr] = [r*cr, i*cr]
+    // term2 = a_swap * [ci, ci] = [i*ci, r*ci]
+
+    // result = [r*cr - i*ci, i*cr + r*ci]
+    //        = term1 +/- term2
+    // NEON has vsubq / vaddq. We need specific usage.
+    // Real part: sub. Imag part: add.
+    // Can we do this in one vector op?
+    // Maybe vmulq then some shuffle?
+    // No, standard is:
+    // res_r = r*cr - i*ci
+    // res_i = i*cr + r*ci
+
+    // Let's implement this logic cleanly.
+
+#pragma omp parallel for
+    for (size_t i = 0; i < local_dim; i += 2 * stride) {
+      for (size_t j = i; j < i + stride; j += 2) {
+        if (stride >= 2 && (j + 2 <= i + stride)) {
+          // --- Process |0> block (multiply by z0) ---
+          float64_t *ptr_a = reinterpret_cast<float64_t *>(&state[j]);
+          float64x2_t a0 = vld1q_f64(ptr_a);
+          float64x2_t a1 = vld1q_f64(ptr_a + 2);
+
+          // Calc a0 * z0
+          float64x2_t a0_swap = vextq_f64(a0, a0, 1); // [i0, r0]
+          float64x2_t t1 = vmulq_f64(a0, v_cr0);      // [r0*cr, i0*cr]
+          float64x2_t t2 = vmulq_f64(a0_swap, v_ci0); // [i0*ci, r0*ci]
+
+          // We want [r0*cr - i0*ci, i0*cr + r0*ci]
+          // t1 = [A, B], t2 = [C, D]
+          // Want [A-C, B+D]
+          // Can use vsubq for real, vaddq for imag? No, element-wise.
+          // We need a vector mask { -1, 1 } to multiply t2?
+          // t2_masked = t2 * [1, -1] ? Wait.
+          // A - C = r*cr - i*ci. Correct.
+          // B + D = i*cr + r*ci. Correct.
+          // So we want t1 + (t2 * [-1, 1])?
+          // No, A - C means we subtract the first element.
+          // B + D means we add the second.
+          // Let's multiply t2 by {-1, 1} then add.
+          // {-1*C, 1*D} = {-i*ci, r*ci}.
+          // t1 + t2' = [r*cr - i*ci, i*cr + r*ci]. Matches!
+
+          static const float64x2_t mask_neg_real = {-1.0, 1.0};
+          t2 = vmulq_f64(t2, mask_neg_real);
+          a0 = vaddq_f64(t1, t2);
+          vst1q_f64(ptr_a, a0);
+
+          // Calc a1 * z0
+          float64x2_t a1_swap = vextq_f64(a1, a1, 1);
+          t1 = vmulq_f64(a1, v_cr0);
+          t2 = vmulq_f64(a1_swap, v_ci0);
+          t2 = vmulq_f64(t2, mask_neg_real);
+          a1 = vaddq_f64(t1, t2);
+          vst1q_f64(ptr_a + 2, a1);
+
+          // --- Process |1> block (multiply by z1) ---
+          float64_t *ptr_b = reinterpret_cast<float64_t *>(&state[j + stride]);
+          float64x2_t b0 = vld1q_f64(ptr_b);
+          float64x2_t b1 = vld1q_f64(ptr_b + 2);
+
+          float64x2_t b0_swap = vextq_f64(b0, b0, 1);
+          t1 = vmulq_f64(b0, v_cr1);
+          t2 = vmulq_f64(b0_swap, v_ci1);
+          t2 = vmulq_f64(t2, mask_neg_real);
+          b0 = vaddq_f64(t1, t2);
+          vst1q_f64(ptr_b, b0);
+
+          float64x2_t b1_swap = vextq_f64(b1, b1, 1);
+          t1 = vmulq_f64(b1, v_cr1);
+          t2 = vmulq_f64(b1_swap, v_ci1);
+          t2 = vmulq_f64(t2, mask_neg_real);
+          b1 = vaddq_f64(t1, t2);
+          vst1q_f64(ptr_b + 2, b1);
+
+        } else {
+          // Scalar fallback
+          state[j] *= z0;
+          state[j + stride] *= z1;
+          if (j + 1 < i + stride) {
+            state[j + 1] *= z0;
+            state[j + 1 + stride] *= z1;
+          }
+        }
+      }
+    }
+#else
 #pragma omp parallel for
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
@@ -388,6 +646,7 @@ void QuantumRegister::applyRotationZ(size_t target, double angle) {
         state[j + stride] *= z1;
       }
     }
+#endif
   }
 }
 

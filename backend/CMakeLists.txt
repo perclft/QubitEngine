@@ -4,8 +4,15 @@ project(QubitEngine)
 set(CMAKE_CXX_STANDARD 17)
 
 if(APPLE)
+    enable_language(OBJCXX)
     # Enable optimizations for Apple Silicon M3
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -mcpu=apple-m3 -mtune=apple-m3")
+    
+    find_library(METAL_LIB Metal)
+    find_library(FOUNDATION_LIB Foundation)
+    
+    find_library(METAL_LIB Metal)
+    find_library(FOUNDATION_LIB Foundation)
 endif()
 
 find_package(gRPC REQUIRED)
@@ -137,11 +144,16 @@ grpc_generate_cpp(GRPC_SRC_GENERATED_CPP GRPC_HDR_GENERATED_CPP
 # --- Physics Kernel (No Heavy Deps) ---
 add_library(QubitEnginePhysics
     src/QuantumRegister.cpp
+    src/MetalContext.mm
 )
 target_include_directories(QubitEnginePhysics PUBLIC src)
 
 if(MPI_FOUND)
     target_link_libraries(QubitEnginePhysics PUBLIC MPI::MPI_CXX)
+endif()
+
+if(APPLE)
+    target_link_libraries(QubitEnginePhysics PUBLIC ${METAL_LIB} ${FOUNDATION_LIB})
 endif()
 
 # --- Service/Core Layer (gRPC, Logs) ---
