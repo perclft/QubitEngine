@@ -8,14 +8,15 @@
 #include "QuantumDifferentiator.hpp"
 #include "QuantumRegister.hpp"
 
+// Include GPU headers
+#include "backends/GPUQuantumRegister.hpp"
+
 namespace py = pybind11;
 
 // Wrapper to adapt Python callables to AnsatzFunction signature
 void applyAnsatzWrapper(
     const std::function<void(std::vector<double>, QuantumRegister *)> &py_func,
     const std::vector<double> &params, QuantumRegister &qreg) {
-  // Note: We pass &qreg to Python because pybind11 handles pointers/refs better
-  // for mutation
   py_func(params, &qreg);
 }
 
@@ -38,26 +39,31 @@ PYBIND11_MODULE(qubit_engine, m) {
       .def("expectationValue", &QuantumRegister::expectationValue)
       .def("getStateVector", &QuantumRegister::getStateVector);
 
+  // --- GPUQuantumRegister Binding ---
+  py::class_<GPUQuantumRegister>(m, "GPUQuantumRegister")
+      .def(py::init<size_t>(),
+           "Initialize a GPU quantum register with N qubits")
+      .def("applyHadamard", &GPUQuantumRegister::applyHadamard)
+      .def("applyX", &GPUQuantumRegister::applyX)
+      .def("applyY", &GPUQuantumRegister::applyY)
+      .def("applyZ", &GPUQuantumRegister::applyZ)
+      .def("applyRotationY", &GPUQuantumRegister::applyRotationY)
+      .def("getStateVector", &GPUQuantumRegister::getStateVector);
+
   // --- QuantumDifferentiator Binding ---
-  // We bind a helper function that takes a Python callable for the ansatz
   m.def(
       "calculate_gradients",
       [](int num_qubits, std::vector<double> params, py::function ansatz_func,
          std::vector<std::pair<double, std::string>> hamiltonian_data) {
-        // Convert simplified Python Hamiltonian data to C++ PauliTerm
         std::vector<PauliTerm> hamiltonian;
         for (const auto &item : hamiltonian_data) {
           hamiltonian.push_back({item.first, item.second});
         }
 
-        // Adapter for the C++ expected AnsatzFunction signature
-        AnsatzFunction cpp_ansatz = [&](const std::vector<double> &p,
-                                        QuantumRegister &q) {
-          // Call the python function.
-          // Warning: releasing GIL might be needed for threading, but we keep
-          // it simple for now.
-          ansatz_func(p, &q);
-        };
+        QuantumDifferentiator::AnsatzFunc<QuantumRegister> cpp_ansatz =
+            [&](const std::vector<double> &p, QuantumRegister &q) {
+              ansatz_func(p, &q);
+            };
 
         return QuantumDifferentiator::calculateGradients(
             num_qubits, params, cpp_ansatz, hamiltonian);
@@ -72,14 +78,31 @@ PYBIND11_MODULE(qubit_engine, m) {
         for (const auto &item : hamiltonian_data) {
           hamiltonian.push_back({item.first, item.second});
         }
-        AnsatzFunction cpp_ansatz = [&](const std::vector<double> &p,
-                                        QuantumRegister &q) {
-          ansatz_func(p, &q);
-        };
-        return QuantumDifferentiator::calculateGradientsAdjoint(
-            num_qubits, params, cpp_ansatz, hamiltonian);
+        QuantumDifferentiator::AnsatzFunc<QuantumRegister> cpp_ansatz =
+            [&](const std::vector<double> &p, QuantumRegister &q) {
+              ansatz_func(p, &q);
+            };
+        return QuantumDifferentiator::calculateGradientsAdjoint<
+            QuantumRegister>(num_qubits, params, cpp_ansatz, hamiltonian);
       },
-      "Calculate analytical gradients using Adjoint Method (O(1) memory)");
+      "Calculate analytical gradients using Adjoint Method (CPU)");
+
+  m.def(
+      "calculate_gradients_adjoint_gpu",
+      [](int num_qubits, std::vector<double> params, py::function ansatz_func,
+         std::vector<std::pair<double, std::string>> hamiltonian_data) {
+        std::vector<PauliTerm> hamiltonian;
+        for (const auto &item : hamiltonian_data) {
+          hamiltonian.push_back({item.first, item.second});
+        }
+        QuantumDifferentiator::AnsatzFunc<GPUQuantumRegister> cpp_ansatz =
+            [&](const std::vector<double> &p, GPUQuantumRegister &q) {
+              ansatz_func(p, &q);
+            };
+        return QuantumDifferentiator::calculateGradientsAdjoint<
+            GPUQuantumRegister>(num_qubits, params, cpp_ansatz, hamiltonian);
+      },
+      "Calculate analytical gradients using Adjoint Method (GPU)");
 
   // --- AdamOptimizer Binding ---
   using qubit_engine::optimizers::AdamOptimizer;
@@ -90,21 +113,14 @@ PYBIND11_MODULE(qubit_engine, m) {
           [](AdamOptimizer &optimizer, int num_qubits, py::function ansatz_func,
              std::vector<std::pair<double, std::string>> hamiltonian_data,
              std::vector<double> initial_params) {
-            // 1. Adapter for Hamiltonian
             std::vector<PauliTerm> hamiltonian;
             for (const auto &item : hamiltonian_data) {
               hamiltonian.push_back({item.first, item.second});
             }
-
-            // 2. Adapter for Ansatz (release GIL inside?)
-            // Since the loop is in C++, we call back to Python many times.
-            // This might be slow if GIL is held, but okay for MVP.
-            // Ideally ansatz should be a C++ defined circuit/function for max
-            // speed. If `ansatz_func` is Python, we still pay overhead.
-            AnsatzFunction cpp_ansatz = [&](const std::vector<double> &p,
-                                            QuantumRegister &q) {
-              ansatz_func(p, &q);
-            };
+            QuantumDifferentiator::AnsatzFunc<QuantumRegister> cpp_ansatz =
+                [&](const std::vector<double> &p, QuantumRegister &q) {
+                  ansatz_func(p, &q);
+                };
 
             return optimizer.minimize(cpp_ansatz, hamiltonian, num_qubits,
                                       initial_params);

@@ -7,14 +7,37 @@ find_package(gRPC REQUIRED)
 find_package(Protobuf REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
-if(MPI_FOUND)
-    add_compile_definitions(MPI_ENABLED)
+option(MPI_ENABLED "Enable MPI Distributed Computing" OFF)
+if(MPI_ENABLED)
+    find_package(MPI REQUIRED)
+    if(MPI_FOUND)
+        add_compile_definitions(MPI_ENABLED)
+        include_directories(${MPI_CXX_INCLUDE_PATH})
+        link_libraries(${MPI_CXX_LIBRARIES})
+    endif()
 endif()
 
 find_package(prometheus-cpp CONFIG REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
 find_package(gflags CONFIG REQUIRED)
+find_package(gflags CONFIG REQUIRED)
 find_package(glog CONFIG REQUIRED)
+
+# --- GPU Acceleration (CUDA) ---
+option(ENABLE_CUDA "Enable CUDA GPU Acceleration" ON)
+
+if(ENABLE_CUDA)
+    include(CheckLanguage)
+    check_language(CUDA)
+    if(CMAKE_CUDA_COMPILER)
+        enable_language(CUDA)
+        find_package(CUDAToolkit REQUIRED)
+        add_compile_definitions(ENABLE_CUDA)
+        message(STATUS "CUDA Detected. GPU Acceleration Enabled.")
+    else()
+        message(STATUS "CUDA Not Found. GPU Acceleration Disabled.")
+    endif()
+endif()
 
 set(PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../api/proto/quantum.proto)
 # The output must be within the CMAKE_CURRENT_BINARY_DIR (build folder) or a source folder.
@@ -120,27 +143,29 @@ grpc_generate_cpp(GRPC_SRC_GENERATED_CPP GRPC_HDR_GENERATED_CPP
 # Generated headers MUST be found in the directory *before* the package name.
 # 3. Define Executable with ALL Sources (CRITICAL FIX)
 # We must include the generated C++ source files (.cc)
+# --- GPU Sources ---
+set(GPU_SOURCES "")
+if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
+    list(APPEND GPU_SOURCES src/kernels/gate_kernels.cu)
+endif()
+
 add_executable(qubit_engine 
     src/QuantumRegister.cpp
     src/ServiceImpl.cpp
     src/ServiceImpl_Visualize.cpp
+    src/backends/GPUQuantumRegister.cpp
     src/main.cpp
-    
-    # Generated sources (.cc) must be included here!
     ${PROTO_SRC_GENERATED_CPP}
     ${GRPC_SRC_GENERATED_CPP}
+    ${GPU_SOURCES}
 )
 
-# 2. Include Directories (Moved after add_executable)
 target_include_directories(qubit_engine PUBLIC
-    # 1. Source code includes (e.g., backend/src/ServiceImpl.hpp)
     src
-    # 2. Generated headers are here: <GENERATED_DIR>/qubit_engine/quantum.grpc.pb.h
     ${GENERATED_DIR} 
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-# 4. Link Libraries
 target_link_libraries(qubit_engine
     PRIVATE
     gRPC::grpc++
@@ -158,6 +183,10 @@ target_link_libraries(qubit_engine
     prometheus-cpp::core
 )
 
+if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
+   target_link_libraries(qubit_engine PRIVATE CUDA::cudart)
+endif()
+
 if(MPI_FOUND)
     target_link_libraries(qubit_engine PRIVATE MPI::MPI_CXX)
 endif()
@@ -166,10 +195,16 @@ endif()
 pybind11_add_module(qubit_engine_module MODULE
     src/python_bindings.cpp
     src/QuantumRegister.cpp
+    src/backends/GPUQuantumRegister.cpp
+    ${GPU_SOURCES}
 )
 set_target_properties(qubit_engine_module PROPERTIES OUTPUT_NAME "qubit_engine")
 
 target_include_directories(qubit_engine_module PRIVATE src)
+
+if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
+    target_link_libraries(qubit_engine_module PRIVATE CUDA::cudart)
+endif()
 
 # Ensure MPI if needed
 if(MPI_FOUND)
@@ -237,4 +272,24 @@ target_link_libraries(benchmark PRIVATE
 )
 if(MPI_FOUND)
     target_link_libraries(benchmark PRIVATE MPI::MPI_CXX)
+endif()
+
+# --- MPI Verification Executable ---
+if(MPI_FOUND)
+    add_executable(mpi_test mpi_test.cpp)
+    target_sources(mpi_test PRIVATE
+        src/QuantumRegister.cpp
+        ${PROTO_SRC_GENERATED_CPP}
+        ${GRPC_SRC_GENERATED_CPP}
+    )
+    target_include_directories(mpi_test PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+    target_link_libraries(mpi_test PRIVATE
+        MPI::MPI_CXX
+        gRPC::grpc++
+        protobuf::libprotobuf
+        OpenSSL::SSL
+        OpenSSL::Crypto
+        Threads::Threads
+        dl
+    )
 endif()

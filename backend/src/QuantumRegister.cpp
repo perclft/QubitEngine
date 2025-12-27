@@ -62,37 +62,21 @@ void QuantumRegister::applyHadamard(size_t target) {
 
   if (stride < local_dim) {
 #ifdef __AVX2__
-    // Precompute constant vector with INV_SQRT_2
     __m256d v_inv_sqrt2 = _mm256_set1_pd(INV_SQRT_2);
-
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       size_t j = i;
-      // Process 2 Complex numbers (4 doubles) at a time
-      // 2 Complex numbers = 4 doubles = 32 bytes
       for (; j + 1 < i + stride; j += 2) {
-        // Load 2 complex numbers from state[j] -> v_a
-        // Load 2 complex numbers from state[j+stride] -> v_b
-        // Cast complex<double>* to double* for loading
         double *ptr_a = reinterpret_cast<double *>(&state[j]);
         double *ptr_b = reinterpret_cast<double *>(&state[j + stride]);
-
         __m256d v_a = _mm256_loadu_pd(ptr_a);
         __m256d v_b = _mm256_loadu_pd(ptr_b);
-
-        // a + b
         __m256d v_sum = _mm256_add_pd(v_a, v_b);
-        // a - b
         __m256d v_diff = _mm256_sub_pd(v_a, v_b);
-
-        // Scale by INV_SQRT_2
         v_sum = _mm256_mul_pd(v_sum, v_inv_sqrt2);
         v_diff = _mm256_mul_pd(v_diff, v_inv_sqrt2);
-
-        // Store back
         _mm256_storeu_pd(ptr_a, v_sum);
         _mm256_storeu_pd(ptr_b, v_diff);
       }
-      // Handle remaining elements (cleanup loop)
       for (; j < i + stride; ++j) {
         Complex a = state[j];
         Complex b = state[j + stride];
@@ -101,7 +85,6 @@ void QuantumRegister::applyHadamard(size_t target) {
       }
     }
 #else
-    // Local AVX-style loop (Scalar fallback)
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
         Complex a = state[j];
@@ -111,8 +94,32 @@ void QuantumRegister::applyHadamard(size_t target) {
       }
     }
 #endif
+  } else {
+#ifdef MPI_ENABLED
+    size_t rank_bit = stride / local_dim;
+    bool is_one = (local_rank & rank_bit);
+    int partner = local_rank ^ rank_bit;
+    std::vector<Complex> recv_buf(local_dim);
+
+    MPI_Sendrecv(state.data(), local_dim * 2, MPI_DOUBLE, partner, 0,
+                 recv_buf.data(), local_dim * 2, MPI_DOUBLE, partner, 0,
+                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+    if (is_one) {
+#pragma omp parallel for
+      for (size_t i = 0; i < local_dim; ++i) {
+        state[i] = (recv_buf[i] - state[i]) * INV_SQRT_2; // |1> -> (|0> - |1>)
+      }
+    } else {
+#pragma omp parallel for
+      for (size_t i = 0; i < local_dim; ++i) {
+        state[i] = (state[i] + recv_buf[i]) * INV_SQRT_2; // |0> -> (|0> + |1>)
+      }
+    }
+#else
+    std::cerr << "Error: Global H requested but MPI not enabled." << std::endl;
+#endif
   }
-  // MPI logic omitted for brevity, but compilation is now safe.
 }
 
 void QuantumRegister::applyX(size_t target) {
@@ -120,6 +127,7 @@ void QuantumRegister::applyX(size_t target) {
   size_t stride = 1ULL << target;
   if (recording_enabled)
     tape.push_back({RecordedGate::X, {target}, {}});
+
   if (stride < local_dim) {
 #ifdef __AVX2__
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
@@ -127,104 +135,40 @@ void QuantumRegister::applyX(size_t target) {
       for (; j + 1 < i + stride; j += 2) {
         double *ptr_a = reinterpret_cast<double *>(&state[j]);
         double *ptr_b = reinterpret_cast<double *>(&state[j + stride]);
-
-        // Swap full blocks (2 complex nums each)
         __m256d v_a = _mm256_loadu_pd(ptr_a);
         __m256d v_b = _mm256_loadu_pd(ptr_b);
-
         _mm256_storeu_pd(ptr_a, v_b);
         _mm256_storeu_pd(ptr_b, v_a);
       }
-      for (; j < i + stride; ++j) {
+      for (; j < i + stride; ++j)
         std::swap(state[j], state[j + stride]);
-      }
     }
 #else
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
-      for (size_t j = i; j < i + stride; ++j) {
+      for (size_t j = i; j < i + stride; ++j)
         std::swap(state[j], state[j + stride]);
-      }
     }
+#endif
+  } else {
+#ifdef MPI_ENABLED
+    size_t rank_bit = stride / local_dim;
+    int partner = local_rank ^ rank_bit;
+    std::vector<Complex> recv_buf(local_dim);
+    MPI_Sendrecv(state.data(), local_dim * 2, MPI_DOUBLE, partner, 0,
+                 recv_buf.data(), local_dim * 2, MPI_DOUBLE, partner, 0,
+                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    state = recv_buf;
+#else
+    std::cerr << "Error: Global X requested but MPI not enabled." << std::endl;
 #endif
   }
 }
-
-// --- Core Gates ---
 
 void QuantumRegister::applyY(size_t target) {
   Complex i_unit(0, 1);
   size_t local_dim = state.size();
   size_t stride = 1ULL << target;
-
   if (stride < local_dim) {
-#ifdef __AVX2__
-    // Y Gate:
-    // |0> -> i|1>
-    // |1> -> -i|0>
-    // state[j] (coeff of 0) becomes -i * state[j+stride]
-    // state[j+stride] (coeff of 1) becomes i * state[j]
-
-    // Constants for complex multiplication by i and -i
-    // v * i = (Re + i Im) * i = -Im + i Re
-    // To achieve this with shuffle/permute:
-    // [R, I] -> [-I, R]
-    // can be done by swapping elements and negating the new real part.
-
-    // 0.0, -1.0, 0.0, -1.0
-    // But multiplication is easier.
-    // However, _mm256_mul_pd with complex logic isn't direct.
-    // Simpler: swap real/imag, then negate appropriate parts.
-
-    // Let's use scalar fallback or simple parallel for simplicity of
-    // implementation correctness first, as Y gate SIMD is trickier without a
-    // dedicated complex helper. Actually, we can just use the provided scalar
-    // loop with OpenMP which is already parallelized. But the task is AVX.
-    // Let's try basic AVX.
-
-    // x = (a, b). x * i = (-b, a).
-    // Swap 64-bit lanes within 128-bit chunks?
-    // _mm256_permute_pd(x, 0x5) -> (b, a, d, c) (swaps adjacent doubles)
-    // Then multiply by (-1, 1, -1, 1) to get (-b, a, -d, c).
-
-    __m256d v_neg_mask =
-        _mm256_setr_pd(-1.0, 1.0, -1.0, 1.0); // For mult by i: (-b, a)
-    // For mult by -i: (b, -a). -> mask (1.0, -1.0)
-    __m256d v_neg_mask_minus_i = _mm256_setr_pd(1.0, -1.0, 1.0, -1.0);
-
-#pragma omp parallel for
-    for (size_t i = 0; i < local_dim; i += 2 * stride) {
-      size_t j = i;
-      for (; j + 1 < i + stride; j += 2) {
-        double *ptr_a = reinterpret_cast<double *>(&state[j]);
-        double *ptr_b = reinterpret_cast<double *>(&state[j + stride]);
-
-        __m256d v_a = _mm256_loadu_pd(ptr_a); // [ReA1, ImA1, ReA2, ImA2]
-        __m256d v_b = _mm256_loadu_pd(ptr_b); // [ReB1, ImB1, ReB2, ImB2]
-
-        // Compute NEW state[j] = -i * state[j+stride] (v_b)
-        // -i * (Re + i Im) = -iRe + Im = Im - iRe. -> [Im, -Re]
-        // Swap: [Im, Re]. Mult by [1, -1]: [Im, -Re].
-        __m256d v_b_swapped =
-            _mm256_permute_pd(v_b, 0x5); // [ImB1, ReB1, ImB2, ReB2]
-        __m256d v_new_a = _mm256_mul_pd(v_b_swapped, v_neg_mask_minus_i);
-
-        // Compute NEW state[j+stride] = i * state[j] (v_a)
-        // i * (Re + i Im) = iRe - Im = -Im + iRe. -> [-Im, Re]
-        // Swap: [Im, Re]. Mult by [-1, 1]: [-Im, Re].
-        __m256d v_a_swapped = _mm256_permute_pd(v_a, 0x5);
-        __m256d v_new_b = _mm256_mul_pd(v_a_swapped, v_neg_mask);
-
-        _mm256_storeu_pd(ptr_a, v_new_a);
-        _mm256_storeu_pd(ptr_b, v_new_b);
-      }
-      for (; j < i + stride; ++j) {
-        Complex a = state[j];
-        Complex b = state[j + stride];
-        state[j] = -i_unit * b;
-        state[j + stride] = i_unit * a;
-      }
-    }
-#else
 #pragma omp parallel for
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
@@ -234,6 +178,26 @@ void QuantumRegister::applyY(size_t target) {
         state[j + stride] = i_unit * a;
       }
     }
+  } else {
+#ifdef MPI_ENABLED
+    size_t rank_bit = stride / local_dim;
+    bool is_one = (local_rank & rank_bit);
+    int partner = local_rank ^ rank_bit;
+    std::vector<Complex> recv_buf(local_dim);
+    MPI_Sendrecv(state.data(), local_dim * 2, MPI_DOUBLE, partner, 0,
+                 recv_buf.data(), local_dim * 2, MPI_DOUBLE, partner, 0,
+                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    if (is_one) {
+#pragma omp parallel for
+      for (size_t i = 0; i < local_dim; ++i)
+        state[i] = i_unit * recv_buf[i];
+    } else {
+#pragma omp parallel for
+      for (size_t i = 0; i < local_dim; ++i)
+        state[i] = -i_unit * recv_buf[i];
+    }
+#else
+    std::cerr << "Error: Global Y requested but MPI not enabled." << std::endl;
 #endif
   }
 }
@@ -242,32 +206,21 @@ void QuantumRegister::applyZ(size_t target) {
   size_t local_dim = state.size();
   size_t stride = 1ULL << target;
   if (stride < local_dim) {
-#ifdef __AVX2__
-    // Z Gate:
-    // |1> -> -|1>
-    // Just negate state[j+stride]
-    __m256d v_neg_one = _mm256_set1_pd(-1.0);
-
 #pragma omp parallel for
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
-      size_t j = i;
-      for (; j + 1 < i + stride; j += 2) {
-        double *ptr = reinterpret_cast<double *>(&state[j + stride]);
-        __m256d v_val = _mm256_loadu_pd(ptr);
-        v_val = _mm256_mul_pd(v_val, v_neg_one);
-        _mm256_storeu_pd(ptr, v_val);
-      }
-      for (; j < i + stride; ++j) {
-        state[j + stride] = -state[j + stride];
-      }
+      for (size_t j = i; j < i + stride; ++j)
+        state[j + stride] *= -1.0;
+    }
+  } else {
+#ifdef MPI_ENABLED
+    size_t rank_bit = stride / local_dim;
+    if (local_rank & rank_bit) {
+#pragma omp parallel for
+      for (size_t i = 0; i < local_dim; ++i)
+        state[i] *= -1.0;
     }
 #else
-#pragma omp parallel for
-    for (size_t i = 0; i < local_dim; i += 2 * stride) {
-      for (size_t j = i; j < i + stride; ++j) {
-        state[j + stride] = -state[j + stride];
-      }
-    }
+    std::cerr << "Error: Global Z requested but MPI not enabled." << std::endl;
 #endif
   }
 }
