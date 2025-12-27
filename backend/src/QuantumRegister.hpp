@@ -11,7 +11,7 @@ using Complex = std::complex<double>;
 class QuantumRegister {
 public:
   // --- Lifecycle ---
-  QuantumRegister(size_t n);
+  QuantumRegister(size_t n, bool force_local = false);
   ~QuantumRegister();
 
   // --- Core Gates ---

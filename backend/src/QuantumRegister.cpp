@@ -13,18 +13,20 @@
 const double INV_SQRT_2 = 1.0 / std::sqrt(2.0);
 
 // --- Lifecycle ---
-QuantumRegister::QuantumRegister(size_t n) : num_qubits(n) {
+QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
   local_rank = 0;
   world_size = 1;
 
 #ifdef MPI_ENABLED
-  int initialized;
-  MPI_Initialized(&initialized);
-  if (!initialized) {
-    MPI_Init(NULL, NULL);
+  if (!force_local) {
+    int initialized;
+    MPI_Initialized(&initialized);
+    if (!initialized) {
+      MPI_Init(NULL, NULL);
+    }
+    MPI_Comm_rank(MPI_COMM_WORLD, &local_rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
   }
-  MPI_Comm_rank(MPI_COMM_WORLD, &local_rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 #endif
 
   size_t total_dim = 1ULL << n;
@@ -33,8 +35,9 @@ QuantumRegister::QuantumRegister(size_t n) : num_qubits(n) {
     local_dim = 1;
 
   state.resize(local_dim, 0.0);
-  if (local_rank == 0)
-    state[0] = 1.0;
+  // If force_local or rank 0, we hold the initial state.
+  // Actually, if force_local is true, world_size=1, local_rank=0, so this check
+  // works.
   if (local_rank == 0)
     state[0] = 1.0;
 }

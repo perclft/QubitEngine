@@ -7,6 +7,10 @@
 #include <iostream>
 #include <vector>
 
+#ifdef MPI_ENABLED
+#include <mpi.h>
+#endif
+
 // Type alias for the ansatz function: (params, register) -> void
 using AnsatzFunction =
     std::function<void(const std::vector<double> &, QuantumRegister &)>;
@@ -26,8 +30,22 @@ public:
 
     const double SHIFT = M_PI / 2.0;
 
-    // Iterate over each parameter
-    for (size_t i = 0; i < current_params.size(); ++i) {
+    // --- Parallelization Strategy (MPI) ---
+    int rank = 0;
+    int size = 1;
+#ifdef MPI_ENABLED
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+#endif
+
+    // Distribute parameters across ranks
+    size_t num_params = current_params.size();
+    size_t chunk_size = (num_params + size - 1) / size;
+    size_t start_idx = rank * chunk_size;
+    size_t end_idx = std::min(start_idx + chunk_size, num_params);
+
+    // Iterate over MY subset of parameters
+    for (size_t i = start_idx; i < end_idx; ++i) {
 
       // --- Forward Shift (+pi/2) ---
       std::vector<double> params_plus = current_params;
@@ -47,6 +65,16 @@ public:
       gradients[i] = 0.5 * (energy_plus - energy_minus);
     }
 
+#ifdef MPI_ENABLED
+    // Gather results (Global Sum)
+    if (size > 1) {
+      std::vector<double> global_gradients(num_params);
+      MPI_Allreduce(gradients.data(), global_gradients.data(), num_params,
+                    MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+      gradients = global_gradients;
+    }
+#endif
+
     return gradients;
   }
 
@@ -56,7 +84,11 @@ private:
                                AnsatzFunction applyAnsatz,
                                const std::vector<PauliTerm> &hamiltonian) {
     // 1. Initialize Register |0...0>
-    QuantumRegister qreg(num_qubits);
+    // CRITICAL: Force Local mode because we are running parallel INDEPENDENT
+    // circuits request. If we used distributed mode here, all ranks would try
+    // to cooperate on ONE circuit, causing deadlock because different ranks are
+    // working on different parameters (different circuits).
+    QuantumRegister qreg(num_qubits, true);
 
     // 2. Apply Ansatz Circuit with specific params
     applyAnsatz(params, qreg);
