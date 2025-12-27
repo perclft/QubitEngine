@@ -13,6 +13,8 @@ endif()
 
 find_package(prometheus-cpp CONFIG REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
+find_package(gflags CONFIG REQUIRED)
+find_package(glog CONFIG REQUIRED)
 
 set(PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../api/proto/quantum.proto)
 # The output must be within the CMAKE_CURRENT_BINARY_DIR (build folder) or a source folder.
@@ -146,8 +148,8 @@ target_link_libraries(qubit_engine
     gRPC::gpr
     gRPC::grpc++_reflection
     protobuf::libprotobuf 
-    gflags
-    glog 
+    gflags::gflags
+    glog::glog 
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
@@ -213,3 +215,26 @@ if(MPI_FOUND)
 endif()
 
 add_test(NAME CoreTests COMMAND tests)
+
+add_executable(benchmark tests/Benchmark.cpp)
+target_sources(benchmark PRIVATE
+    src/QuantumRegister.cpp
+    src/ServiceImpl.cpp
+    src/ServiceImpl_Visualize.cpp
+    ${PROTO_SRC_GENERATED_CPP}
+    ${GRPC_SRC_GENERATED_CPP}
+)
+target_include_directories(benchmark PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(benchmark PRIVATE
+    gRPC::grpc++
+    protobuf::libprotobuf
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    Threads::Threads
+    dl
+    prometheus-cpp::pull
+    prometheus-cpp::core
+)
+if(MPI_FOUND)
+    target_link_libraries(benchmark PRIVATE MPI::MPI_CXX)
+endif()

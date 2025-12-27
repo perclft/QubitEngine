@@ -3,6 +3,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include "AdamOptimizer.hpp"
 #include "MolecularHamiltonian.hpp"
 #include "QuantumDifferentiator.hpp"
 #include "QuantumRegister.hpp"
@@ -62,4 +63,51 @@ PYBIND11_MODULE(qubit_engine, m) {
             num_qubits, params, cpp_ansatz, hamiltonian);
       },
       "Calculate analytical gradients using Parameter Shift Rule");
+
+  m.def(
+      "calculate_gradients_adjoint",
+      [](int num_qubits, std::vector<double> params, py::function ansatz_func,
+         std::vector<std::pair<double, std::string>> hamiltonian_data) {
+        std::vector<PauliTerm> hamiltonian;
+        for (const auto &item : hamiltonian_data) {
+          hamiltonian.push_back({item.first, item.second});
+        }
+        AnsatzFunction cpp_ansatz = [&](const std::vector<double> &p,
+                                        QuantumRegister &q) {
+          ansatz_func(p, &q);
+        };
+        return QuantumDifferentiator::calculateGradientsAdjoint(
+            num_qubits, params, cpp_ansatz, hamiltonian);
+      },
+      "Calculate analytical gradients using Adjoint Method (O(1) memory)");
+
+  // --- AdamOptimizer Binding ---
+  using qubit_engine::optimizers::AdamOptimizer;
+  py::class_<AdamOptimizer>(m, "AdamOptimizer")
+      .def(py::init<>()) // Default config
+      .def(
+          "minimize",
+          [](AdamOptimizer &optimizer, int num_qubits, py::function ansatz_func,
+             std::vector<std::pair<double, std::string>> hamiltonian_data,
+             std::vector<double> initial_params) {
+            // 1. Adapter for Hamiltonian
+            std::vector<PauliTerm> hamiltonian;
+            for (const auto &item : hamiltonian_data) {
+              hamiltonian.push_back({item.first, item.second});
+            }
+
+            // 2. Adapter for Ansatz (release GIL inside?)
+            // Since the loop is in C++, we call back to Python many times.
+            // This might be slow if GIL is held, but okay for MVP.
+            // Ideally ansatz should be a C++ defined circuit/function for max
+            // speed. If `ansatz_func` is Python, we still pay overhead.
+            AnsatzFunction cpp_ansatz = [&](const std::vector<double> &p,
+                                            QuantumRegister &q) {
+              ansatz_func(p, &q);
+            };
+
+            return optimizer.minimize(cpp_ansatz, hamiltonian, num_qubits,
+                                      initial_params);
+          },
+          "Run Adam Optimizer natively in C++");
 }

@@ -105,3 +105,22 @@ TEST(QuantumTest, GradientDescentTest) {
   EXPECT_EQ(grads.size(), 1);
   EXPECT_NEAR(grads[0], -1.0, 1e-6);
 }
+
+TEST(QuantumTest, AdjointGradientTest) {
+  // Same circuit as GradientDescentTest: Ry(theta)|0> with theta=pi/2
+  // But using Adjoint Method (O(1) Memory).
+
+  int num_qubits = 1;
+  std::vector<double> params = {M_PI / 2.0};
+  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+
+  AnsatzFunction ansatz = [](const std::vector<double> &p, QuantumRegister &q) {
+    q.applyRotationY(0, p[0]);
+  };
+
+  auto grads = QuantumDifferentiator::calculateGradientsAdjoint(
+      num_qubits, params, ansatz, hamiltonian);
+
+  EXPECT_EQ(grads.size(), 1);
+  EXPECT_NEAR(grads[0], -1.0, 1e-6);
+}
