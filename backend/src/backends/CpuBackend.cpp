@@ -11,7 +11,13 @@
 #ifdef MPI_ENABLED
 #include <mpi.h>
 #endif
+
+// Intel SIMD intrinsics - only available on x86/x64, not ARM
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) ||             \
+    defined(_M_IX86)
+#define USE_AVX2_INTRINSICS
 #include <immintrin.h>
+#endif
 
 namespace qubit_engine {
 
@@ -52,7 +58,7 @@ void CpuBackend::applyHadamard(size_t target) {
   size_t stride = 1ULL << target;
 
   if (stride < local_dim) {
-#ifdef __AVX2__
+#if defined(USE_AVX2_INTRINSICS) && defined(__AVX2__)
     __m256d v_inv_sqrt2 = _mm256_set1_pd(INV_SQRT_2);
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       size_t j = i;
@@ -126,7 +132,7 @@ void CpuBackend::applyX(size_t target) {
   size_t stride = 1ULL << target;
 
   if (stride < local_dim) {
-#ifdef __AVX2__
+#if defined(USE_AVX2_INTRINSICS) && defined(__AVX2__)
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       size_t j = i;
       if (stride >= 2) {

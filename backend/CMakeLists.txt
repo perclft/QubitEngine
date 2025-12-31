@@ -201,7 +201,7 @@ target_link_libraries(qubit_engine
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
-    dl
+    $<$<BOOL:${UNIX}>:dl>
     prometheus-cpp::pull
     prometheus-cpp::core
 )
@@ -267,7 +267,7 @@ target_link_libraries(tests PRIVATE
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
-    dl
+    $<$<BOOL:${UNIX}>:dl>
     prometheus-cpp::pull
     prometheus-cpp::core
 )
@@ -294,7 +294,7 @@ target_link_libraries(benchmark PRIVATE
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
-    dl
+    $<$<BOOL:${UNIX}>:dl>
     prometheus-cpp::pull
     prometheus-cpp::core
 )
@@ -319,7 +319,7 @@ if(MPI_FOUND)
         OpenSSL::SSL
         OpenSSL::Crypto
         Threads::Threads
-        dl
+        $<$<BOOL:${UNIX}>:dl>
     )
 
 
