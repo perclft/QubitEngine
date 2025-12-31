@@ -45,7 +45,7 @@ jobs:
       - name: Configure CMake
         run: |
           cmake -S backend -B build \
-            -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DCMAKE_BUILD_TYPE=Release \
             -DMPI_ENABLED=ON \
             -DENABLE_CUDA=OFF
@@ -89,7 +89,7 @@ jobs:
       - name: Configure CMake
         run: |
           cmake -S backend -B build \
-            -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DCMAKE_BUILD_TYPE=Release \
             -DMPI_ENABLED=OFF
 
@@ -133,7 +133,7 @@ jobs:
       - name: Configure CMake
         run: |
           cmake -S backend -B build `
-            -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake `
+            -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE\vcpkg\scripts\buildsystems\vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET=x64-windows `
             -DCMAKE_BUILD_TYPE=Release `
             -DENABLE_CUDA=OFF `
