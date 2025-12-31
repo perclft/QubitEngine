@@ -39,6 +39,9 @@ jobs:
           name: vcpkg-logs
           path: build/vcpkg_installed/vcpkg/blds/**/*.log
 
+      - name: Create Bin Directory
+        run: mkdir -p bin
+
       - name: Configure CMake
         run: |
           cmake -S backend -B build \
@@ -52,6 +55,7 @@ jobs:
 
       - name: Run Tests
         run: |
+          export LD_LIBRARY_PATH=$PWD/build/vcpkg_installed/x64-linux/lib:$LD_LIBRARY_PATH
           cd build
           ctest --output-on-failure
 
@@ -77,6 +81,9 @@ jobs:
         run: |
           git clone https://github.com/microsoft/vcpkg.git
           ./vcpkg/bootstrap-vcpkg.sh
+
+      - name: Create Bin Directory
+        run: mkdir -p bin
 
       - name: Configure CMake
         run: |
@@ -117,6 +124,9 @@ jobs:
           git clone https://github.com/microsoft/vcpkg.git
           .\vcpkg\bootstrap-vcpkg.bat
 
+      - name: Create Bin Directory
+        run: mkdir bin
+
       - name: Configure CMake
         run: |
           cmake -S backend -B build `
@@ -131,5 +141,6 @@ jobs:
 
       - name: Test
         run: |
+          $env:PATH += ";$pwd\build\vcpkg_installed\x64-windows\bin"
           cd build
           ctest -C Release --output-on-failure
