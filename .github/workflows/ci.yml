@@ -27,6 +27,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libopenmpi-dev ninja-build
 
+          sudo apt-get install -y libopenmpi-dev
+
       - name: Setup VCPKG
         run: |
           git clone https://github.com/microsoft/vcpkg.git
@@ -34,13 +36,14 @@ jobs:
 
       - name: Configure CMake
         run: |
-          cmake -S backend -B build -G Ninja \
+          cmake -S backend -B build \
             -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DCMAKE_BUILD_TYPE=Release \
-            -DMPI_ENABLED=ON
+            -DMPI_ENABLED=ON \
+            -DENABLE_CUDA=OFF
 
       - name: Build
-        run: cmake --build build
+        run: cmake --build build -- -j4
 
       - name: Run Tests
         run: |
@@ -72,7 +75,7 @@ jobs:
 
       - name: Configure CMake
         run: |
-          cmake -S backend -B build -G Ninja \
+          cmake -S backend -B build \
             -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DCMAKE_BUILD_TYPE=Release \
             -DMPI_ENABLED=OFF
