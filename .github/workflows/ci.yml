@@ -76,7 +76,7 @@ jobs:
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
       - name: Install build tools
-        run: brew install ninja cmake || true
+        run: brew install ninja cmake autoconf autoconf-archive automake libtool || true
 
       - name: Setup VCPKG
         run: |
