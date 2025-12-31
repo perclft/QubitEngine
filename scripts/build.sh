@@ -7,9 +7,13 @@ OUTPUT_BIN="bin"
 VCPKG_ROOT="$HOME/vcpkg"
 
 # Ensure VCPKG is available
-if [ ! -d "$VCPKG_ROOT" ]; then
-    echo "vcpkg not found at $VCPKG_ROOT. Please install it."
-    exit 1
+# Optional VCPKG
+CMAKE_ARGS=""
+if [ -d "$VCPKG_ROOT" ]; then
+    echo "Using vcpkg at $VCPKG_ROOT"
+    CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+else
+    echo "vcpkg not found at $VCPKG_ROOT. Attempting to use system dependencies..."
 fi
 
 # Clean previous build if requested
@@ -21,12 +25,20 @@ fi
 # Create output directories
 mkdir -p $OUTPUT_BIN
 
+# Check for Metal toolchain on macOS
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    if ! xcrun -sdk macosx metal --version &> /dev/null; then
+        echo "Metal toolchain not found. Disabling Metal shaders."
+        CMAKE_ARGS="$CMAKE_ARGS -DSKIP_METAL_SHADERS=ON"
+    fi
+fi
+
 # Configure CMake
 echo "Configuring CMake..."
 cmake -S backend -B $BUILD_DIR \
-    -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+    $CMAKE_ARGS \
     -DCMAKE_BUILD_TYPE=Release \
-    -DMPI_ENABLED=ON \
+    -DMPI_ENABLED=OFF \
     -DENABLE_CUDA=OFF
 
 # Build

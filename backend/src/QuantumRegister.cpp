@@ -1,8 +1,8 @@
 #include "QuantumRegister.hpp"
 #include "backends/CpuBackend.hpp"
 #include "backends/MetalBackend.hpp" // Added for MetalBackend
-#include <iostream>
 #include <fstream>
+#include <iostream>
 
 // --- Lifecycle ---
 QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
@@ -17,13 +17,21 @@ QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
       metalAvailable = true;
     }
   }
-  
+
   if (metalAvailable) {
-    backend = std::make_unique<qubit_engine::MetalBackend>(n);
-    std::cout << "QuantumRegister: Using MetalBackend (GPU)" << std::endl;
+    try {
+      backend = std::make_unique<qubit_engine::MetalBackend>(n);
+      std::cout << "QuantumRegister: Using MetalBackend (GPU)" << std::endl;
+    } catch (const std::exception &e) {
+      std::cerr << "QuantumRegister: MetalBackend failed to initialize ("
+                << e.what() << "). Falling back to CpuBackend." << std::endl;
+      backend = std::make_unique<qubit_engine::CpuBackend>(n, force_local);
+    }
   } else {
     backend = std::make_unique<qubit_engine::CpuBackend>(n, force_local);
-    std::cout << "QuantumRegister: Using CpuBackend (Metal shaders not available)" << std::endl;
+    std::cout
+        << "QuantumRegister: Using CpuBackend (Metal shaders not available)"
+        << std::endl;
   }
 #else
   // Default to CPU on Linux/Windows for now

@@ -33,8 +33,7 @@ MetalBackend::~MetalBackend() {
 void MetalBackend::initializeMetal() {
   id<MTLDevice> device = MTLCreateSystemDefaultDevice();
   if (!device) {
-    std::cerr << "Error: Metal is not supported on this device." << std::endl;
-    return;
+    throw std::runtime_error("Metal is not supported on this device.");
   }
   device_ = (__bridge_retained void *)device;
 
@@ -50,9 +49,8 @@ void MetalBackend::initializeMetal() {
     library = [device newLibraryWithFile:@"default.metallib" error:&error];
   }
   if (!library) {
-    std::cerr << "Error: Could not load Metal library: " <<
-        [[error localizedDescription] UTF8String] << std::endl;
-    return;
+    throw std::runtime_error(std::string("Could not load Metal library: ") +
+                             [[error localizedDescription] UTF8String]);
   }
 
   buildPipelines((__bridge void *)library);
