@@ -34,7 +34,7 @@ jobs:
 
       - name: Upload VCPKG Logs on Failure
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: vcpkg-logs
           path: build/vcpkg_installed/vcpkg/blds/**/*.log
@@ -125,7 +125,7 @@ jobs:
           .\vcpkg\bootstrap-vcpkg.bat
 
       - name: Create Bin Directory
-        run: mkdir bin
+        run: if (!(Test-Path bin)) { New-Item -ItemType Directory -Path bin -Force }
 
       - name: Configure CMake
         run: |
@@ -141,6 +141,6 @@ jobs:
 
       - name: Test
         run: |
-          $env:PATH += ";$pwd\build\vcpkg_installed\x64-windows\bin"
+          $env:PATH = "$env:GITHUB_WORKSPACE\backend\build\vcpkg_installed\x64-windows\bin;$env:PATH"
           cd build
           ctest -C Release --output-on-failure
