@@ -71,7 +71,8 @@ void CpuBackend::applyHadamard(size_t target) {
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static)
 #endif
-    for (size_t i = 0; i < local_dim; i += 2 * stride) {
+    for (long long i = 0; i < static_cast<long long>(local_dim);
+         i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
         // Load complex numbers (each is 2 doubles: real, imag)
         double *ptr_a = reinterpret_cast<double *>(&state[j]);
@@ -124,7 +125,8 @@ void CpuBackend::applyHadamard(size_t target) {
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static)
 #endif
-    for (size_t i = 0; i < local_dim; i += 2 * stride) {
+    for (long long i = 0; i < static_cast<long long>(local_dim);
+         i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
         Complex a = state[j];
         Complex b = state[j + stride];
@@ -148,14 +150,14 @@ void CpuBackend::applyHadamard(size_t target) {
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-      for (size_t i = 0; i < local_dim; ++i) {
+      for (long long i = 0; i < static_cast<long long>(local_dim); ++i) {
         state[i] = (recv_buf[i] - state[i]) * INV_SQRT_2;
       }
     } else {
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-      for (size_t i = 0; i < local_dim; ++i) {
+      for (long long i = 0; i < static_cast<long long>(local_dim); ++i) {
         state[i] = (state[i] + recv_buf[i]) * INV_SQRT_2;
       }
     }
@@ -215,7 +217,8 @@ void CpuBackend::applyY(size_t target) {
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-    for (size_t i = 0; i < local_dim; i += 2 * stride) {
+    for (long long i = 0; i < static_cast<long long>(local_dim);
+         i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
         Complex a = state[j];
         Complex b = state[j + stride];
@@ -236,13 +239,13 @@ void CpuBackend::applyY(size_t target) {
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-      for (size_t i = 0; i < local_dim; ++i)
+      for (long long i = 0; i < static_cast<long long>(local_dim); ++i)
         state[i] = i_unit * recv_buf[i];
     } else {
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-      for (size_t i = 0; i < local_dim; ++i)
+      for (long long i = 0; i < static_cast<long long>(local_dim); ++i)
         state[i] = -i_unit * recv_buf[i];
     }
 #else
@@ -258,7 +261,8 @@ void CpuBackend::applyZ(size_t target) {
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-    for (size_t i = 0; i < local_dim; i += 2 * stride) {
+    for (long long i = 0; i < static_cast<long long>(local_dim);
+         i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j)
         state[j + stride] *= -1.0;
     }
@@ -269,7 +273,7 @@ void CpuBackend::applyZ(size_t target) {
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-      for (size_t i = 0; i < local_dim; ++i)
+      for (long long i = 0; i < static_cast<long long>(local_dim); ++i)
         state[i] *= -1.0;
     }
 #else
@@ -295,7 +299,7 @@ void CpuBackend::applyCNOT(size_t control, size_t target) {
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-    for (size_t i = 0; i < local_dim; ++i) {
+    for (long long i = 0; i < static_cast<long long>(local_dim); ++i) {
       if ((i & c_stride)) {
         size_t partner = i ^ t_stride;
         if (i < partner) {
@@ -338,7 +342,7 @@ void CpuBackend::applyCNOT(size_t control, size_t target) {
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-    for (size_t i = 0; i < local_dim; ++i) {
+    for (long long i = 0; i < static_cast<long long>(local_dim); ++i) {
       if (i & c_stride) {
         state[i] = recv_buf[i];
       } else {
@@ -366,7 +370,7 @@ void CpuBackend::applyToffoli(size_t c1, size_t c2, size_t t) {
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-    for (size_t i = 0; i < local_dim; ++i) {
+    for (long long i = 0; i < static_cast<long long>(local_dim); ++i) {
       if ((i & c1_s) && (i & c2_s) && !(i & t_s)) {
         std::swap(state[i], state[i + t_s]);
       }
@@ -383,7 +387,8 @@ void CpuBackend::applyPhaseS(size_t target) {
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-    for (size_t i = 0; i < local_dim; i += 2 * stride) {
+    for (long long i = 0; i < static_cast<long long>(local_dim);
+         i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
         state[j + stride] *= i_unit;
       }
@@ -400,7 +405,8 @@ void CpuBackend::applyPhaseT(size_t target) {
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-    for (size_t i = 0; i < local_dim; i += 2 * stride) {
+    for (long long i = 0; i < static_cast<long long>(local_dim);
+         i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
         state[j + stride] *= phase;
       }
@@ -419,7 +425,8 @@ void CpuBackend::applyRotationY(size_t target, double angle) {
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-    for (size_t i = 0; i < local_dim; i += 2 * stride) {
+    for (long long i = 0; i < static_cast<long long>(local_dim);
+         i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
         Complex a = state[j];
         Complex b = state[j + stride];
@@ -441,7 +448,8 @@ void CpuBackend::applyRotationZ(size_t target, double angle) {
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-    for (size_t i = 0; i < local_dim; i += 2 * stride) {
+    for (long long i = 0; i < static_cast<long long>(local_dim);
+         i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
         state[j] *= z0;
         state[j + stride] *= z1;

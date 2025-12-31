@@ -5,19 +5,26 @@
 #include <iostream>
 #include <vector>
 
-int main() {
-  int num_qubits = 15; // 2^15 = 32,768 amplitudes
-  std::cout << "--- Quantum Linux 2 Benchmark ---" << std::endl;
-  std::cout << "Creating Register with " << num_qubits << " qubits..."
-            << std::endl;
+int main(int argc, char **argv) {
+  int num_qubits = 25; // 2^25 * 16 bytes ~= 536 MB
+  if (argc > 1) {
+    num_qubits = std::atoi(argv[1]);
+  }
+
+  std::cout << "--- QubitEngine Stress Test ---" << std::endl;
+  std::cout << "Initializing Quantum Register with " << num_qubits
+            << " qubits..." << std::endl;
+  size_t memory_size = (1ULL << num_qubits) * 16;
+  std::cout << "Estimated Memory Usage: " << memory_size / (1024.0 * 1024.0)
+            << " MB" << std::endl;
 
   QuantumRegister q(num_qubits);
 
-  auto start = std::chrono::high_resolution_clock::now();
+  int num_gates = 100;
+  std::cout << "Applying " << num_gates
+            << " layers of Hadamard gates across all qubits..." << std::endl;
 
-  int num_gates = 10;
-  std::cout << "Applying " << num_gates << " layers of Hadamard gates..."
-            << std::endl;
+  auto start = std::chrono::high_resolution_clock::now();
 
   for (int i = 0; i < num_gates; ++i) {
     for (int k = 0; k < num_qubits; ++k) {
@@ -34,6 +41,9 @@ int main() {
   std::cout << "Time: " << diff.count() << " s" << std::endl;
   std::cout << "Throughput: " << throughput / 1e6 << " million gates/s"
             << std::endl;
+  std::cout << "Effective Bandwidth: "
+            << (throughput * 16.0 * 2.0) / (1024.0 * 1024.0 * 1024.0)
+            << " GB/s (R/W)" << std::endl;
 
   return 0;
 }

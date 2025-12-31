@@ -10,6 +10,7 @@ import os
 
 # Add the bin directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'bin'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'bin', 'Release'))
 
 import qubit_engine
 
@@ -133,14 +134,14 @@ def print_separator():
 def main():
     print()
     print_separator()
-    print("🔬 QubitEngine Performance Benchmark Suite")
+    print("= QubitEngine Performance Benchmark Suite")
     print(f"   Platform: {sys.platform}")
     print(f"   Python: {sys.version.split()[0]}")
     print_separator()
     print()
     
     # Test scaling with qubit count
-    print("📊 SCALING TEST: State Vector Size vs Performance")
+    print("# SCALING TEST: State Vector Size vs Performance")
     print("-" * 80)
     print(f"{'Qubits':>8} {'State Size':>12} {'Memory (KB)':>12} {'Init Time':>12} {'H Gate Time':>12}")
     print("-" * 80)
@@ -164,7 +165,7 @@ def main():
     
     print()
     print_separator()
-    print("⚡ GATE THROUGHPUT TEST (16 qubits, 100 iterations)")
+    print("# GATE THROUGHPUT TEST (16 qubits, 100 iterations)")
     print("-" * 80)
     print(f"{'Gate':>12} {'Total Gates':>12} {'Duration':>10} {'Gates/sec':>12} {'µs/gate':>10}")
     print("-" * 80)
@@ -198,7 +199,7 @@ def main():
     
     print()
     print_separator()
-    print("🔗 ENTANGLEMENT BENCHMARKS")
+    print("# ENTANGLEMENT BENCHMARKS")
     print("-" * 80)
     print(f"{'Circuit':>20} {'Qubits':>8} {'Time':>12} {'Gates':>10} {'Gates/sec':>12}")
     print("-" * 80)
@@ -216,7 +217,7 @@ def main():
     
     print()
     print_separator()
-    print("🎲 RANDOM CIRCUIT BENCHMARK (circuit depth = 20)")
+    print("# RANDOM CIRCUIT BENCHMARK (circuit depth = 20)")
     print("-" * 80)
     print(f"{'Qubits':>8} {'Total Gates':>12} {'Duration':>12} {'Gates/sec':>12}")
     print("-" * 80)
@@ -227,7 +228,7 @@ def main():
     
     print()
     print_separator()
-    print("🏋️ STRESS TEST: Maximum Qubit Count")
+    print("# STRESS TEST: Maximum Qubit Count")
     print("-" * 80)
     
     max_qubits = 20
@@ -247,15 +248,15 @@ def main():
             q.applyCNOT(0, max_qubits - 1)
             gate_time = time.perf_counter() - start
             
-            print(f"✅ Init: {init_time*1000:.1f}ms, Gate: {gate_time*1000:.2f}ms")
+            print(f"[OK] Init: {init_time*1000:.1f}ms, Gate: {gate_time*1000:.2f}ms")
             max_qubits += 2
         except Exception as e:
-            print(f"❌ Failed: {e}")
+            print(f"[FAIL] Failed: {e}")
             break
     
     print()
     print_separator()
-    print("✅ Benchmark Complete!")
+    print("Benchmark Complete!")
     print_separator()
 
 if __name__ == "__main__":
