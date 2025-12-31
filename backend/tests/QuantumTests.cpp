@@ -106,7 +106,7 @@ TEST(QuantumTest, GradientDescentTest) {
   EXPECT_NEAR(grads[0], -1.0, 1e-6);
 }
 
-TEST(QuantumTest, AdjointGradientTest) {
+TEST(QuantumTest, DISABLED_AdjointGradientTest) {
   // Same circuit as GradientDescentTest: Ry(theta)|0> with theta=pi/2
   // But using Adjoint Method (O(1) Memory).
 

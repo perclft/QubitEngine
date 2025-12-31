@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main", "feature/*" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake ninja-build libopenmpi-dev openmpi-bin libssl-dev protobuf-compiler
+
+    - name: Configure CMake (Linux)
+      run: |
+        cmake -S backend -B build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DMPI_ENABLED=ON \
+          -DENABLE_CUDA=OFF 
+
+    - name: Build
+      run: cmake --build build --config Release -j4
+
+    - name: Test
+      run: |
+        cd build
+        ctest -C Release --output-on-failure
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Dependencies
+      run: |
+        brew install cmake ninja protobuf openssl
+
+    - name: Configure CMake (Mac)
+      run: |
+        cmake -S backend -B build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DMPI_ENABLED=OFF \
+          -DENABLE_CUDA=OFF
+
+    - name: Build
+      run: cmake --build build --config Release -j4
+
+    - name: Test
+      run: |
+        cd build
+        ctest -C Release --output-on-failure
+        
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup VCPKG
+      run: |
+        git clone https://github.com/microsoft/vcpkg.git
+        .\vcpkg\bootstrap-vcpkg.bat
+
+    - name: Configure CMake (Windows)
+      run: |
+        cmake -S backend -B build `
+          -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake `
+          -DVCPKG_TARGET_TRIPLET=x64-windows `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DMPI_ENABLED=OFF `
+          -DENABLE_CUDA=OFF
+
+    - name: Build
+      run: cmake --build build --config Release
+
+    - name: Test
+      run: |
+        cd build
+        ctest -C Release --output-on-failure

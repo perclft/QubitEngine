@@ -1,5 +1,6 @@
 # C++ Build Artifacts
 backend/build/
+backend/build_mpi/
 backend/vcpkg_installed/
 backend/src/generated/
 *.o

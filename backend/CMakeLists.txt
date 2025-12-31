@@ -39,6 +39,31 @@ if(ENABLE_CUDA)
     endif()
 endif()
 
+# --- Metal (MacOS) ---
+if(APPLE)
+    enable_language(OBJCXX)
+    find_library(METAL_LIB Metal)
+    find_library(FOUNDATION_LIB Foundation)
+    
+    # Metal Shader Compilation
+    set(METAL_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders.metal)
+    set(METAL_LIB_OUT ${CMAKE_CURRENT_BINARY_DIR}/default.metallib)
+    
+    add_custom_command(
+        OUTPUT ${METAL_LIB_OUT}
+        COMMAND xcrun -sdk macosx metal -c ${METAL_SRC} -o ${CMAKE_CURRENT_BINARY_DIR}/shaders.air
+        COMMAND xcrun -sdk macosx metallib ${CMAKE_CURRENT_BINARY_DIR}/shaders.air -o ${METAL_LIB_OUT}
+        DEPENDS ${METAL_SRC}
+        COMMENT "Compiling Metal Shaders"
+    )
+    add_custom_target(CompileMetal ALL DEPENDS ${METAL_LIB_OUT})
+    
+    add_compile_definitions(ENABLE_METAL)
+    set(METAL_SOURCES src/backends/MetalBackend.mm)
+else()
+    set(METAL_SOURCES "")
+endif()
+
 set(PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../api/proto/quantum.proto)
 # The output must be within the CMAKE_CURRENT_BINARY_DIR (build folder) or a source folder.
 # Since your source files are outside the build folder, using a dedicated source directory is clean.
@@ -151,8 +176,10 @@ endif()
 
 add_executable(qubit_engine 
     src/QuantumRegister.cpp
+    src/backends/CpuBackend.cpp
     src/ServiceImpl.cpp
     src/ServiceImpl_Visualize.cpp
+    ${METAL_SOURCES}
     src/backends/GPUQuantumRegister.cpp
     src/main.cpp
     ${PROTO_SRC_GENERATED_CPP}
@@ -195,6 +222,8 @@ endif()
 pybind11_add_module(qubit_engine_module MODULE
     src/python_bindings.cpp
     src/QuantumRegister.cpp
+    src/backends/CpuBackend.cpp
+    ${METAL_SOURCES}
     src/backends/GPUQuantumRegister.cpp
     ${GPU_SOURCES}
 )
@@ -225,6 +254,8 @@ add_executable(tests tests/QuantumTests.cpp)
 # Solution: Add core sources to tests target.
 target_sources(tests PRIVATE
     src/QuantumRegister.cpp
+    src/backends/CpuBackend.cpp
+    ${METAL_SOURCES}
     src/ServiceImpl.cpp
     src/ServiceImpl_Visualize.cpp
     ${PROTO_SRC_GENERATED_CPP}
@@ -254,6 +285,7 @@ add_test(NAME CoreTests COMMAND tests)
 add_executable(benchmark tests/Benchmark.cpp)
 target_sources(benchmark PRIVATE
     src/QuantumRegister.cpp
+    src/backends/CpuBackend.cpp
     src/ServiceImpl.cpp
     src/ServiceImpl_Visualize.cpp
     ${PROTO_SRC_GENERATED_CPP}
@@ -279,6 +311,7 @@ if(MPI_FOUND)
     add_executable(mpi_test mpi_test.cpp)
     target_sources(mpi_test PRIVATE
         src/QuantumRegister.cpp
+        src/backends/CpuBackend.cpp
         ${PROTO_SRC_GENERATED_CPP}
         ${GRPC_SRC_GENERATED_CPP}
     )

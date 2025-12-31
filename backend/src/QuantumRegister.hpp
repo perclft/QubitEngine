@@ -1,12 +1,19 @@
 #pragma once
 
+#include "backends/IQuantumBackend.hpp"
 #include <complex>
 #include <cstddef>
+#include <memory>
 #include <string>
 #include <vector>
 
-// --- Fix 1: Global Type Alias (Crucial for ServiceImpl_Visualize) ---
+// Global Type Alias
 using Complex = std::complex<double>;
+
+// Forward declaration of backend logic
+namespace qubit_engine {
+class IQuantumBackend;
+}
 
 class QuantumRegister {
 public:
@@ -28,7 +35,7 @@ public:
   void applyRotationY(size_t target, double angle);
   void applyRotationZ(size_t target, double angle);
 
-  // --- Fix 2: Noise Simulation (Restored) ---
+  // --- Noise Simulation ---
   void applyDepolarizingNoise(double probability);
 
   // --- Measurement & Analysis ---
@@ -37,8 +44,8 @@ public:
   double expectationValue(const std::string &pauli_string);
 
   // --- Distributed Helpers ---
-  int getRank() const { return local_rank; }
-  int getSize() const { return world_size; }
+  int getRank() const;
+  int getSize() const;
 
   // --- Debugging ---
   std::vector<Complex> getStateVector() const;
@@ -68,72 +75,17 @@ public:
   void clearTape();
   const std::vector<RecordedGate> &getTape() const;
 
-  // Manual Gate Application (for Adjoint replay)
-  void applyRegisteredGate(const RecordedGate &gate) {
-    switch (gate.type) {
-    case RecordedGate::H:
-      applyHadamard(gate.qubits[0]);
-      break;
-    case RecordedGate::X:
-      applyX(gate.qubits[0]);
-      break;
-    case RecordedGate::Y:
-      applyY(gate.qubits[0]);
-      break;
-    case RecordedGate::Z:
-      applyZ(gate.qubits[0]);
-      break;
-    case RecordedGate::CNOT:
-      applyCNOT(gate.qubits[0], gate.qubits[1]);
-      break;
-    case RecordedGate::RY:
-      applyRotationY(gate.qubits[0], gate.params[0]);
-      break;
-    case RecordedGate::RZ:
-      applyRotationZ(gate.qubits[0], gate.params[0]);
-      break;
-    default:
-      break;
-    }
-  }
-
-  void applyRegisteredGateInverse(const RecordedGate &gate) {
-    switch (gate.type) {
-    case RecordedGate::H:
-      applyHadamard(gate.qubits[0]);
-      break; // Self-inverse
-    case RecordedGate::X:
-      applyX(gate.qubits[0]);
-      break; // Self-inverse
-    case RecordedGate::Y:
-      applyY(gate.qubits[0]);
-      break; // Self-inverse
-    case RecordedGate::Z:
-      applyZ(gate.qubits[0]);
-      break; // Self-inverse
-    case RecordedGate::CNOT:
-      applyCNOT(gate.qubits[0], gate.qubits[1]);
-      break; // Self-inverse
-    case RecordedGate::RY:
-      applyRotationY(gate.qubits[0], -gate.params[0]);
-      break;
-    case RecordedGate::RZ:
-      applyRotationZ(gate.qubits[0], -gate.params[0]);
-      break;
-    default:
-      break;
-    }
-  }
+  // Helper to Replay Tape (Optional, for adjoint)
+  void applyRegisteredGate(const RecordedGate &gate);
+  void applyRegisteredGateInverse(const RecordedGate &gate);
 
 private:
   size_t num_qubits;
-  std::vector<Complex> state;
 
-  // Recorder
+  // New Backend Architecture
+  std::unique_ptr<qubit_engine::IQuantumBackend> backend;
+
+  // Recorder logic remains in proxy
   bool recording_enabled = false;
   std::vector<RecordedGate> tape;
-
-  // Distributed State
-  int local_rank;
-  int world_size;
 };

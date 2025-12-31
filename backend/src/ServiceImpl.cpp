@@ -1,8 +1,6 @@
 #include "ServiceImpl.hpp"
 #include "QuantumRegister.hpp"
-#include "backends/CloudBackend.hpp"
-#include "backends/MockHardwareBackend.hpp"
-#include "backends/SimulatorBackend.hpp"
+#include "ServiceImpl.hpp"
 #include <cmath>
 #include <cstdint> // FIX: Added for uint32_t
 #include <iostream>
@@ -103,26 +101,7 @@ void QubitEngineServiceImpl::serializeState(
   response->set_server_id(id_str);
 }
 
-// Factory Helper
-std::unique_ptr<IQuantumBackend>
-createBackend(qubit_engine::CircuitRequest::ExecutionBackend type,
-              int num_qubits) {
-  switch (type) {
-  case qubit_engine::CircuitRequest::MOCK_HARDWARE:
-    std::cout << "Using Mock Hardware Backend" << std::endl;
-    return std::make_unique<MockHardwareBackend>(num_qubits);
-#include "backends/CloudBackend.hpp"
-
-    // ... inside switch ...
-  case qubit_engine::CircuitRequest::REAL_IBM_Q:
-    std::cout << "Using Cloud Quantum Backend" << std::endl;
-    return std::make_unique<CloudBackend>(num_qubits);
-  case qubit_engine::CircuitRequest::SIMULATOR:
-  default:
-    std::cout << "Using Local Simulator Backend" << std::endl;
-    return std::make_unique<SimulatorBackend>(num_qubits);
-  }
-}
+// Factory Helper Removed - Access via QuantumRegister directly
 
 grpc::Status
 QubitEngineServiceImpl::RunCircuit(grpc::ServerContext *context,
@@ -139,29 +118,32 @@ QubitEngineServiceImpl::RunCircuit(grpc::ServerContext *context,
                         "Qubits must be between 1 and 30");
   }
 
-  // 2. DYNAMIC MEMORY CHECK (Only for Simulator really, but good safety)
+  // 2. DYNAMIC MEMORY CHECK
   if (!hasEnoughMemory(n)) {
     return grpc::Status(grpc::StatusCode::RESOURCE_EXHAUSTED,
                         "Insufficient Server Memory for " + std::to_string(n) +
                             " qubits.");
   }
 
+  // Check Backend Request
+  if (request->execution_backend() != qubit_engine::CircuitRequest::SIMULATOR) {
+    std::cout << "Warning: Requested backend " << request->execution_backend()
+              << " but currently defaulting to Local CPU Simulator."
+              << std::endl;
+    // Future: Pass backend type to QuantumRegister constructor
+  }
+
   try {
-    // Instantiate Backend
-    auto backend = createBackend(request->execution_backend(), n);
+    // Instantiate Register (Frontend)
+    QuantumRegister qreg(n);
 
     // Apply Gates
     for (const auto &op : request->operations()) {
-      try {
-        backend->applyGate(op);
-      } catch (const std::exception &e) {
-        // If backend fails on a gate (e.g. out of bounds)
-        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, e.what());
-      }
+      applyGate(qreg, op, response);
     }
 
-    // Get Result
-    backend->getResult(response);
+    // Serialize Result
+    serializeState(qreg, response);
 
   } catch (const std::exception &e) {
     return grpc::Status(grpc::StatusCode::INTERNAL,
