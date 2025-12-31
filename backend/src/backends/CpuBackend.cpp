@@ -2,7 +2,9 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 #include <random>
 #include <vector>
 
@@ -99,12 +101,16 @@ void CpuBackend::applyHadamard(size_t target) {
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
     if (is_one) {
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
       for (size_t i = 0; i < local_dim; ++i) {
         state[i] = (recv_buf[i] - state[i]) * INV_SQRT_2;
       }
     } else {
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
       for (size_t i = 0; i < local_dim; ++i) {
         state[i] = (state[i] + recv_buf[i]) * INV_SQRT_2;
       }
@@ -162,7 +168,9 @@ void CpuBackend::applyY(size_t target) {
   size_t local_dim = state.size();
   size_t stride = 1ULL << target;
   if (stride < local_dim) {
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
         Complex a = state[j];
@@ -181,11 +189,15 @@ void CpuBackend::applyY(size_t target) {
                  recv_buf.data(), local_dim * 2, MPI_DOUBLE, partner, 0,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     if (is_one) {
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
       for (size_t i = 0; i < local_dim; ++i)
         state[i] = i_unit * recv_buf[i];
     } else {
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
       for (size_t i = 0; i < local_dim; ++i)
         state[i] = -i_unit * recv_buf[i];
     }
@@ -199,7 +211,9 @@ void CpuBackend::applyZ(size_t target) {
   size_t local_dim = state.size();
   size_t stride = 1ULL << target;
   if (stride < local_dim) {
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j)
         state[j + stride] *= -1.0;
@@ -208,7 +222,9 @@ void CpuBackend::applyZ(size_t target) {
 #ifdef MPI_ENABLED
     size_t rank_bit = stride / local_dim;
     if (local_rank & rank_bit) {
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
       for (size_t i = 0; i < local_dim; ++i)
         state[i] *= -1.0;
     }
@@ -232,7 +248,9 @@ void CpuBackend::applyCNOT(size_t control, size_t target) {
   bool t_is_global = (t_stride >= local_dim);
 
   if (!c_is_global && !t_is_global) {
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
     for (size_t i = 0; i < local_dim; ++i) {
       if ((i & c_stride)) {
         size_t partner = i ^ t_stride;
@@ -273,7 +291,9 @@ void CpuBackend::applyCNOT(size_t control, size_t target) {
     MPI_Sendrecv(state.data(), local_dim * 2, MPI_DOUBLE, partner, 0,
                  recv_buf.data(), local_dim * 2, MPI_DOUBLE, partner, 0,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
     for (size_t i = 0; i < local_dim; ++i) {
       if (i & c_stride) {
         state[i] = recv_buf[i];
@@ -299,7 +319,9 @@ void CpuBackend::applyToffoli(size_t c1, size_t c2, size_t t) {
 
   // Assuming local for MVP
   if (t_s < local_dim && c1_s < local_dim && c2_s < local_dim) {
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
     for (size_t i = 0; i < local_dim; ++i) {
       if ((i & c1_s) && (i & c2_s) && !(i & t_s)) {
         std::swap(state[i], state[i + t_s]);
@@ -314,7 +336,9 @@ void CpuBackend::applyPhaseS(size_t target) {
   Complex i_unit(0, 1);
 
   if (stride < local_dim) {
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
         state[j + stride] *= i_unit;
@@ -329,7 +353,9 @@ void CpuBackend::applyPhaseT(size_t target) {
   Complex phase(1.0 / std::sqrt(2.0), 1.0 / std::sqrt(2.0));
 
   if (stride < local_dim) {
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
         state[j + stride] *= phase;
@@ -346,7 +372,9 @@ void CpuBackend::applyRotationY(size_t target, double angle) {
   double s = std::sin(angle / 2.0);
 
   if (stride < local_dim) {
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
         Complex a = state[j];
@@ -366,7 +394,9 @@ void CpuBackend::applyRotationZ(size_t target, double angle) {
   Complex z1(std::cos(angle / 2.0), std::sin(angle / 2.0));
 
   if (stride < local_dim) {
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
         state[j] *= z0;

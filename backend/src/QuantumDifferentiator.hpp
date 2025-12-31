@@ -8,6 +8,11 @@
 #include <iostream>
 #include <vector>
 
+// Fallback for M_PI if not defined (Windows compatibility)
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 #ifdef MPI_ENABLED
 #include <mpi.h>
 #endif

@@ -1,6 +1,5 @@
 #include "ServiceImpl.hpp"
 #include "QuantumRegister.hpp"
-#include "ServiceImpl.hpp"
 #include <cmath>
 #include <cstdint> // FIX: Added for uint32_t
 #include <iostream>
