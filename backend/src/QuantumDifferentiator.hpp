@@ -2,6 +2,7 @@
 
 #include "MolecularHamiltonian.hpp"
 #include "QuantumRegister.hpp"
+#define _USE_MATH_DEFINES
 #include <cmath>
 #include <functional>
 #include <iostream>

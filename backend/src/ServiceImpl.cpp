@@ -4,8 +4,14 @@
 #include <cmath>
 #include <cstdint> // FIX: Added for uint32_t
 #include <iostream>
+#ifdef __linux__
 #include <sys/sysinfo.h>
+#endif
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <unistd.h> // For gethostname
+#endif
 
 using grpc::ServerContext;
 using grpc::Status;
@@ -14,7 +20,9 @@ using qubit_engine::GateOperation;
 using qubit_engine::StateResponse;
 
 // HELPER: Check if the server has enough free RAM for the requested qubits
+// HELPER: Check if the server has enough free RAM for the requested qubits
 bool hasEnoughMemory(int num_qubits) {
+#ifdef __linux__
   struct sysinfo memInfo;
   sysinfo(&memInfo);
 
@@ -29,6 +37,12 @@ bool hasEnoughMemory(int num_qubits) {
   size_t overhead = required_bytes / 20;
 
   return available_ram > (required_bytes + overhead);
+#elif defined(_WIN32)
+  return true; // Assume enough memory on Windows for now (or use
+               // GlobalMemoryStatusEx)
+#else
+  return true; // Default for Mac/Other
+#endif
 }
 
 // Helper to map GateOperation to QuantumRegister calls
