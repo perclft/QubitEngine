@@ -55,8 +55,8 @@ jobs:
 
       - name: Run Tests
         run: |
-          find build/vcpkg_installed -name "*.so*"
-          export LD_LIBRARY_PATH=$PWD/build/vcpkg_installed/x64-linux/lib:$LD_LIBRARY_PATH
+          ls -l bin
+          export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/build/vcpkg_installed/x64-linux/lib:$LD_LIBRARY_PATH
           cd build
           ctest --output-on-failure
 
@@ -98,6 +98,8 @@ jobs:
 
       - name: Run Tests
         run: |
+          ls -l bin
+          export DYLD_LIBRARY_PATH=$GITHUB_WORKSPACE/build/vcpkg_installed/x64-osx/lib:$DYLD_LIBRARY_PATH
           cd build
           ctest --output-on-failure
 
@@ -143,7 +145,8 @@ jobs:
       - name: Test
         run: |
           Get-ChildItem -Recurse build\vcpkg_installed | Where-Object { $_.Name -like "*.dll" } | Select-Object FullName
-          $env:PATH = "$env:GITHUB_WORKSPACE\backend\build\vcpkg_installed\x64-windows\bin;$env:PATH"
+          $env:PATH = "$env:GITHUB_WORKSPACE\build\vcpkg_installed\x64-windows\bin;$env:PATH"
           Write-Host "PATH is: $env:PATH"
+          dir bin
           cd build
           ctest -C Release --output-on-failure
