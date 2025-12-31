@@ -118,6 +118,11 @@ jobs:
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Ninja
+        run: choco install ninja
+
       - name: Install MS-MPI
         run: |
           choco install msmpi
@@ -132,7 +137,7 @@ jobs:
 
       - name: Configure CMake
         run: |
-          cmake -S backend -B build `
+          cmake -S backend -B build -G Ninja `
             -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE\vcpkg\scripts\buildsystems\vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET=x64-windows `
             -DCMAKE_BUILD_TYPE=Release `
@@ -140,7 +145,7 @@ jobs:
             -DMPI_ENABLED=OFF
 
       - name: Build
-        run: cmake --build build --config Release
+        run: cmake --build build
 
       - name: Test
         run: |
@@ -149,4 +154,4 @@ jobs:
           Write-Host "PATH is: $env:PATH"
           dir bin
           cd build
-          ctest -C Release --output-on-failure
+          ctest --output-on-failure
