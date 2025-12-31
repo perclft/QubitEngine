@@ -123,10 +123,6 @@ jobs:
       - name: Install Ninja
         run: choco install ninja
 
-      - name: Install MS-MPI
-        run: |
-          choco install msmpi
-
       - name: Setup VCPKG
         run: |
           git clone https://github.com/microsoft/vcpkg.git
