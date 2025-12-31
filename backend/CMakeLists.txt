@@ -7,6 +7,11 @@ find_package(gRPC REQUIRED)
 find_package(Protobuf REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
+
+# --- Build Output ---
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
+
 option(MPI_ENABLED "Enable MPI Distributed Computing" OFF)
 if(MPI_ENABLED)
     find_package(MPI REQUIRED)
@@ -244,7 +249,7 @@ endif()
 enable_testing()
 find_package(GTest CONFIG REQUIRED)
 
-add_executable(tests tests/QuantumTests.cpp)
+add_executable(tests tests/QuantumTests.cpp tests/ServiceTests.cpp)
 
 # Link QubitEngine sources (excluding main.cpp) to tests or link object lib?
 # Easiest is to add sources to tests executable for now, or make a library.
@@ -312,7 +317,7 @@ if(MPI_FOUND)
     target_sources(mpi_test PRIVATE
         src/QuantumRegister.cpp
         src/backends/CpuBackend.cpp
-        ${PROTO_SRC_GENERATED_CPP}
+            ${PROTO_SRC_GENERATED_CPP}
         ${GRPC_SRC_GENERATED_CPP}
     )
     target_include_directories(mpi_test PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})

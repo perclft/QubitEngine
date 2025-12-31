@@ -1,6 +1,7 @@
 # C++ Build Artifacts
 backend/build/
 backend/build_mpi/
+backend/build_ci_debug/
 backend/vcpkg_installed/
 backend/src/generated/
 *.o
@@ -8,6 +9,12 @@ backend/src/generated/
 *.so
 *.dylib
 *.dll
+
+# Root Build Artifacts
+build/
+bin/
+__pycache__/
+*.pyc
 
 # Go Build Artifacts
 cli/bin/

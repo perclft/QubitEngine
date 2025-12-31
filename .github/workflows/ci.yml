@@ -27,12 +27,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libopenmpi-dev ninja-build
 
-          sudo apt-get install -y libopenmpi-dev
-
       - name: Setup VCPKG
         run: |
           git clone https://github.com/microsoft/vcpkg.git
           ./vcpkg/bootstrap-vcpkg.sh
+
+      - name: Upload VCPKG Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: vcpkg-logs
+          path: build/vcpkg_installed/vcpkg/blds/**/*.log
 
       - name: Configure CMake
         run: |
@@ -43,7 +48,7 @@ jobs:
             -DENABLE_CUDA=OFF
 
       - name: Build
-        run: cmake --build build -- -j4
+        run: cmake --build build -- -j2
 
       - name: Run Tests
         run: |

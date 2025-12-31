@@ -219,9 +219,11 @@ void CpuBackend::applyZ(size_t target) {
 }
 
 void CpuBackend::applyCNOT(size_t control, size_t target) {
-  size_t local_dim = state.size();
   if (control == target)
-    return;
+    throw std::invalid_argument(
+        "Control and Target qubits cannot be the same.");
+
+  size_t local_dim = state.size();
 
   size_t c_stride = 1ULL << control;
   size_t t_stride = 1ULL << target;
