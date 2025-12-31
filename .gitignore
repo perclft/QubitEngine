@@ -26,3 +26,7 @@ cli/qctl
 *.swp
 .DS_Store
 .env
+
+# Local Setup
+vcpkg/
+*.log

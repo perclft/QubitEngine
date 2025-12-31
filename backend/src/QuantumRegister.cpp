@@ -2,14 +2,29 @@
 #include "backends/CpuBackend.hpp"
 #include "backends/MetalBackend.hpp" // Added for MetalBackend
 #include <iostream>
+#include <fstream>
 
 // --- Lifecycle ---
 QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
   // Factory Logic
 #ifdef __APPLE__
-  // Default to Metal on Mac
-  backend = std::make_unique<qubit_engine::MetalBackend>(n);
-  std::cout << "QuantumRegister: Using MetalBackend (GPU)" << std::endl;
+  // Check if Metal shaders are available before using Metal backend
+  bool metalAvailable = false;
+  if (!force_local) {
+    // Check for metallib file in current directory or common locations
+    std::ifstream metallib("default.metallib");
+    if (metallib.good()) {
+      metalAvailable = true;
+    }
+  }
+  
+  if (metalAvailable) {
+    backend = std::make_unique<qubit_engine::MetalBackend>(n);
+    std::cout << "QuantumRegister: Using MetalBackend (GPU)" << std::endl;
+  } else {
+    backend = std::make_unique<qubit_engine::CpuBackend>(n, force_local);
+    std::cout << "QuantumRegister: Using CpuBackend (Metal shaders not available)" << std::endl;
+  }
 #else
   // Default to CPU on Linux/Windows for now
   backend = std::make_unique<qubit_engine::CpuBackend>(n, force_local);

@@ -19,6 +19,12 @@
 #include <immintrin.h>
 #endif
 
+// ARM NEON intrinsics - available on ARM64 (Apple Silicon M-series)
+#if defined(__aarch64__) || defined(__arm64__)
+#define USE_NEON_INTRINSICS
+#include <arm_neon.h>
+#endif
+
 namespace qubit_engine {
 
 static const double INV_SQRT_2 = 1.0 / std::sqrt(2.0);
@@ -58,7 +64,35 @@ void CpuBackend::applyHadamard(size_t target) {
   size_t stride = 1ULL << target;
 
   if (stride < local_dim) {
-#if defined(USE_AVX2_INTRINSICS) && defined(__AVX2__)
+#if defined(USE_NEON_INTRINSICS)
+    // ARM NEON implementation for Apple Silicon
+    float64x2_t v_inv_sqrt2 = vdupq_n_f64(INV_SQRT_2);
+
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+    for (size_t i = 0; i < local_dim; i += 2 * stride) {
+      for (size_t j = i; j < i + stride; ++j) {
+        // Load complex numbers (each is 2 doubles: real, imag)
+        double *ptr_a = reinterpret_cast<double *>(&state[j]);
+        double *ptr_b = reinterpret_cast<double *>(&state[j + stride]);
+
+        float64x2_t v_a = vld1q_f64(ptr_a); // Load complex a
+        float64x2_t v_b = vld1q_f64(ptr_b); // Load complex b
+
+        // (a + b) * inv_sqrt2
+        float64x2_t v_sum = vaddq_f64(v_a, v_b);
+        v_sum = vmulq_f64(v_sum, v_inv_sqrt2);
+
+        // (a - b) * inv_sqrt2
+        float64x2_t v_diff = vsubq_f64(v_a, v_b);
+        v_diff = vmulq_f64(v_diff, v_inv_sqrt2);
+
+        vst1q_f64(ptr_a, v_sum);
+        vst1q_f64(ptr_b, v_diff);
+      }
+    }
+#elif defined(USE_AVX2_INTRINSICS) && defined(__AVX2__)
     __m256d v_inv_sqrt2 = _mm256_set1_pd(INV_SQRT_2);
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       size_t j = i;
@@ -86,6 +120,10 @@ void CpuBackend::applyHadamard(size_t target) {
       }
     }
 #else
+    // Scalar fallback with OpenMP
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j) {
         Complex a = state[j];

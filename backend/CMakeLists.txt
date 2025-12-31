@@ -22,6 +22,18 @@ if(MPI_ENABLED)
     endif()
 endif()
 
+# --- OpenMP (Multi-threading) ---
+option(ENABLE_OPENMP "Enable OpenMP Multi-threading" ON)
+if(ENABLE_OPENMP)
+    find_package(OpenMP)
+    if(OpenMP_CXX_FOUND)
+        message(STATUS "OpenMP found. Multi-threading enabled.")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    else()
+        message(STATUS "OpenMP not found. Multi-threading disabled.")
+    endif()
+endif()
+
 find_package(prometheus-cpp CONFIG REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
 find_package(gflags CONFIG REQUIRED)
@@ -50,18 +62,24 @@ if(APPLE)
     find_library(METAL_LIB Metal)
     find_library(FOUNDATION_LIB Foundation)
     
-    # Metal Shader Compilation
-    set(METAL_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders.metal)
-    set(METAL_LIB_OUT ${CMAKE_CURRENT_BINARY_DIR}/default.metallib)
+    option(SKIP_METAL_SHADERS "Skip Metal shader compilation (use precompiled or fallback)" OFF)
     
-    add_custom_command(
-        OUTPUT ${METAL_LIB_OUT}
-        COMMAND xcrun -sdk macosx metal -c ${METAL_SRC} -o ${CMAKE_CURRENT_BINARY_DIR}/shaders.air
-        COMMAND xcrun -sdk macosx metallib ${CMAKE_CURRENT_BINARY_DIR}/shaders.air -o ${METAL_LIB_OUT}
-        DEPENDS ${METAL_SRC}
-        COMMENT "Compiling Metal Shaders"
-    )
-    add_custom_target(CompileMetal ALL DEPENDS ${METAL_LIB_OUT})
+    if(NOT SKIP_METAL_SHADERS)
+        # Metal Shader Compilation
+        set(METAL_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders.metal)
+        set(METAL_LIB_OUT ${CMAKE_CURRENT_BINARY_DIR}/default.metallib)
+        
+        add_custom_command(
+            OUTPUT ${METAL_LIB_OUT}
+            COMMAND xcrun -sdk macosx metal -c ${METAL_SRC} -o ${CMAKE_CURRENT_BINARY_DIR}/shaders.air
+            COMMAND xcrun -sdk macosx metallib ${CMAKE_CURRENT_BINARY_DIR}/shaders.air -o ${METAL_LIB_OUT}
+            DEPENDS ${METAL_SRC}
+            COMMENT "Compiling Metal Shaders"
+        )
+        add_custom_target(CompileMetal ALL DEPENDS ${METAL_LIB_OUT})
+    else()
+        message(STATUS "Skipping Metal shader compilation (SKIP_METAL_SHADERS=ON)")
+    endif()
     
     add_compile_definitions(ENABLE_METAL)
     set(METAL_SOURCES src/backends/MetalBackend.mm)
@@ -204,7 +222,13 @@ target_link_libraries(qubit_engine
     $<$<BOOL:${UNIX}>:dl>
     prometheus-cpp::pull
     prometheus-cpp::core
+    $<$<PLATFORM_ID:Darwin>:${METAL_LIB}>
+    $<$<PLATFORM_ID:Darwin>:${FOUNDATION_LIB}>
 )
+
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(qubit_engine PRIVATE OpenMP::OpenMP_CXX)
+endif()
 
 if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
    target_link_libraries(qubit_engine PRIVATE CUDA::cudart)
@@ -231,9 +255,17 @@ if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
     target_link_libraries(qubit_engine_module PRIVATE CUDA::cudart)
 endif()
 
+if(APPLE)
+    target_link_libraries(qubit_engine_module PRIVATE ${METAL_LIB} ${FOUNDATION_LIB})
+endif()
+
 # Ensure MPI if needed
 if(MPI_FOUND)
     target_link_libraries(qubit_engine_module PRIVATE MPI::MPI_CXX)
+endif()
+
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(qubit_engine_module PRIVATE OpenMP::OpenMP_CXX)
 endif()
 
 # --- Testing ---
@@ -270,10 +302,16 @@ target_link_libraries(tests PRIVATE
     $<$<BOOL:${UNIX}>:dl>
     prometheus-cpp::pull
     prometheus-cpp::core
+    $<$<PLATFORM_ID:Darwin>:${METAL_LIB}>
+    $<$<PLATFORM_ID:Darwin>:${FOUNDATION_LIB}>
 )
 
 if(MPI_FOUND)
     target_link_libraries(tests PRIVATE MPI::MPI_CXX)
+endif()
+
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(tests PRIVATE OpenMP::OpenMP_CXX)
 endif()
 
 add_test(NAME CoreTests COMMAND tests)
@@ -282,6 +320,7 @@ add_executable(benchmark tests/Benchmark.cpp)
 target_sources(benchmark PRIVATE
     src/QuantumRegister.cpp
     src/backends/CpuBackend.cpp
+    ${METAL_SOURCES}
     src/ServiceImpl.cpp
     src/ServiceImpl_Visualize.cpp
     ${PROTO_SRC_GENERATED_CPP}
@@ -297,9 +336,15 @@ target_link_libraries(benchmark PRIVATE
     $<$<BOOL:${UNIX}>:dl>
     prometheus-cpp::pull
     prometheus-cpp::core
+    $<$<PLATFORM_ID:Darwin>:${METAL_LIB}>
+    $<$<PLATFORM_ID:Darwin>:${FOUNDATION_LIB}>
 )
 if(MPI_FOUND)
     target_link_libraries(benchmark PRIVATE MPI::MPI_CXX)
+endif()
+
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(benchmark PRIVATE OpenMP::OpenMP_CXX)
 endif()
 
 # --- MPI Verification Executable ---
