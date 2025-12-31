@@ -2,83 +2,126 @@ name: CI
 
 on:
   push:
-    branches: [ "main", "feature/*" ]
+    branches: [main, feature/*]
   pull_request:
-    branches: [ "main" ]
+    branches: [main]
 
 jobs:
   build-linux:
     runs-on: ubuntu-latest
+    env:
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-    - name: Install System Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake ninja-build libopenmpi-dev openmpi-bin libssl-dev protobuf-compiler
+      - name: Export GitHub Actions Cache Variables
+        uses: actions/github-script@v6
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
-    - name: Configure CMake (Linux)
-      run: |
-        cmake -S backend -B build \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DMPI_ENABLED=ON \
-          -DENABLE_CUDA=OFF 
+      - name: Install System Dependencies (MPI)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libopenmpi-dev ninja-build
 
-    - name: Build
-      run: cmake --build build --config Release -j4
+      - name: Setup VCPKG
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.sh
 
-    - name: Test
-      run: |
-        cd build
-        ctest -C Release --output-on-failure
+      - name: Configure CMake
+        run: |
+          cmake -S backend -B build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DMPI_ENABLED=ON
 
-  build-macos:
+      - name: Build
+        run: cmake --build build
+
+      - name: Run Tests
+        run: |
+          cd build
+          ctest --output-on-failure
+
+  build-mac:
     runs-on: macos-latest
+    env:
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-    - name: Install Dependencies
-      run: |
-        brew install cmake ninja protobuf openssl
+      - name: Export GitHub Actions Cache Variables
+        uses: actions/github-script@v6
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
-    - name: Configure CMake (Mac)
-      run: |
-        cmake -S backend -B build \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DMPI_ENABLED=OFF \
-          -DENABLE_CUDA=OFF
+      - name: Install build tools
+        run: brew install ninja cmake
 
-    - name: Build
-      run: cmake --build build --config Release -j4
+      - name: Setup VCPKG
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.sh
 
-    - name: Test
-      run: |
-        cd build
-        ctest -C Release --output-on-failure
-        
+      - name: Configure CMake
+        run: |
+          cmake -S backend -B build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DMPI_ENABLED=OFF
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run Tests
+        run: |
+          cd build
+          ctest --output-on-failure
+
   build-windows:
     runs-on: windows-latest
+    env:
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-    - name: Setup VCPKG
-      run: |
-        git clone https://github.com/microsoft/vcpkg.git
-        .\vcpkg\bootstrap-vcpkg.bat
+      - name: Export GitHub Actions Cache Variables
+        uses: actions/github-script@v6
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
-    - name: Configure CMake (Windows)
-      run: |
-        cmake -S backend -B build `
-          -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake `
-          -DVCPKG_TARGET_TRIPLET=x64-windows `
-          -DCMAKE_BUILD_TYPE=Release `
-          -DMPI_ENABLED=OFF `
-          -DENABLE_CUDA=OFF
+      - name: Install MS-MPI
+        run: |
+          choco install msmpi
 
-    - name: Build
-      run: cmake --build build --config Release
+      - name: Setup VCPKG
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          .\vcpkg\bootstrap-vcpkg.bat
 
-    - name: Test
-      run: |
-        cd build
-        ctest -C Release --output-on-failure
+      - name: Configure CMake
+        run: |
+          cmake -S backend -B build `
+            -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake `
+            -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DENABLE_CUDA=OFF `
+            -DMPI_ENABLED=OFF
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test
+        run: |
+          cd build
+          ctest -C Release --output-on-failure
