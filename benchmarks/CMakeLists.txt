@@ -4,9 +4,30 @@ project(Benchmarks)
 set(CMAKE_CXX_STANDARD 17)
 
 # --- Dependencies ---
-find_package(benchmark REQUIRED)
+include(FetchContent)
+set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
+set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+  googlebenchmark
+  GIT_REPOSITORY https://github.com/google/benchmark.git
+  GIT_TAG v1.8.3
+)
+FetchContent_MakeAvailable(googlebenchmark)
+
 find_package(OpenMP)
 find_package(Threads REQUIRED)
+
+# --- Metal (MacOS) ---
+if(APPLE)
+    enable_language(OBJCXX)
+    find_library(METAL_LIB Metal REQUIRED)
+    find_library(FOUNDATION_LIB Foundation REQUIRED)
+    set(METAL_SOURCES ../backend/src/backends/MetalBackend.mm)
+    add_compile_definitions(ENABLE_METAL)
+else()
+    set(METAL_SOURCES "")
+endif()
 
 # --- Hardware Acceleration (Copy from Backend) ---
 option(ENABLE_HW_ACCEL "Enable Hardware Acceleration (AVX2/NEON)" ON)
@@ -30,29 +51,36 @@ endif()
 include_directories(${CMAKE_SOURCE_DIR}/../backend/src)
 
 # --- Define Dependencies ---
-# Since backend is not a library, we compile the necessary sources directly.
 set(BACKEND_SOURCES
     ../backend/src/QuantumRegister.cpp
     ../backend/src/backends/CpuBackend.cpp
-    # Add dummy/empty GPU backend or exclude ENABLE_CUDA if possible to avoid linking CUDA
-    ../backend/src/backends/GPUQuantumRegister.cpp 
+    ../backend/src/backends/GPUQuantumRegister.cpp
+    ${METAL_SOURCES}
 )
 
-# Mocking or Handling Missing Symbols if any
-# (e.g., if CpuBackend depends on generated protobufs, we might fail. 
-# Checking CpuBackend.cpp usage... it uses "CpuBackend.hpp", "QuantumRegister.hpp")
-# It seems decoupled from ServiceImpl (gRPC).
-
+# Benchmark executables
 add_executable(memory_benchmark MemoryWallBenchmark.cpp ${BACKEND_SOURCES})
-
 target_link_libraries(memory_benchmark
     PRIVATE
     benchmark::benchmark
     Threads::Threads
 )
 
+add_executable(antigravity_memory_benchmark AntigravityMemoryBenchmark.cpp ${BACKEND_SOURCES})
+target_link_libraries(antigravity_memory_benchmark
+    PRIVATE
+    benchmark::benchmark
+    Threads::Threads
+)
+
+if(APPLE)
+    target_link_libraries(memory_benchmark PRIVATE ${METAL_LIB} ${FOUNDATION_LIB})
+    target_link_libraries(antigravity_memory_benchmark PRIVATE ${METAL_LIB} ${FOUNDATION_LIB})
+endif()
+
 if(OpenMP_CXX_FOUND)
     target_link_libraries(memory_benchmark PRIVATE OpenMP::OpenMP_CXX)
+    target_link_libraries(antigravity_memory_benchmark PRIVATE OpenMP::OpenMP_CXX)
 endif()
 
 # MPI stub if valid
@@ -60,5 +88,6 @@ option(MPI_ENABLED "Enable MPI" OFF)
 if(MPI_ENABLED)
     find_package(MPI REQUIRED)
     target_link_libraries(memory_benchmark PRIVATE MPI::MPI_CXX)
+    target_link_libraries(antigravity_memory_benchmark PRIVATE MPI::MPI_CXX)
     add_compile_definitions(MPI_ENABLED)
 endif()
