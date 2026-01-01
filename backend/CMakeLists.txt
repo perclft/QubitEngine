@@ -59,9 +59,15 @@ if(ENABLE_HW_ACCEL)
     endif()
 endif()
 
-find_package(prometheus-cpp CONFIG REQUIRED)
+option(ENABLE_PROMETHEUS "Enable Prometheus Metrics" ON)
+if(ENABLE_PROMETHEUS)
+    find_package(prometheus-cpp CONFIG)
+    if(NOT prometheus-cpp_FOUND)
+        message(WARNING "prometheus-cpp not found. Disabling metrics.")
+        set(ENABLE_PROMETHEUS OFF)
+    endif()
+endif()
 find_package(pybind11 CONFIG REQUIRED)
-find_package(gflags CONFIG REQUIRED)
 find_package(gflags CONFIG REQUIRED)
 find_package(glog CONFIG REQUIRED)
 
@@ -239,14 +245,14 @@ target_link_libraries(qubit_engine
     gRPC::gpr
     gRPC::grpc++_reflection
     protobuf::libprotobuf 
-    gflags::gflags
+    gflags
     glog::glog 
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
     $<$<BOOL:${UNIX}>:dl>
-    prometheus-cpp::pull
-    prometheus-cpp::core
+    $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
+    $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
     $<$<PLATFORM_ID:Darwin>:${METAL_LIB}>
     $<$<PLATFORM_ID:Darwin>:${FOUNDATION_LIB}>
 )
@@ -325,8 +331,8 @@ target_link_libraries(tests PRIVATE
     OpenSSL::Crypto
     Threads::Threads
     $<$<BOOL:${UNIX}>:dl>
-    prometheus-cpp::pull
-    prometheus-cpp::core
+    $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
+    $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
     $<$<PLATFORM_ID:Darwin>:${METAL_LIB}>
     $<$<PLATFORM_ID:Darwin>:${FOUNDATION_LIB}>
 )
@@ -359,8 +365,8 @@ target_link_libraries(benchmark PRIVATE
     OpenSSL::Crypto
     Threads::Threads
     $<$<BOOL:${UNIX}>:dl>
-    prometheus-cpp::pull
-    prometheus-cpp::core
+    $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
+    $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
     $<$<PLATFORM_ID:Darwin>:${METAL_LIB}>
     $<$<PLATFORM_ID:Darwin>:${FOUNDATION_LIB}>
 )

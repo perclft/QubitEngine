@@ -43,3 +43,23 @@ The following benchmarks measured the effective memory bandwidth during the appl
 1. **Cache Resident (20 Qubits)**: At 16 MB, the state vector likely fits partially or entirely within the L3 cache of the processor (depending on the specific SKU), resulting in the highest observed bandwidth (~8.56 GB/s).
 2. **Memory Bound (22+ Qubits)**: As the state vector grows to 64 MB and beyond, it exceeds cache capacity. The performance drops to ~7.2 GB/s and stabilizes around ~6.6-6.8 GB/s. This plateau represents the effective main memory bandwidth available to the single-threaded AVX2 kernel.
 3. **Conclusion**: The `applyHadamard` operation is memory-bandwidth bound for N >= 22. Further optimizations would require multi-threading (OpenMP) to saturate the memory bus, as a single core cannot typically utilize full DDR bandwidth.
+
+## Antigravity Local Benchmark (Arch Linux)
+
+**Date:** 2025-12-31
+**Environment:** Arch Linux (GCC 15)
+**Optimization:** AVX2 Enabled (Single-threaded path)
+**Backend:** CpuBackend (Double Precision)
+
+| Qubits | State Vector Size | Time (ms) | effective Bandwidth (GB/s) |
+|:-------|:------------------|:----------|:---------------------------|
+| 20     | 16 MB             | 22.45     | **1.39**                   |
+| 22     | 64 MB             | 85.39     | **1.46**                   |
+| 24     | 256 MB            | 336.47    | **1.48**                   |
+| 26     | 1024 MB           | 1352.29   | **1.48**                   |
+
+### Analysis
+
+1. **Memory Bound Stability**: The effective bandwidth stabilizes around 1.48 GB/s for state vectors larger than 64 MB. This represents the peak throughput of the single-threaded AVX2 implementation on this specific hardware.
+2. **Comparison to Apple Silicon**: While the peak bandwidth is lower than the M3's unified memory (~22 GB/s), it remains consistent as the state vector grows to 1 GB, showing less drastic "wall" effects compared to the M3's 4GB drop-off (down to 5.2 GB/s).
+3. **Optimization Path**: Enabling OpenMP for the AVX2 path in `CpuBackend.cpp` should significantly increase these numbers by leveraging multiple memory controllers.
