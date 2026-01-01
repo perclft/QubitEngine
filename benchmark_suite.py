@@ -140,6 +140,20 @@ def main():
     print_separator()
     print()
     
+    # Simple MPI rank check
+    rank = 0
+    try:
+        from mpi4py import MPI
+        rank = MPI.COMM_WORLD.Get_rank()
+    except ImportError:
+        # Fallback to checking environment variables if mpi4py not installed
+        rank = int(os.environ.get('OMPI_COMM_WORLD_RANK', os.environ.get('PMI_RANK', '0')))
+
+    if rank != 0:
+        # Suppress output for other ranks
+        sys.stdout = open(os.devnull, 'w')
+        sys.stderr = open(os.devnull, 'w')
+
     # Test scaling with qubit count
     print("# SCALING TEST: State Vector Size vs Performance")
     print("-" * 80)
