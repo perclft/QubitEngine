@@ -20,7 +20,7 @@ The following benchmarks measured the effective memory bandwidth during the appl
 
 ### Windows Scaling Note
 
-*(Note: Time for 25 qubits is normalized per iteration, total runtime was longer)*
+Note: Time for 25 qubits is normalized per iteration, total runtime was longer.
 
 ### Baseline Conclusion
 
