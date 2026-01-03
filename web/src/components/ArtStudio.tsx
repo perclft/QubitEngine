@@ -195,7 +195,7 @@ export function ArtStudio({ onBack }: ArtStudioProps) {
                                 type="range"
                                 className="art-slider"
                                 min="0"
-                                max="0.5"
+                                max="1.0"
                                 step="0.01"
                                 value={entropy}
                                 onChange={(e) => setEntropy(parseFloat(e.target.value))}
