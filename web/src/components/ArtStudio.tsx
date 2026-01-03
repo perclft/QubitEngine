@@ -7,10 +7,11 @@ import { QuantumAudio } from './QuantumAudio';
 import { ChaosDice } from './art/ChaosDice';
 import { MatterSculpt } from './art/MatterSculpt';
 import { SoundWaves } from './art/SoundWaves';
+import { QuantumSwamp } from './art/QuantumSwamp';
 import './ArtStudio.css';
 
 // Art mode definitions
-type ArtMode = 'chaos' | 'matter' | 'sound' | 'classic';
+type ArtMode = 'chaos' | 'matter' | 'sound' | 'classic' | 'swamp';
 
 interface ModeConfig {
     id: ArtMode;
@@ -20,6 +21,7 @@ interface ModeConfig {
 }
 
 const MODES: ModeConfig[] = [
+    { id: 'swamp', name: 'Build Her Swamp', icon: '🌫️', description: 'Procedural quantum biome generation' },
     { id: 'chaos', name: 'Chaos Dice', icon: '🎲', description: 'Quantum random dice with visual bursts' },
     { id: 'matter', name: 'Matter Sculpt', icon: '⚛️', description: 'VQE molecular visualization' },
     { id: 'sound', name: 'Sound Waves', icon: '🎵', description: 'Quantum music as flowing ribbons' },
@@ -36,6 +38,7 @@ export function ArtStudio({ onBack }: ArtStudioProps) {
     const [audioEnabled, setAudioEnabled] = useState(false);
     const [entropy, setEntropy] = useState(0.1);
     const [effectsEnabled, setEffectsEnabled] = useState(true);
+    const [particlesEnabled, setParticlesEnabled] = useState(true);
 
     // Quantum state for visualization
     const [q0State, setQ0State] = useState({ real: 1, imag: 0 });
@@ -119,6 +122,8 @@ export function ArtStudio({ onBack }: ArtStudioProps) {
 
     const renderModeContent = () => {
         switch (activeMode) {
+            case 'swamp':
+                return <QuantumSwamp entropy={entropy} />;
             case 'chaos':
                 return <ChaosDice onRollResult={(val) => console.log('Rolled:', val)} />;
             case 'matter':
@@ -212,6 +217,14 @@ export function ArtStudio({ onBack }: ArtStudioProps) {
                                 onClick={() => setAudioEnabled(!audioEnabled)}
                             />
                         </div>
+
+                        <div className="toggle-container">
+                            <span className="toggle-label">Quantum Particles</span>
+                            <div
+                                className={`toggle-switch ${particlesEnabled ? 'active' : ''}`}
+                                onClick={() => setParticlesEnabled(!particlesEnabled)}
+                            />
+                        </div>
                     </div>
 
                     <div className="panel-section">
@@ -270,7 +283,7 @@ export function ArtStudio({ onBack }: ArtStudioProps) {
             </div>
 
             {/* Generative particle canvas */}
-            <GenerativeCanvas amplitude0={q0State} amplitude1={amplitude1} />
+            {particlesEnabled && <GenerativeCanvas amplitude0={q0State} amplitude1={amplitude1} />}
 
             {/* Audio synthesis */}
             <QuantumAudio amplitude0={q0State} amplitude1={amplitude1} isActive={audioEnabled} />
