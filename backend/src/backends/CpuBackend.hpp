@@ -1,7 +1,7 @@
 #pragma once
 
+#include "../Types.hpp"
 #include "IQuantumBackend.hpp"
-#include <complex>
 #include <vector>
 
 namespace qubit_engine {
@@ -22,11 +22,11 @@ public:
   void applyToffoli(size_t control1, size_t control2, size_t target) override;
   void applyPhaseS(size_t target) override;
   void applyPhaseT(size_t target) override;
-  void applyRotationY(size_t target, double angle) override;
-  void applyRotationZ(size_t target, double angle) override;
+  void applyRotationY(size_t target, Precision angle) override;
+  void applyRotationZ(size_t target, Precision angle) override;
 
   // --- Noise ---
-  void applyDepolarizingNoise(double probability) override;
+  void applyDepolarizingNoise(Precision probability) override;
 
   // --- Measurement ---
   int measure(size_t target) override;
@@ -34,7 +34,7 @@ public:
   double expectationValue(const std::string &pauli_string) override;
 
   // --- State Access ---
-  std::vector<std::complex<double>> getStateVector() const override;
+  std::vector<Complex> getStateVector() const override;
 
   // --- Distributed Helpers ---
   int getRank() const override { return local_rank; }
@@ -42,7 +42,7 @@ public:
 
 private:
   size_t num_qubits;
-  std::vector<std::complex<double>> state;
+  std::vector<Complex> state;
   int local_rank = 0;
   int world_size = 1;
 };

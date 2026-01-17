@@ -8,7 +8,9 @@
 #include <vector>
 
 // Global Type Alias
-using Complex = std::complex<double>;
+// Global Type Alias
+#include "Types.hpp"
+// using Complex = std::complex<double>; // REMOVED
 
 // Forward declaration of backend logic
 namespace qubit_engine {
@@ -29,14 +31,15 @@ public:
   void applyCNOT(size_t control, size_t target);
 
   // --- Advanced Gates ---
+  // --- Advanced Gates ---
   void applyToffoli(size_t control1, size_t control2, size_t target);
   void applyPhaseS(size_t target);
   void applyPhaseT(size_t target);
-  void applyRotationY(size_t target, double angle);
-  void applyRotationZ(size_t target, double angle);
+  void applyRotationY(size_t target, qubit_engine::Precision angle);
+  void applyRotationZ(size_t target, qubit_engine::Precision angle);
 
   // --- Noise Simulation ---
-  void applyDepolarizingNoise(double probability);
+  void applyDepolarizingNoise(qubit_engine::Precision probability);
 
   // --- Measurement & Analysis ---
   int measure(size_t target);
@@ -48,7 +51,7 @@ public:
   int getSize() const;
 
   // --- Debugging ---
-  std::vector<Complex> getStateVector() const;
+  std::vector<qubit_engine::Complex> getStateVector() const;
 
   // --- Recording / Tape Helper ---
   struct RecordedGate {

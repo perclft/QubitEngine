@@ -93,21 +93,24 @@ void QuantumRegister::applyPhaseT(size_t target) {
   backend->applyPhaseT(target);
 }
 
-void QuantumRegister::applyRotationY(size_t target, double angle) {
+void QuantumRegister::applyRotationY(size_t target,
+                                     qubit_engine::Precision angle) {
   if (recording_enabled)
-    tape.push_back({RecordedGate::RY, {target}, {angle}});
+    tape.push_back({RecordedGate::RY, {target}, {(double)angle}});
   backend->applyRotationY(target, angle);
 }
 
-void QuantumRegister::applyRotationZ(size_t target, double angle) {
+void QuantumRegister::applyRotationZ(size_t target,
+                                     qubit_engine::Precision angle) {
   if (recording_enabled)
-    tape.push_back({RecordedGate::RZ, {target}, {angle}});
+    tape.push_back({RecordedGate::RZ, {target}, {(double)angle}});
   backend->applyRotationZ(target, angle);
 }
 
 // --- Noise ---
 
-void QuantumRegister::applyDepolarizingNoise(double probability) {
+void QuantumRegister::applyDepolarizingNoise(
+    qubit_engine::Precision probability) {
   backend->applyDepolarizingNoise(probability);
 }
 
@@ -132,7 +135,7 @@ int QuantumRegister::getRank() const { return backend->getRank(); }
 int QuantumRegister::getSize() const { return backend->getSize(); }
 
 // --- Debugging ---
-std::vector<Complex> QuantumRegister::getStateVector() const {
+std::vector<qubit_engine::Complex> QuantumRegister::getStateVector() const {
   return backend->getStateVector();
 }
 
