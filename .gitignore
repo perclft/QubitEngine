@@ -20,6 +20,12 @@ __pycache__/
 cli/bin/
 cli/qctl
 
+# Service Binaries
+services/scheduler/scheduler
+modules/gaming/gaming
+modules/music/music
+
+
 # IDE/Editor Junk
 .vscode/
 .idea/

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package qubit_engine.gaming;
 
-option go_package = "github.com/perclft/QubitEngine/modules/gaming/generated";
+option go_package = "github.com/perclft/QubitEngine/api/generated";
 
 // ------------------------------------------------------------------
 // Quantum Gaming Service

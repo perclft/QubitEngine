@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package qubit_engine;
 
-option go_package = "github.com/perclft/QubitEngine/services/scheduler/generated";
+option go_package = "github.com/perclft/QubitEngine/api/generated";
 
 import "api/proto/quantum.proto";
 

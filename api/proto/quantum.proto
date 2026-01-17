@@ -3,7 +3,7 @@ syntax = "proto3";
 package qubit_engine;
 
 // Standard options for Go (used in your original file)
-option go_package = "github.com/perclft/QubitEngine/cli/internal/generated";
+option go_package = "github.com/perclft/QubitEngine/api/generated";
 
 // Standard options for C++ (often included for generated headers)
 option cc_enable_arenas = true;

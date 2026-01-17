@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
+	pb "github.com/perclft/QubitEngine/api/generated"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -66,18 +67,12 @@ type Job struct {
 // ------------------------------------------------------------------
 
 type SchedulerServer struct {
+	pb.UnimplementedQuantumSchedulerServer
 	rdb          *redis.Client
 	engineAddr   string
 	mu           sync.RWMutex
-	jobResults   map[string]chan *JobResult
+	jobResults   map[string]chan *pb.JobResult
 	workerCancel map[string]context.CancelFunc
-}
-
-type JobResult struct {
-	JobID        string
-	ShotNumber   int32
-	StateVector  []ComplexNumber
-	Measurements map[int32]bool
 }
 
 type ComplexNumber struct {
@@ -89,7 +84,7 @@ func NewSchedulerServer(rdb *redis.Client, engineAddr string) *SchedulerServer {
 	return &SchedulerServer{
 		rdb:          rdb,
 		engineAddr:   engineAddr,
-		jobResults:   make(map[string]chan *JobResult),
+		jobResults:   make(map[string]chan *pb.JobResult),
 		workerCancel: make(map[string]context.CancelFunc),
 	}
 }
@@ -98,17 +93,17 @@ func NewSchedulerServer(rdb *redis.Client, engineAddr string) *SchedulerServer {
 // SubmitJob - Add job to Redis queue
 // ------------------------------------------------------------------
 
-func (s *SchedulerServer) SubmitJob(ctx context.Context, req *JobRequest) (*JobHandle, error) {
+func (s *SchedulerServer) SubmitJob(ctx context.Context, req *pb.JobRequest) (*pb.JobHandle, error) {
 	jobID := uuid.New().String()
 	now := time.Now().Unix()
 
 	job := &Job{
 		ID:          jobID,
-		UserID:      req.UserID,
+		UserID:      req.UserId,
 		Priority:    JobPriority(req.Priority),
 		State:       StateQueued,
 		Shots:       req.Shots,
-		CallbackURL: req.CallbackURL,
+		CallbackURL: req.CallbackUrl,
 		Metadata:    req.Metadata,
 		SubmittedAt: now,
 	}
@@ -146,8 +141,8 @@ func (s *SchedulerServer) SubmitJob(ctx context.Context, req *JobRequest) (*JobH
 	// Start a background worker to process jobs
 	go s.processNextJob()
 
-	return &JobHandle{
-		JobID:                jobID,
+	return &pb.JobHandle{
+		JobId:                jobID,
 		SubmittedAt:          now,
 		EstimatedWaitSeconds: estimatedWait,
 	}, nil
@@ -157,10 +152,10 @@ func (s *SchedulerServer) SubmitJob(ctx context.Context, req *JobRequest) (*JobH
 // GetJobStatus - Retrieve job status from Redis
 // ------------------------------------------------------------------
 
-func (s *SchedulerServer) GetJobStatus(ctx context.Context, handle *JobHandle) (*JobStatus, error) {
-	jobBytes, err := s.rdb.Get(ctx, "job:"+handle.JobID).Bytes()
+func (s *SchedulerServer) GetJobStatus(ctx context.Context, handle *pb.JobHandle) (*pb.JobStatus, error) {
+	jobBytes, err := s.rdb.Get(ctx, "job:"+handle.JobId).Bytes()
 	if err == redis.Nil {
-		return nil, status.Errorf(codes.NotFound, "job not found: %s", handle.JobID)
+		return nil, status.Errorf(codes.NotFound, "job not found: %s", handle.JobId)
 	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "redis error: %v", err)
@@ -174,17 +169,17 @@ func (s *SchedulerServer) GetJobStatus(ctx context.Context, handle *JobHandle) (
 	// Get queue position if still queued
 	position := int32(0)
 	if job.State == StateQueued {
-		rank, err := s.rdb.ZRank(ctx, "queue:jobs", handle.JobID).Result()
+		rank, err := s.rdb.ZRank(ctx, "queue:jobs", handle.JobId).Result()
 		if err == nil {
 			position = int32(rank) + 1
 		}
 	}
 
-	return &JobStatus{
-		JobID:           job.ID,
-		State:           int32(job.State),
+	return &pb.JobStatus{
+		JobId:           job.ID,
+		State:           pb.JobState(job.State),
 		PositionInQueue: position,
-		WorkerID:        job.WorkerID,
+		WorkerId:        job.WorkerID,
 		StartedAt:       job.StartedAt,
 		CompletedAt:     job.CompletedAt,
 		ErrorMessage:    job.ErrorMessage,
@@ -195,33 +190,37 @@ func (s *SchedulerServer) GetJobStatus(ctx context.Context, handle *JobHandle) (
 // CancelJob - Remove from queue or stop running job
 // ------------------------------------------------------------------
 
-func (s *SchedulerServer) CancelJob(ctx context.Context, handle *JobHandle) (*CancelResponse, error) {
+func (s *SchedulerServer) CancelJob(ctx context.Context, handle *pb.JobHandle) (*pb.CancelResponse, error) {
 	// Try to remove from queue
-	removed, _ := s.rdb.ZRem(ctx, "queue:jobs", handle.JobID).Result()
+	removed, _ := s.rdb.ZRem(ctx, "queue:jobs", handle.JobId).Result()
 	if removed > 0 {
-		s.updateJobState(ctx, handle.JobID, StateCancelled, "")
-		return &CancelResponse{Success: true, Message: "Job cancelled from queue"}, nil
+		s.updateJobState(ctx, handle.JobId, StateCancelled, "")
+		return &pb.CancelResponse{Success: true, Message: "Job cancelled from queue"}, nil
 	}
 
 	// Try to cancel running job
 	s.mu.RLock()
-	cancel, exists := s.workerCancel[handle.JobID]
+	cancel, exists := s.workerCancel[handle.JobId]
 	s.mu.RUnlock()
 
 	if exists {
 		cancel()
-		s.updateJobState(ctx, handle.JobID, StateCancelled, "")
-		return &CancelResponse{Success: true, Message: "Running job cancelled"}, nil
+		s.updateJobState(ctx, handle.JobId, StateCancelled, "")
+		return &pb.CancelResponse{Success: true, Message: "Running job cancelled"}, nil
 	}
 
-	return &CancelResponse{Success: false, Message: "Job not found or already completed"}, nil
+	return &pb.CancelResponse{Success: false, Message: "Job not found or already completed"}, nil
 }
 
 // ------------------------------------------------------------------
 // ListJobs - List jobs for a user
 // ------------------------------------------------------------------
 
-func (s *SchedulerServer) ListJobs(ctx context.Context, req *ListJobsRequest) (*JobList, error) {
+// ------------------------------------------------------------------
+// ListJobs - List jobs for a user
+// ------------------------------------------------------------------
+
+func (s *SchedulerServer) ListJobs(ctx context.Context, req *pb.ListJobsRequest) (*pb.JobList, error) {
 	// Get all job IDs for user (we'd normally have a user index, simplified here)
 	pattern := "job:*"
 	keys, err := s.rdb.Keys(ctx, pattern).Result()
@@ -229,7 +228,7 @@ func (s *SchedulerServer) ListJobs(ctx context.Context, req *ListJobsRequest) (*
 		return nil, status.Errorf(codes.Internal, "failed to list jobs: %v", err)
 	}
 
-	var jobs []*JobStatus
+	var jobs []*pb.JobStatus
 	for _, key := range keys {
 		jobBytes, err := s.rdb.Get(ctx, key).Bytes()
 		if err != nil {
@@ -241,19 +240,19 @@ func (s *SchedulerServer) ListJobs(ctx context.Context, req *ListJobsRequest) (*
 		}
 
 		// Filter by user if specified
-		if req.UserID != "" && job.UserID != req.UserID {
+		if req.UserId != "" && job.UserID != req.UserId {
 			continue
 		}
 
 		// Filter by state if specified
-		if req.StateFilter != 0 && int32(job.State) != req.StateFilter {
+		if req.StateFilter != pb.JobState_STATE_UNKNOWN && pb.JobState(job.State) != req.StateFilter {
 			continue
 		}
 
-		jobs = append(jobs, &JobStatus{
-			JobID:        job.ID,
-			State:        int32(job.State),
-			WorkerID:     job.WorkerID,
+		jobs = append(jobs, &pb.JobStatus{
+			JobId:        job.ID,
+			State:        pb.JobState(job.State),
+			WorkerId:     job.WorkerID,
 			StartedAt:    job.StartedAt,
 			CompletedAt:  job.CompletedAt,
 			ErrorMessage: job.ErrorMessage,
@@ -270,10 +269,14 @@ func (s *SchedulerServer) ListJobs(ctx context.Context, req *ListJobsRequest) (*
 		start = len(jobs)
 	}
 
-	return &JobList{
+	return &pb.JobList{
 		Jobs:       jobs[start:end],
 		TotalCount: int32(len(jobs)),
 	}, nil
+}
+
+func (s *SchedulerServer) StreamJobResults(handle *pb.JobHandle, stream pb.QuantumScheduler_StreamJobResultsServer) error {
+	return status.Errorf(codes.Unimplemented, "method StreamJobResults not implemented")
 }
 
 // ------------------------------------------------------------------
@@ -350,13 +353,37 @@ func (s *SchedulerServer) executeOnEngine(ctx context.Context, job *Job) error {
 	}
 	defer conn.Close()
 
-	// For now, just simulate execution
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-time.After(time.Duration(job.NumOps) * 100 * time.Millisecond):
-		return nil
+	client := pb.NewQuantumComputeClient(conn)
+
+	// Convert Job to CircuitRequest
+	var req pb.CircuitRequest
+	if err := json.Unmarshal([]byte(job.CircuitJSON), &req); err != nil {
+		return fmt.Errorf("failed to parse circuit JSON: %v", err)
 	}
+
+	// Call Engine
+	resp, err := client.RunCircuit(ctx, &req)
+	if err != nil {
+		return fmt.Errorf("engine error: %w", err)
+	}
+
+	// Map measurements
+	measurements := make(map[int32]bool)
+	for k, v := range resp.ClassicalResults {
+		measurements[int32(k)] = v
+	}
+
+	// Convert Response to JobResult (store first shot)
+	result := &pb.JobResult{
+		JobId:        job.ID,
+		ShotNumber:   1,
+		State:        resp,
+		Measurements: measurements,
+	}
+
+	_ = result // In production we would broadcast this
+
+	return nil
 }
 
 func (s *SchedulerServer) updateJobState(ctx context.Context, jobID string, state JobState, errMsg string) {
@@ -385,58 +412,9 @@ func (s *SchedulerServer) saveJob(ctx context.Context, job *Job) {
 // Placeholder types (would be generated from protobuf)
 // ------------------------------------------------------------------
 
-type JobRequest struct {
-	Circuit     *CircuitRequest
-	Priority    int32
-	Shots       int32
-	CallbackURL string
-	UserID      string
-	Metadata    map[string]string
-}
-
-type CircuitRequest struct {
-	NumQubits  int32           `json:"num_qubits"`
-	Operations []GateOperation `json:"operations"`
-}
-
-type GateOperation struct {
-	Type        int32 `json:"type"`
-	TargetQubit int32 `json:"target_qubit"`
-}
-
-type JobHandle struct {
-	JobID                string
-	SubmittedAt          int64
-	EstimatedWaitSeconds int32
-}
-
-type JobStatus struct {
-	JobID           string
-	State           int32
-	PositionInQueue int32
-	ProgressPercent int32
-	WorkerID        string
-	StartedAt       int64
-	CompletedAt     int64
-	ErrorMessage    string
-}
-
-type CancelResponse struct {
-	Success bool
-	Message string
-}
-
-type ListJobsRequest struct {
-	UserID      string
-	StateFilter int32
-	Limit       int32
-	Offset      int32
-}
-
-type JobList struct {
-	Jobs       []*JobStatus
-	TotalCount int32
-}
+// ------------------------------------------------------------------
+// Placeholder types REPLACED BY Generated PB Types
+// ------------------------------------------------------------------
 
 // ------------------------------------------------------------------
 // Main
@@ -471,7 +449,7 @@ func main() {
 	}
 
 	grpcServer := grpc.NewServer()
-	// RegisterQuantumSchedulerServer(grpcServer, server)
+	pb.RegisterQuantumSchedulerServer(grpcServer, server)
 
 	log.Printf("📋 Quantum Scheduler starting on port %d", *port)
 	log.Printf("   Redis: %s", *redisAddr)

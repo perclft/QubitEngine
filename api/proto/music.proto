@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package qubit_engine.music;
 
-option go_package = "github.com/perclft/QubitEngine/modules/music/generated";
+option go_package = "github.com/perclft/QubitEngine/api/generated";
 
 // ------------------------------------------------------------------
 // Quantum Music Composer Service

@@ -194,3 +194,35 @@ jobs:
           $env:PATH = "$env:GITHUB_WORKSPACE\build\vcpkg_installed\x64-windows\bin;$env:PATH"
           cd build
           ctest --output-on-failure --timeout 300
+
+  test-services:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Install Protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Install Go Protobuf Plugins
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+          export PATH=$PATH:$(go env GOPATH)/bin
+
+      - name: Generate gRPC Code
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          mkdir -p api/generated
+          protoc --go_out=api/generated --go_opt=paths=source_relative --go-grpc_out=api/generated --go-grpc_opt=paths=source_relative -I . api/proto/quantum.proto api/proto/scheduler.proto
+
+      - name: Test Scheduler
+        run: |
+          cd services/scheduler
+          go test -v ./tests/e2e/...
