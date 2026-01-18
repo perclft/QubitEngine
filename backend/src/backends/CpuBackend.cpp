@@ -68,48 +68,111 @@ void CpuBackend::applyHadamard(size_t target) {
     // float32x4_t holds 2 complex numbers (4 floats)
     float32x4_t v_inv_sqrt2 = vdupq_n_f32(INV_SQRT_2);
 
+    // Threshold for when to switch to inner-loop parallelization
+    // If we have few outer iterations (large stride), we must parallelize
+    // independent inner blocks.
+    const size_t PARALLEL_THRESHOLD = 2048;
+
+    // Case 1: Small Stride (Many outer iterations) -> Parallelize Outer Loop
+    if (2 * stride < local_dim / 4 || stride < PARALLEL_THRESHOLD) {
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static)
 #endif
-    for (long long i = 0; i < static_cast<long long>(local_dim);
-         i += 2 * stride) {
-      for (size_t j = i; j < i + stride; j += 2) {
-        // Handle vectorization boundary for small strides
-        if (j + 1 >= i + stride && stride < 2) {
-          // Scalar fallback for single element
+      for (long long i = 0; i < static_cast<long long>(local_dim);
+           i += 2 * stride) {
+        for (size_t j = i; j < i + stride; j += 2) {
+          // Handle vectorization boundary for small strides
+          if (j + 1 >= i + stride && stride < 2) {
+            Complex a = state[j];
+            Complex b = state[j + stride];
+            state[j] = (a + b) * INV_SQRT_2;
+            state[j + stride] = (a - b) * INV_SQRT_2;
+            continue;
+          }
+
+          float *ptr_a = reinterpret_cast<float *>(&state[j]);
+          float *ptr_b = reinterpret_cast<float *>(&state[j + stride]);
+
+          float32x4_t v_a = vld1q_f32(ptr_a);
+          float32x4_t v_b = vld1q_f32(ptr_b);
+
+          float32x4_t v_sum = vaddq_f32(v_a, v_b);
+          v_sum = vmulq_f32(v_sum, v_inv_sqrt2);
+
+          float32x4_t v_diff = vsubq_f32(v_a, v_b);
+          v_diff = vmulq_f32(v_diff, v_inv_sqrt2);
+
+          vst1q_f32(ptr_a, v_sum);
+          vst1q_f32(ptr_b, v_diff);
+        }
+      }
+    } else {
+      // Case 2: Large Stride (Few outer iterations, huge inner blocks) ->
+      // Parallelize Inner Loop We iterate serially over outer blocks, but
+      // inside each block we parallelize
+      for (long long i = 0; i < static_cast<long long>(local_dim);
+           i += 2 * stride) {
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+        for (size_t j = i; j < i + stride; j += 2) {
+          float *ptr_a = reinterpret_cast<float *>(&state[j]);
+          float *ptr_b = reinterpret_cast<float *>(&state[j + stride]);
+
+          float32x4_t v_a = vld1q_f32(ptr_a);
+          float32x4_t v_b = vld1q_f32(ptr_b);
+
+          float32x4_t v_sum = vaddq_f32(v_a, v_b);
+          v_sum = vmulq_f32(v_sum, v_inv_sqrt2);
+
+          float32x4_t v_diff = vsubq_f32(v_a, v_b);
+          v_diff = vmulq_f32(v_diff, v_inv_sqrt2);
+
+          vst1q_f32(ptr_a, v_sum);
+          vst1q_f32(ptr_b, v_diff);
+        }
+      }
+    }
+#elif defined(USE_AVX2_INTRINSICS) && defined(__AVX2__)
+    // AVX2 float implementation
+    const size_t PARALLEL_THRESHOLD = 2048;
+    __m256 v_inv_sqrt2 = _mm256_set1_ps(INV_SQRT_2);
+
+    if (2 * stride < local_dim / 4 || stride < PARALLEL_THRESHOLD) {
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+      for (size_t i = 0; i < local_dim; i += 2 * stride) {
+        size_t j = i;
+        if (stride >= 4) {
+          for (; j + 3 < i + stride; j += 4) {
+            float *ptr_a = reinterpret_cast<float *>(&state[j]);
+            float *ptr_b = reinterpret_cast<float *>(&state[j + stride]);
+            __m256 v_a = _mm256_loadu_ps(ptr_a);
+            __m256 v_b = _mm256_loadu_ps(ptr_b);
+            __m256 v_sum = _mm256_add_ps(v_a, v_b);
+            __m256 v_diff = _mm256_sub_ps(v_a, v_b);
+            v_sum = _mm256_mul_ps(v_sum, v_inv_sqrt2);
+            v_diff = _mm256_mul_ps(v_diff, v_inv_sqrt2);
+            _mm256_storeu_ps(ptr_a, v_sum);
+            _mm256_storeu_ps(ptr_b, v_diff);
+          }
+        }
+        for (; j < i + stride; ++j) {
           Complex a = state[j];
           Complex b = state[j + stride];
           state[j] = (a + b) * INV_SQRT_2;
           state[j + stride] = (a - b) * INV_SQRT_2;
-          continue;
         }
-
-        // Load 2 complex numbers (4 floats) from state[j] and state[j+stride]
-        float *ptr_a = reinterpret_cast<float *>(&state[j]);
-        float *ptr_b = reinterpret_cast<float *>(&state[j + stride]);
-
-        float32x4_t v_a = vld1q_f32(ptr_a); // [a0, a1]
-        float32x4_t v_b = vld1q_f32(ptr_b); // [b0, b1]
-
-        // (a + b) * inv_sqrt2
-        float32x4_t v_sum = vaddq_f32(v_a, v_b);
-        v_sum = vmulq_f32(v_sum, v_inv_sqrt2);
-
-        // (a - b) * inv_sqrt2
-        float32x4_t v_diff = vsubq_f32(v_a, v_b);
-        v_diff = vmulq_f32(v_diff, v_inv_sqrt2);
-
-        vst1q_f32(ptr_a, v_sum);
-        vst1q_f32(ptr_b, v_diff);
       }
-    }
-#elif defined(USE_AVX2_INTRINSICS) && defined(__AVX2__)
-    // AVX2 float implementation (8 floats = 4 complex numbers per reg)
-    __m256 v_inv_sqrt2 = _mm256_set1_ps(INV_SQRT_2);
-    for (size_t i = 0; i < local_dim; i += 2 * stride) {
-      size_t j = i;
-      if (stride >= 4) {
-        for (; j + 3 < i + stride; j += 4) {
+    } else {
+      for (size_t i = 0; i < local_dim; i += 2 * stride) {
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+        for (size_t j = i; j < i + stride; j += 4) {
+          // Checking boundary inside parallel loop might be tricky, simplified
+          // assuming aligned
           float *ptr_a = reinterpret_cast<float *>(&state[j]);
           float *ptr_b = reinterpret_cast<float *>(&state[j + stride]);
           __m256 v_a = _mm256_loadu_ps(ptr_a);
@@ -122,25 +185,35 @@ void CpuBackend::applyHadamard(size_t target) {
           _mm256_storeu_ps(ptr_b, v_diff);
         }
       }
-      for (; j < i + stride; ++j) {
-        Complex a = state[j];
-        Complex b = state[j + stride];
-        state[j] = (a + b) * INV_SQRT_2;
-        state[j + stride] = (a - b) * INV_SQRT_2;
-      }
     }
 #else
-    // Scalar fallback with OpenMP
+    // Scalar fallback
+    const size_t PARALLEL_THRESHOLD = 2048;
+    if (2 * stride < local_dim / 4 || stride < PARALLEL_THRESHOLD) {
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static)
 #endif
-    for (long long i = 0; i < static_cast<long long>(local_dim);
-         i += 2 * stride) {
-      for (size_t j = i; j < i + stride; ++j) {
-        Complex a = state[j];
-        Complex b = state[j + stride];
-        state[j] = (a + b) * INV_SQRT_2;
-        state[j + stride] = (a - b) * INV_SQRT_2;
+      for (long long i = 0; i < static_cast<long long>(local_dim);
+           i += 2 * stride) {
+        for (size_t j = i; j < i + stride; ++j) {
+          Complex a = state[j];
+          Complex b = state[j + stride];
+          state[j] = (a + b) * INV_SQRT_2;
+          state[j + stride] = (a - b) * INV_SQRT_2;
+        }
+      }
+    } else {
+      for (long long i = 0; i < static_cast<long long>(local_dim);
+           i += 2 * stride) {
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+        for (size_t j = i; j < i + stride; ++j) {
+          Complex a = state[j];
+          Complex b = state[j + stride];
+          state[j] = (a + b) * INV_SQRT_2;
+          state[j + stride] = (a - b) * INV_SQRT_2;
+        }
       }
     }
 #endif
