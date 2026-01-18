@@ -8,6 +8,8 @@
 
 namespace qubit_engine {
 
+// --- Lifecycle ---
+
 MetalBackend::MetalBackend(size_t num_qubits) : num_qubits_(num_qubits) {
   initializeMetal();
 
@@ -25,8 +27,6 @@ MetalBackend::~MetalBackend() {
     CFRelease(device_);
   if (commandQueue_)
     CFRelease(commandQueue_);
-  // Release pipelines... (omitted for brevity, assume OS cleanup or explicit
-  // release if needed)
 }
 
 void MetalBackend::initializeMetal() {
@@ -34,10 +34,10 @@ void MetalBackend::initializeMetal() {
   if (!device) {
     throw std::runtime_error("Metal is not supported on this device.");
   }
-  device_ = (__bridge_retained void *)device;
+  device_ = (void *)CFBridgingRetain(device);
 
   id<MTLCommandQueue> queue = [device newCommandQueue];
-  commandQueue_ = (__bridge_retained void *)queue;
+  commandQueue_ = (void *)CFBridgingRetain(queue);
 
   // Load Library
   NSError *error = nil;
@@ -45,14 +45,16 @@ void MetalBackend::initializeMetal() {
       [device newDefaultLibraryWithBundle:[NSBundle mainBundle] error:&error];
   if (!library) {
     // Try to load from "default.metallib" in current dir
-    library = [device newLibraryWithFile:@"default.metallib" error:&error];
+    NSString *path = @"default.metallib";
+    NSURL *url = [NSURL fileURLWithPath:path];
+    library = [device newLibraryWithURL:url error:&error];
   }
   if (!library) {
     throw std::runtime_error(std::string("Could not load Metal library: ") +
                              [[error localizedDescription] UTF8String]);
   }
 
-  buildPipelines((__bridge void *)library);
+  buildPipelines((void *)CFBridgingRetain(library));
 }
 
 void MetalBackend::buildPipelines(void *libPtr) {
@@ -74,7 +76,7 @@ void MetalBackend::buildPipelines(void *libPtr) {
                 << std::endl;
       return nullptr;
     }
-    return (__bridge_retained void *)pso;
+    return (void *)CFBridgingRetain(pso);
   };
 
   hadamardPipeline_ = createPipe(@"hadamard_kernel");
@@ -87,11 +89,22 @@ void MetalBackend::buildPipelines(void *libPtr) {
   cnotPipeline_ = createPipe(@"cnot_kernel");
 }
 
+// --- Memory Management ---
+
+void MetalBackend::initializeBuffer(const std::vector<Complex> &initialState) {
+  id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
+  size_t size = initialState.size() * sizeof(Complex);
+
+  id<MTLBuffer> mtlBuf =
+      [device newBufferWithBytes:initialState.data()
+                          length:size
+                         options:MTLResourceStorageModeShared];
+  gpuBuffer_ = (void *)CFBridgingRetain(mtlBuf);
+}
+
 void MetalBackend::uploadState(const std::vector<Complex> &cpuState) {
   id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
   size_t num_elements = cpuState.size();
-
-  // floats (host) to Float (device) - direct copy if Precision is float
   size_t bufferSize = num_elements * sizeof(Complex);
 
   if (gpuBuffer_)
@@ -100,10 +113,9 @@ void MetalBackend::uploadState(const std::vector<Complex> &cpuState) {
   id<MTLBuffer> mtlBuf =
       [device newBufferWithLength:bufferSize
                           options:MTLResourceStorageModeShared];
-  gpuBuffer_ = (__bridge_retained void *)mtlBuf;
+  gpuBuffer_ = (void *)CFBridgingRetain(mtlBuf);
   capacity_ = num_elements;
 
-  // Memcpy directly
   void *ptr = [mtlBuf contents];
   std::memcpy(ptr, cpuState.data(), bufferSize);
 }
@@ -123,16 +135,18 @@ std::vector<Complex> MetalBackend::getStateVector() const {
   return state;
 }
 
-// Helper for dispatch
-void dispatchHelper(void *queuePtr, void *psoPtr, void *bufPtr, size_t dim,
-                    std::vector<void *> args, std::vector<size_t> sizes) {
+// --- Dispatch Helper ---
+
+void MetalBackend::dispatchHelper(void *queuePtr, void *psoPtr, void *bufPtr,
+                                  size_t dim, std::vector<void *> args,
+                                  std::vector<size_t> sizes) {
   id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)queuePtr;
   id<MTLComputePipelineState> pso =
       (__bridge id<MTLComputePipelineState>)psoPtr;
   id<MTLBuffer> buffer = (__bridge id<MTLBuffer>)bufPtr;
 
   if (!pso)
-    return; // Guard against failed pipeline creation
+    return;
 
   id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
   id<MTLComputeCommandEncoder> enc = [cmdBuf computeCommandEncoder];
@@ -157,6 +171,8 @@ void dispatchHelper(void *queuePtr, void *psoPtr, void *bufPtr, size_t dim,
   [cmdBuf commit];
   [cmdBuf waitUntilCompleted];
 }
+
+// --- Gate Implementations ---
 
 void MetalBackend::applyHadamard(size_t target) {
   uint32_t stride = 1 << target;

@@ -56,8 +56,11 @@ private:
 
   void initializeMetal();
   void buildPipelines(void *library);
+  void initializeBuffer(const std::vector<Complex> &initialState);
   void uploadState(const std::vector<Complex> &cpuState);
   void downloadState(std::vector<Complex> &cpuState) const;
+  void dispatchHelper(void *queue, void *pipeline, void *buffer, size_t dim,
+                      std::vector<void *> args, std::vector<size_t> sizes);
 };
 
 } // namespace qubit_engine
