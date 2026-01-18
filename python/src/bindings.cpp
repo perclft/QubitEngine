@@ -1,5 +1,8 @@
+#include "MolecularHamiltonian.hpp"
+#include "QuantumDifferentiator.hpp"
 #include "QuantumRegister.hpp"
 #include <pybind11/complex.h>
+#include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -41,4 +44,40 @@ PYBIND11_MODULE(qubit_engine, m) {
       .def("num_qubits", [](const QuantumRegister &q) {
         return q.getStateVector().size();
       }); // Approximation, actual num_qubits getter needed in class
+  py::class_<PauliTerm>(m, "PauliTerm")
+      .def(py::init<double, std::string>())
+      .def_readwrite("coefficient", &PauliTerm::coefficient)
+      .def_readwrite("pauli_string", &PauliTerm::pauli_string);
+
+  py::enum_<MolecularHamiltonian::MoleculeType>(m, "MoleculeType")
+      .value("H2", MolecularHamiltonian::H2)
+      .value("LiH", MolecularHamiltonian::LiH)
+      .export_values();
+
+  py::class_<MolecularHamiltonian>(m, "MolecularHamiltonian")
+      .def_static("getHamiltonian", &MolecularHamiltonian::getHamiltonian,
+                  py::arg("type"), "Get Hamiltonian for a molecule")
+      .def_static("getNumQubits", &MolecularHamiltonian::getNumQubits,
+                  py::arg("type"), "Get required qubits for a molecule");
+
+  py::class_<QuantumDifferentiator>(m, "QuantumDifferentiator")
+      .def_static(
+          "calculate_gradients",
+          [](int num_qubits, std::vector<double> params,
+             py::function ansatz_func, std::vector<PauliTerm> hamiltonian) {
+            // Convert Python function to C++ std::function
+            AnsatzFunction cpp_ansatz =
+                [ansatz_func](const std::vector<double> &p,
+                              QuantumRegister &q) {
+                  // Call Python function, passing params and register
+                  // The Register is passed by reference to Python, needing
+                  // proper casting
+                  ansatz_func(p, std::ref(q));
+                };
+
+            return QuantumDifferentiator::calculateGradients(
+                num_qubits, params, cpp_ansatz, hamiltonian);
+          },
+          py::arg("num_qubits"), py::arg("params"), py::arg("ansatz_func"),
+          py::arg("hamiltonian"), "Calculate gradients for VQE");
 }
