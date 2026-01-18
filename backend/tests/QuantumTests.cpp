@@ -1,8 +1,11 @@
 #include "../src/MolecularHamiltonian.hpp"
 #include "../src/QuantumDifferentiator.hpp"
 #include "../src/QuantumRegister.hpp"
+#include "Types.hpp"
 #include <complex>
 #include <gtest/gtest.h>
+
+using namespace qubit_engine;
 
 TEST(QuantumTest, Initialization) {
   // Test that a 2-qubit register initializes to |00>
@@ -12,8 +15,8 @@ TEST(QuantumTest, Initialization) {
   // Size should be 2^2 = 4
   EXPECT_EQ(state.size(), 4);
   // |00> (index 0) should have probability amplitude 1.0
-  EXPECT_EQ(state[0], std::complex<double>(1.0, 0.0));
-  EXPECT_EQ(state[1], std::complex<double>(0.0, 0.0));
+  EXPECT_EQ(state[0], Complex(1.0, 0.0));
+  EXPECT_EQ(state[1], Complex(0.0, 0.0));
 }
 
 TEST(QuantumTest, PauliXGate) {
@@ -22,8 +25,8 @@ TEST(QuantumTest, PauliXGate) {
   q.applyX(0);          // Apply X -> |1>
 
   auto state = q.getStateVector();
-  EXPECT_EQ(state[0], std::complex<double>(0.0, 0.0));
-  EXPECT_EQ(state[1], std::complex<double>(1.0, 0.0));
+  EXPECT_EQ(state[0], Complex(0.0, 0.0));
+  EXPECT_EQ(state[1], Complex(1.0, 0.0));
 }
 
 TEST(QuantumTest, HadamardGate) {
@@ -32,10 +35,10 @@ TEST(QuantumTest, HadamardGate) {
   q.applyHadamard(0);   // |+> = (|0> + |1>) / sqrt(2)
 
   auto state = q.getStateVector();
-  double inv_sqrt_2 = 1.0 / std::sqrt(2.0);
+  Precision inv_sqrt_2 = 1.0 / std::sqrt(2.0);
 
-  EXPECT_NEAR(state[0].real(), inv_sqrt_2, 1e-9);
-  EXPECT_NEAR(state[1].real(), inv_sqrt_2, 1e-9);
+  EXPECT_NEAR(state[0].real(), inv_sqrt_2, 1e-6);
+  EXPECT_NEAR(state[1].real(), inv_sqrt_2, 1e-6);
 }
 
 TEST(QuantumTest, BellState) {
@@ -46,13 +49,13 @@ TEST(QuantumTest, BellState) {
   q.applyCNOT(0, 1);  // Entangle
 
   auto state = q.getStateVector();
-  double inv_sqrt_2 = 1.0 / std::sqrt(2.0);
+  Precision inv_sqrt_2 = 1.0 / std::sqrt(2.0);
 
   // Expecting 1/sqrt(2) * (|00> + |11>)
-  EXPECT_NEAR(state[0].real(), inv_sqrt_2, 1e-9); // |00>
-  EXPECT_NEAR(std::abs(state[1]), 0.0, 1e-9);     // |01>
-  EXPECT_NEAR(std::abs(state[2]), 0.0, 1e-9);     // |10>
-  EXPECT_NEAR(state[3].real(), inv_sqrt_2, 1e-9); // |11>
+  EXPECT_NEAR(state[0].real(), inv_sqrt_2, 1e-6); // |00>
+  EXPECT_NEAR(std::abs(state[1]), 0.0, 1e-6);     // |01>
+  EXPECT_NEAR(std::abs(state[2]), 0.0, 1e-6);     // |10>
+  EXPECT_NEAR(state[3].real(), inv_sqrt_2, 1e-6); // |11>
 }
 TEST(QuantumTest, ReverseCNOT) {
   // Test Control(1) -> Target(0) (Control > Target)
@@ -69,8 +72,8 @@ TEST(QuantumTest, ReverseCNOT) {
   auto state = q.getStateVector();
 
   // Index 2 is |10>, Index 3 is |11>
-  EXPECT_NEAR(std::abs(state[2]), 0.0, 1e-9); // Old state empty
-  EXPECT_NEAR(state[3].real(), 1.0, 1e-9);    // New state occupied
+  EXPECT_NEAR(std::abs(state[2]), 0.0, 1e-6); // Old state empty
+  EXPECT_NEAR(state[3].real(), 1.0, 1e-6);    // New state occupied
 }
 
 TEST(QuantumTest, LogicValidation) {
@@ -96,14 +99,14 @@ TEST(QuantumTest, GradientDescentTest) {
   std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
 
   AnsatzFunction ansatz = [](const std::vector<double> &p, QuantumRegister &q) {
-    q.applyRotationY(0, p[0]);
+    q.applyRotationY(0, static_cast<Precision>(p[0]));
   };
 
   auto grads = QuantumDifferentiator::calculateGradients(num_qubits, params,
                                                          ansatz, hamiltonian);
 
   EXPECT_EQ(grads.size(), 1);
-  EXPECT_NEAR(grads[0], -1.0, 1e-6);
+  EXPECT_NEAR(grads[0], -1.0, 1e-5);
 }
 
 TEST(QuantumTest, DISABLED_AdjointGradientTest) {
@@ -115,12 +118,12 @@ TEST(QuantumTest, DISABLED_AdjointGradientTest) {
   std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
 
   AnsatzFunction ansatz = [](const std::vector<double> &p, QuantumRegister &q) {
-    q.applyRotationY(0, p[0]);
+    q.applyRotationY(0, static_cast<Precision>(p[0]));
   };
 
   auto grads = QuantumDifferentiator::calculateGradientsAdjoint(
       num_qubits, params, ansatz, hamiltonian);
 
   EXPECT_EQ(grads.size(), 1);
-  EXPECT_NEAR(grads[0], -1.0, 1e-6);
+  EXPECT_NEAR(grads[0], -1.0, 1e-5);
 }
