@@ -142,8 +142,9 @@ void CpuBackend::applyHadamard(size_t target) {
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static)
 #endif
-      for (size_t i = 0; i < local_dim; i += 2 * stride) {
-        size_t j = i;
+      for (long long i = 0; i < static_cast<long long>(local_dim);
+           i += 2 * stride) {
+        long long j = i;
         if (stride >= 4) {
           for (; j + 3 < i + stride; j += 4) {
             float *ptr_a = reinterpret_cast<float *>(&state[j]);
@@ -166,11 +167,12 @@ void CpuBackend::applyHadamard(size_t target) {
         }
       }
     } else {
-      for (size_t i = 0; i < local_dim; i += 2 * stride) {
+      for (long long i = 0; i < static_cast<long long>(local_dim);
+           i += 2 * stride) {
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static)
 #endif
-        for (size_t j = i; j < i + stride; j += 4) {
+        for (long long j = i; j < i + stride; j += 4) {
           // Checking boundary inside parallel loop might be tricky, simplified
           // assuming aligned
           float *ptr_a = reinterpret_cast<float *>(&state[j]);
