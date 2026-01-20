@@ -2,16 +2,13 @@
 
 ## Metal Support (GPU)
 
-**Status**: FAILED (System Environment Issue)
+**Status**: RESOLVED
 
 **Diagnosis**:
-The `metal` compilation toolchain is missing or corrupted on this system, despite Xcode Command Line Tools being installed.
-
-- `xcrun -sdk macosx metal` -> "missing Metal Toolchain"
-- Direct execution of binary -> "missing Metal Toolchain"
+The `metal` compilation toolchain was missing.
 
 **Resolution**:
-Since we cannot fix the system environment (requires `sudo` or interactive `xcodebuild`), we are pivoting to **CPU optimizations**.
+Running `xcodebuild -downloadComponent MetalToolchain` successfully downloaded and installed the missing components. Metal shader compilation is now enabled and verified with `verify_metal` and benchmarks.
 
 ## Memory Wall Optimization
 

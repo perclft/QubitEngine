@@ -165,6 +165,11 @@ QuantumRegister::getTape() const {
   return tape;
 }
 
+#include "CircuitOptimizer.hpp"
+void QuantumRegister::optimize() {
+  qubit_engine::CircuitOptimizer::optimize(tape);
+}
+
 // --- Replay Logic (Kept purely on proxy as it uses public API) ---
 
 void QuantumRegister::applyRegisteredGate(const RecordedGate &gate) {

@@ -78,6 +78,8 @@ public:
   void clearTape();
   const std::vector<RecordedGate> &getTape() const;
 
+  void optimize(); // Optimizes the current tape
+
   // Helper to Replay Tape (Optional, for adjoint)
   void applyRegisteredGate(const RecordedGate &gate);
   void applyRegisteredGateInverse(const RecordedGate &gate);

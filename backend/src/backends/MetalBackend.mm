@@ -10,7 +10,9 @@ namespace qubit_engine {
 
 // --- Lifecycle ---
 
-MetalBackend::MetalBackend(size_t num_qubits) : num_qubits_(num_qubits) {
+MetalBackend::MetalBackend(size_t num_qubits)
+    : num_qubits_(num_qubits), device_(nullptr), commandQueue_(nullptr),
+      gpuBuffer_(nullptr) {
   initializeMetal();
 
   // Initialize State |0...0>
@@ -30,31 +32,43 @@ MetalBackend::~MetalBackend() {
 }
 
 void MetalBackend::initializeMetal() {
+  std::cout << "MetalBackend::initializeMetal - Start" << std::endl;
   id<MTLDevice> device = MTLCreateSystemDefaultDevice();
   if (!device) {
     throw std::runtime_error("Metal is not supported on this device.");
   }
+  std::cout << "MetalBackend::initializeMetal - Device Created: " <<
+      [[device name] UTF8String] << std::endl;
   device_ = (void *)CFBridgingRetain(device);
 
   id<MTLCommandQueue> queue = [device newCommandQueue];
   commandQueue_ = (void *)CFBridgingRetain(queue);
+  std::cout << "MetalBackend::initializeMetal - CommandQueue Created"
+            << std::endl;
 
   // Load Library
   NSError *error = nil;
   id<MTLLibrary> library =
       [device newDefaultLibraryWithBundle:[NSBundle mainBundle] error:&error];
   if (!library) {
+    std::cout << "MetalBackend::initializeMetal - Main Bundle Library not "
+                 "found, trying file..."
+              << std::endl;
     // Try to load from "default.metallib" in current dir
     NSString *path = @"default.metallib";
     NSURL *url = [NSURL fileURLWithPath:path];
     library = [device newLibraryWithURL:url error:&error];
   }
   if (!library) {
+    std::cerr << "MetalBackend::initializeMetal - Failed to load library: " <<
+        [[error localizedDescription] UTF8String] << std::endl;
     throw std::runtime_error(std::string("Could not load Metal library: ") +
                              [[error localizedDescription] UTF8String]);
   }
+  std::cout << "MetalBackend::initializeMetal - Library Loaded" << std::endl;
 
   buildPipelines((void *)CFBridgingRetain(library));
+  std::cout << "MetalBackend::initializeMetal - Pipelines Built" << std::endl;
 }
 
 void MetalBackend::buildPipelines(void *libPtr) {

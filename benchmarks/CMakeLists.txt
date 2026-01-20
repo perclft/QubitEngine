@@ -50,10 +50,16 @@ endif()
 # --- Include Backend Headers ---
 include_directories(${CMAKE_SOURCE_DIR}/../backend/src)
 
+if(APPLE)
+    # Enable ARC for Metal backend
+    add_compile_options(-fobjc-arc)
+endif()
+
 # --- Define Dependencies ---
 set(BACKEND_SOURCES
     ../backend/src/QuantumRegister.cpp
     ../backend/src/backends/CpuBackend.cpp
+    ../backend/src/backends/CudaBackend.cpp
     ../backend/src/backends/GPUQuantumRegister.cpp
     ${METAL_SOURCES}
 )

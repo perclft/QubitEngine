@@ -82,3 +82,24 @@ The `applyHadamard` operation is memory-bandwidth bound for N >= 22. Further opt
 1. **MPI Scaling**: Distributed execution via MPI provided a near-perfect 2x speedup for smaller state vectors (up to 64 MB), effectively doubling the available memory bandwidth by utilizing two independent simulation kernels.
 2. **Network/Sync Overhead**: For larger state vectors (256 MB+), the speedup dropped to ~16-20%. This indicates that the time spent communicating half the state vector across the MPI interconnect (even on localhost) begins to rival the computation time as memory access becomes the bottleneck.
 3. **OpenMP Limitations**: The Multi-threaded (OpenMP) results showed negligible gains over single-threaded execution. This confirms that the current AVX2 implementation is strictly memory-bandwidth bound on this processor; adding more cores does not increase the rate at which data can be fetched from the memory controllers.
+
+## Metal (GPU) Performance
+
+**Date:** 2026-01-20
+**Environment:** macOS (M3 Air) - Metal Backend
+**Optimization:** Async Dispatch, Single Precision
+
+| Qubits | State Vector Size | Time (ms) | effective Bandwidth (GB/s) |
+|:-------|:------------------|:----------|:---------------------------|
+| 20     | 16 MB             | 16.1      | **2.33**                   |
+| 25     | 512 MB            | 536       | **1.96**                   |
+| 28     | 4096 MB           | 5487      | **1.77**                   |
+
+### Analysis (Metal)
+
+1. **Functional Verification**: The Metal backend is now correctly compiling and executing kernels on the M3 GPU (Toolchain Issue Fixed).
+2. **Performance Gap**: The measured bandwidth (~2 GB/s) is significantly lower than the CPU NEON baseline (~22 GB/s). This suggests the benchmark includes significant overhead, likely from:
+   - Constant `QuantumRegister` re-initialization (seen in logs).
+   - `Shared` memory synchronization costs vs purely cached CPU access.
+   - Lack of "kernel fusion" (dispatching many small kernels vs one large one).
+3. **Next Steps**: Optimize the benchmark harness to persist the backend and state on the GPU, measuring only the kernel execution time.

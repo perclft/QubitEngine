@@ -208,6 +208,7 @@ kernel void cnot_kernel(device Complex* state [[buffer(0)]],
         state[j] = state[k];
         state[k] = temp;
     }
+}
 // Phase S Kernel (Z rotation by PI/2)
 // S = [1 0; 0 i]
 kernel void phases_kernel(device Complex* state [[buffer(0)]],
