@@ -43,3 +43,14 @@ target_link_libraries(qubit_engine
     "-framework Foundation"
     "-framework CoreGraphics"
 )
+
+# 4. Metal Backend verification executable
+# add_executable(verify_metal backend/src/verify_metal_main.cpp)
+# target_link_libraries(verify_metal qubit_engine)
+
+# 4. Metal Shaders Compilation (Apple Only)
+# Note: Disabled due to missing Metal Toolchain in CI/Env
+# if(APPLE)
+#     set(METAL_SRC "${CMAKE_SOURCE_DIR}/backend/src/shaders.metal")
+# ...
+# endif()

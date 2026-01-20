@@ -1,5 +1,6 @@
 #include "QuantumRegister.hpp"
 #include "backends/CpuBackend.hpp"
+#include "backends/CudaBackend.hpp"  // Added for CudaBackend
 #include "backends/MetalBackend.hpp" // Added for MetalBackend
 #include <fstream>
 #include <iostream>
@@ -7,6 +8,20 @@
 // --- Lifecycle ---
 QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
   // Factory Logic
+#ifdef QUAN_CUDA_AVAILABLE
+  if (!force_local) {
+    try {
+      // Stub: In real imp, check device count e.g. cudaGetDeviceCount
+      backend = std::make_unique<qubit_engine::CudaBackend>(n);
+      std::cout << "QuantumRegister: Using CudaBackend (GPU)" << std::endl;
+      return;
+    } catch (...) {
+      std::cerr << "QuantumRegister: CudaBackend failed. Falling back."
+                << std::endl;
+    }
+  }
+#endif
+
 #ifdef __APPLE__
   // Check if Metal shaders are available before using Metal backend
   bool metalAvailable = false;
