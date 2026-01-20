@@ -226,6 +226,7 @@ add_executable(qubit_engine
     src/ServiceImpl_Visualize.cpp
     ${METAL_SOURCES}
     src/backends/GPUQuantumRegister.cpp
+    src/CircuitOptimizer.cpp
     src/main.cpp
     ${PROTO_SRC_GENERATED_CPP}
     ${GRPC_SRC_GENERATED_CPP}
@@ -276,6 +277,7 @@ pybind11_add_module(qubit_engine_module MODULE
     src/backends/CpuBackend.cpp
     ${METAL_SOURCES}
     src/backends/GPUQuantumRegister.cpp
+    src/CircuitOptimizer.cpp
     ${GPU_SOURCES}
 )
 set_target_properties(qubit_engine_module PROPERTIES OUTPUT_NAME "qubit_engine")
@@ -317,6 +319,7 @@ target_sources(tests PRIVATE
     ${METAL_SOURCES}
     src/ServiceImpl.cpp
     src/ServiceImpl_Visualize.cpp
+    src/CircuitOptimizer.cpp
     ${PROTO_SRC_GENERATED_CPP}
     ${GRPC_SRC_GENERATED_CPP}
 )
@@ -354,6 +357,7 @@ target_sources(benchmark PRIVATE
     ${METAL_SOURCES}
     src/ServiceImpl.cpp
     src/ServiceImpl_Visualize.cpp
+    src/CircuitOptimizer.cpp
     ${PROTO_SRC_GENERATED_CPP}
     ${GRPC_SRC_GENERATED_CPP}
 )
@@ -384,6 +388,7 @@ if(MPI_FOUND)
     target_sources(mpi_test PRIVATE
         src/QuantumRegister.cpp
         src/backends/CpuBackend.cpp
+        src/CircuitOptimizer.cpp
             ${PROTO_SRC_GENERATED_CPP}
         ${GRPC_SRC_GENERATED_CPP}
     )
