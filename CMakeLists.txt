@@ -1,8 +1,13 @@
 cmake_minimum_required(VERSION 3.15)
-project(QubitEngine)
+project(QubitEngine LANGUAGES C CXX OBJCXX)
 
 set(CMAKE_CXX_STANDARD 17)
-add_compile_options(-O3 -mavx2 -mfma)
+
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
+    add_compile_options(-O3 -mavx2 -mfma)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+    add_compile_options(-O3) # NEON is default on Apple Silicon
+endif()
 
 find_package(Protobuf REQUIRED)
 find_package(gRPC REQUIRED)
@@ -14,7 +19,8 @@ include_directories(backend/src)
 include_directories(backend/src/generated)
 
 # 2. Find Sources
-file(GLOB_RECURSE ENGINE_SRCS "backend/src/*.cpp")
+# Include .mm for Metal support
+file(GLOB_RECURSE ENGINE_SRCS "backend/src/*.cpp" "backend/src/*.mm")
 # We will manually compile protos in makefile or docker, so just find them
 file(GLOB_RECURSE PROTO_SRCS "backend/src/generated/*.cc")
 
@@ -33,4 +39,7 @@ target_link_libraries(qubit_engine
     OpenSSL::Crypto
     Threads::Threads
     dl
+    "-framework Metal"
+    "-framework Foundation"
+    "-framework CoreGraphics"
 )

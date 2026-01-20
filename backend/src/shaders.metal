@@ -208,4 +208,45 @@ kernel void cnot_kernel(device Complex* state [[buffer(0)]],
         state[j] = state[k];
         state[k] = temp;
     }
+// Phase S Kernel (Z rotation by PI/2)
+// S = [1 0; 0 i]
+kernel void phases_kernel(device Complex* state [[buffer(0)]],
+                          constant uint& stride [[buffer(1)]],
+                          uint id [[thread_position_in_grid]]) {
+    uint group = id / stride;
+    uint offset = id % stride;
+    // uint j = 2 * group * stride + offset;
+    uint k = 2 * group * stride + offset + stride;
+    
+    // b' = i*b = -b.imag + i*b.real
+    Complex b = state[k];
+    Complex res_b;
+    res_b.real = -b.imag;
+    res_b.imag = b.real;
+    
+    state[k] = res_b;
+}
+
+// Phase T Kernel (Z rotation by PI/4)
+// T = [1 0; 0 e^i*pi/4]
+// e^i*pi/4 = cos(pi/4) + i*sin(pi/4) = 1/sqrt(2) + i/sqrt(2)
+kernel void phaset_kernel(device Complex* state [[buffer(0)]],
+                          constant uint& stride [[buffer(1)]],
+                          uint id [[thread_position_in_grid]]) {
+    uint group = id / stride;
+    uint offset = id % stride;
+    // uint j = 2 * group * stride + offset;
+    uint k = 2 * group * stride + offset + stride;
+    
+    Complex b = state[k];
+    
+    // b' = b * (1/sqrt2 + i/sqrt2)
+    // real = b.real * inv_sqrt2 - b.imag * inv_sqrt2
+    // imag = b.real * inv_sqrt2 + b.imag * inv_sqrt2
+    
+    Complex res_b;
+    res_b.real = (b.real - b.imag) * INV_SQRT_2;
+    res_b.imag = (b.real + b.imag) * INV_SQRT_2;
+    
+    state[k] = res_b;
 }

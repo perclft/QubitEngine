@@ -52,7 +52,10 @@ private:
   void *rxPipeline_;
   void *ryPipeline_;
   void *rzPipeline_;
+  void *phaseSPipeline_;
+  void *phaseTPipeline_;
   void *cnotPipeline_;
+  void *toffoliPipeline_;
 
   void initializeMetal();
   void buildPipelines(void *library);

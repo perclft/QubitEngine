@@ -84,6 +84,8 @@ void MetalBackend::buildPipelines(void *libPtr) {
   pauliyPipeline_ = createPipe(@"pauliy_kernel");
   paulizPipeline_ = createPipe(@"pauliz_kernel");
   rxPipeline_ = createPipe(@"rx_kernel");
+  phaseSPipeline_ = createPipe(@"phases_kernel");
+  phaseTPipeline_ = createPipe(@"phaset_kernel");
   ryPipeline_ = createPipe(@"ry_kernel");
   rzPipeline_ = createPipe(@"rz_kernel");
   cnotPipeline_ = createPipe(@"cnot_kernel");
@@ -122,6 +124,13 @@ void MetalBackend::uploadState(const std::vector<Complex> &cpuState) {
 
 void MetalBackend::downloadState(std::vector<Complex> &cpuState) const {
   id<MTLBuffer> mtlBuf = (__bridge id<MTLBuffer>)gpuBuffer_;
+
+  // SYNC: Wait for all pending GPU work to finish
+  id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)commandQueue_;
+  id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
+  [cmdBuf commit];
+  [cmdBuf waitUntilCompleted];
+
   void *ptr = [mtlBuf contents];
   size_t num_elements = 1ULL << num_qubits_;
 
@@ -169,7 +178,7 @@ void MetalBackend::dispatchHelper(void *queuePtr, void *psoPtr, void *bufPtr,
   [enc dispatchThreads:gridSize threadsPerThreadgroup:threadsPerGroup];
   [enc endEncoding];
   [cmdBuf commit];
-  [cmdBuf waitUntilCompleted];
+  // Removed [cmdBuf waitUntilCompleted] for Async Execution!
 }
 
 // --- Gate Implementations ---
@@ -226,16 +235,31 @@ void MetalBackend::applyRotationZ(size_t target, Precision angle) {
                  {4, 4});
 }
 
-// --- Stubs for unused/complex gates ---
-void MetalBackend::applyToffoli(size_t c1, size_t c2, size_t target) {}
-void MetalBackend::applyPhaseS(size_t target) {}
-void MetalBackend::applyPhaseT(size_t target) {}
+void MetalBackend::applyPhaseS(size_t target) {
+  uint32_t stride = 1 << target;
+  size_t dim = 1ULL << num_qubits_;
+  dispatchHelper(commandQueue_, phaseSPipeline_, gpuBuffer_, dim, {&stride},
+                 {sizeof(uint32_t)});
+}
+
+void MetalBackend::applyPhaseT(size_t target) {
+  uint32_t stride = 1 << target;
+  size_t dim = 1ULL << num_qubits_;
+  dispatchHelper(commandQueue_, phaseTPipeline_, gpuBuffer_, dim, {&stride},
+                 {sizeof(uint32_t)});
+}
+
+void MetalBackend::applyToffoli(size_t c1, size_t c2, size_t target) {
+  // Stilling stubbed for now until logic verified
+}
 void MetalBackend::applyDepolarizingNoise(Precision p) {}
 
 int MetalBackend::measure(size_t target) {
+  // SYNC is implicit here because getStateVector calls downloadState which we
+  // just synced.
   auto state = getStateVector();
 
-  double prob0 = 0.0; // Use double for accumulation precision
+  double prob0 = 0.0;
   size_t stride = 1ULL << target;
   for (size_t i = 0; i < state.size(); ++i) {
     if (!(i & stride))
@@ -282,6 +306,7 @@ double MetalBackend::expectationValue(const std::string &pauli) { return 0.0; }
 namespace qubit_engine {
 MetalBackend::MetalBackend(size_t n) {}
 MetalBackend::~MetalBackend() {}
+void MetalBackend::initializeMetal() {}
 void MetalBackend::applyHadamard(size_t t) {}
 void MetalBackend::applyX(size_t t) {}
 void MetalBackend::applyY(size_t t) {}
