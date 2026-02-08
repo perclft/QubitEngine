@@ -155,8 +155,58 @@ export const GenerativeCanvas: React.FC<GenerativeCanvasProps> = ({ amplitude0, 
         return () => cancelAnimationFrame(reqIdRef.current);
     }, []); // Empty dependency array - runs once and uses refs for data
 
+    // --- Draggable Logic ---
+    const [position, setPosition] = useState({ x: 20, y: 20 });
+    const [isDragging, setIsDragging] = useState(false);
+    const dragStartRef = useRef({ x: 0, y: 0 });
+    const windowStartRef = useRef({ x: 0, y: 0 });
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        // Only allow dragging from the container/header, not the canvas itself if interaction is needed there (though canvas is visual only here)
+        setIsDragging(true);
+        dragStartRef.current = { x: e.clientX, y: e.clientY };
+        windowStartRef.current = { ...position };
+        e.preventDefault(); // Prevent text selection
+    };
+
+    useEffect(() => {
+        if (!isDragging) return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            const dx = e.clientX - dragStartRef.current.x;
+            const dy = e.clientY - dragStartRef.current.y;
+            setPosition({
+                x: windowStartRef.current.x + dx,
+                y: windowStartRef.current.y + dy
+            });
+        };
+
+        const handleMouseUp = () => {
+            setIsDragging(false);
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging]);
+
     return (
-        <div style={{ position: 'absolute', top: 20, left: 20, pointerEvents: 'none' }}>
+        <div
+            onMouseDown={handleMouseDown}
+            style={{
+                position: 'absolute',
+                top: position.y,
+                left: position.x,
+                pointerEvents: 'auto', // Re-enable pointer events for dragging
+                cursor: isDragging ? 'grabbing' : 'grab',
+                userSelect: 'none', // Prevent text selection while dragging
+                zIndex: 1000 // Ensure it sits on top
+            }}
+        >
             <h3 style={{ color: `hsl(${displayHue}, 100%, 60%)`, margin: 0, textShadow: `0 0 10px hsl(${displayHue}, 100%, 50%)` }}>
                 Quantum Particle Field
             </h3>
@@ -177,3 +227,4 @@ export const GenerativeCanvas: React.FC<GenerativeCanvasProps> = ({ amplitude0, 
         </div>
     );
 };
+

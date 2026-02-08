@@ -532,24 +532,43 @@ std::vector<double> CpuBackend::getProbabilities() {
 }
 
 double CpuBackend::expectationValue(const std::string &pauli_string) {
-  double expected_value = 0.0;
-  // #pragma omp parallel for reduction(+:expected_value)
-  for (size_t i = 0; i < state.size(); ++i) {
-    double prob = std::norm(state[i]);
-    if (prob < 1e-15)
-      continue;
+  Complex expected_value = 0.0;
+  size_t local_dim = state.size();
+  // Note: Only safe for single-rank execution (local_dim == total_dim)
+  // For distributed, this requires communication (Swap/Gather).
+  // Assuming singleton execution for VQE on H2/LiH (small qubits).
 
-    int sign = 1;
+  // #pragma omp parallel for reduction(+:expected_value) // Complex reduction
+  // requires OpenMP 4.0+
+  for (size_t i = 0; i < local_dim; ++i) {
+    size_t j = i;
+    Complex coeff = 1.0;
+
     for (size_t q = 0; q < num_qubits && q < pauli_string.size(); ++q) {
       char op = pauli_string[q];
-      if (op == 'Z') {
-        if ((i >> q) & 1)
-          sign *= -1;
+      if (op == 'I')
+        continue;
+
+      bool bit_set = (i >> q) & 1;
+
+      if (op == 'X') {
+        j ^= (1ULL << q);
+      } else if (op == 'Y') {
+        j ^= (1ULL << q);
+        // Y|0> = i|1>, Y|1> = -i|0>
+        coeff *= (bit_set ? Complex(0, -1) : Complex(0, 1));
+      } else if (op == 'Z') {
+        if (bit_set)
+          coeff *= -1.0;
       }
     }
-    expected_value += prob * sign;
+
+    if (j < local_dim) {
+      // <psi|P|psi> = sum_i conj(psi[i]) * coeff * psi[j]
+      expected_value += std::conj(state[i]) * coeff * state[j];
+    }
   }
-  return expected_value;
+  return expected_value.real();
 }
 
 std::vector<Complex> CpuBackend::getStateVector() const { return state; }

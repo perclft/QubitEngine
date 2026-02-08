@@ -214,20 +214,20 @@ function InputLily({ position, hue, onConfirm, onCancel }: { position: [number, 
 
 
 
+import { SwampAudio, type SwampAudioRef } from './SwampAudio';
+
 // --- Decoherence Storm (Rain & Lightning) ---
-function DecoherenceStorm({ entropy }: { entropy: number }) {
+function DecoherenceStorm({ entropy, onLightning }: { entropy: number, onLightning?: () => void }) {
     const { scene } = useThree();
     const rainRef = useRef<THREE.InstancedMesh>(null);
     const lightRef = useRef<THREE.PointLight>(null);
     const flashIntensity = useRef(0);
     
+    // ... (Rain setup same as before) ...
     // 1000 raindrops
     const count = 1000;
     const dummy = useMemo(() => new THREE.Object3D(), []);
-
-    // Initialize rain positions
     const particles = useMemo(() => {
-        // eslint-disable-next-line
         return new Array(count).fill(0).map(() => ({
             x: (Math.random() - 0.5) * 50,
             y: Math.random() * 20,
@@ -241,36 +241,30 @@ function DecoherenceStorm({ entropy }: { entropy: number }) {
         if (entropy > 0.5 && rainRef.current) {
             particles.forEach((p, i) => {
                 p.y -= p.speed;
-                if (p.y < 0) p.y = 20; // Reset to top
-                
+                if (p.y < 0) p.y = 20; 
                 dummy.position.set(p.x, p.y, p.z);
-                // Rain slant
                 dummy.rotation.z = 0.1;
-                dummy.scale.set(0.05, 1, 0.05); // Thin streaks
+                dummy.scale.set(0.05, 1, 0.05); 
                 dummy.updateMatrix();
                 rainRef.current!.setMatrixAt(i, dummy.matrix);
             });
             rainRef.current.instanceMatrix.needsUpdate = true;
-            // Opacity based on entropy (fade in from 0.5 to 0.8)
             const rainIntensity = Math.min(1, (entropy - 0.5) * 3);
             if (rainRef.current.material) {
                 (rainRef.current.material as THREE.MeshBasicMaterial).opacity = rainIntensity * 0.6;
             }
         } else if (rainRef.current && rainRef.current.material) {
-             (rainRef.current.material as THREE.MeshBasicMaterial).opacity = 0; // Hide rain
+             (rainRef.current.material as THREE.MeshBasicMaterial).opacity = 0; 
         }
 
         // --- 2. Lightning Animation ---
-        // Threshold: Entropy > 0.6 triggers storms
         if (entropy > 0.6) {
-             // Higher entropy = more frequent flashes
-             // At entropy 1.0: chance is 0.02 (approx 1 flash per second at 60fps)
              const chance = (entropy - 0.6) * 0.05; 
-             
              if (Math.random() < chance) {
-                 flashIntensity.current = 1.0; // Trigger Full Flash
-                 
-                 // Random Thunderbolt Position
+                 flashIntensity.current = 1.0; 
+                 // Trigger Audio
+                 onLightning?.();
+
                  if (lightRef.current) {
                     lightRef.current.position.set(
                         (Math.random() - 0.5) * 40,
@@ -284,16 +278,13 @@ function DecoherenceStorm({ entropy }: { entropy: number }) {
         // Decay Flash
         flashIntensity.current *= 0.85;
 
-        // Apply Flash to Scene
+        // Apply Flash
         if (lightRef.current) {
-            // Local Point Light (The Bolt itself)
-            lightRef.current.intensity = flashIntensity.current * 500; // Massive intensity
+            lightRef.current.intensity = flashIntensity.current * 500; 
         }
 
-        // Global Atmosphere Flash (Fog & Ambient)
         if (scene.fog instanceof THREE.Fog) {
             if (flashIntensity.current > 0.01) {
-                // Flash to dull blue-white
                 const flashColor = new THREE.Color('#8899ff').multiplyScalar(flashIntensity.current * 0.5);
                 const baseColor = new THREE.Color('#020205');
                 scene.fog.color.copy(baseColor).add(flashColor);
@@ -309,44 +300,36 @@ function DecoherenceStorm({ entropy }: { entropy: number }) {
                 <cylinderGeometry args={[0.05, 0.05, 1]} />
                 <meshBasicMaterial color="#aaddff" transparent opacity={0} blending={THREE.AdditiveBlending} />
             </instancedMesh>
-            {/* Lightning Light Source */}
             <pointLight ref={lightRef} distance={200} color="#ccddee" intensity={0} decay={1} />
         </>
     );
 }
 
 export function QuantumSwamp({ entropy: userEntropy = 0.1 }: { entropy?: number }) {
-    // State for streaming data
+    // ... (State same as before)
     const [liveData, setLiveData] = useState<QuantumStateData>({ entropy: userEntropy, phase: 0, amplitudes: [] });
-    // Lilies state
     const [lilies, setLilies] = useState<{ id: number; position: [number, number, number]; hue: number; text: string }[]>([]);
-    
-    // Ghost Input State
     const [pendingLily, setPendingLily] = useState<{ position: [number, number, number]; hue: number } | null>(null);
+    const audioRef = useRef<SwampAudioRef>(null);
 
     // Subscribe to Backend Stream
     useEffect(() => {
         const dataStream = backend.streamQuantumState();
         let isActive = true;
-
         const consumeStream = async () => {
              for await (const data of dataStream) {
                  if (!isActive) break;
-                 setLiveData(data); // In a real app, might want to use refs or throttle this for performance
+                 setLiveData(data); 
              }
         };
-
         consumeStream();
         return () => { isActive = false; };
     }, []);
 
-    // effectiveEntropy combines User Slider + Quantum System Energy
     const effectiveEntropy = (userEntropy * 0.5) + (liveData.entropy * 0.5);
 
-    // ... (rest of component uses effectiveEntropy and liveData.phase)
-
+    // Trees Logic
     const trees = useMemo(() => {
-        // eslint-disable-next-line
         return Array.from({ length: 20 }).map(() => ({
             x: (Math.random() - 0.5) * 25,
             z: (Math.random() - 0.5) * 25,
@@ -354,18 +337,14 @@ export function QuantumSwamp({ entropy: userEntropy = 0.1 }: { entropy?: number 
         }));
     }, []);
 
-    // ... (handleWaterClick uses effectiveEntropy)
     const handleWaterClick = (e: ThreeEvent<MouseEvent>) => {
         e.stopPropagation();
-        if (pendingLily) return; // Don't allow multiple inputs at once
-
+        if (pendingLily) return; 
         const x = e.point.x;
         const z = e.point.z;
-        
         const baseHue = 180; 
         const variance = effectiveEntropy * 360; 
         const hue = baseHue + (Math.random() - 0.5) * variance;
-
         setPendingLily({ position: [x, 0, z], hue });
     };
 
@@ -383,8 +362,14 @@ export function QuantumSwamp({ entropy: userEntropy = 0.1 }: { entropy?: number 
 
     return (
         <div className="matter-sculpt-container" style={{ background: 'linear-gradient(to bottom, #020205, #001111)' }}>
+            {/* Audio Engine (Hidden) */}
+            <SwampAudio 
+                ref={audioRef}
+                entropy={effectiveEntropy} 
+                enabled={true} 
+            />
+
             <Canvas camera={{ position: [8, 6, 12], fov: 55 }}>
-                {/* ... (Lighting, Environment, Sparkles same as before) */}
                 <color attach="background" args={['#010101']} />
                 
                 <ambientLight intensity={0.2} />
@@ -394,24 +379,18 @@ export function QuantumSwamp({ entropy: userEntropy = 0.1 }: { entropy?: number 
                 <Stars radius={100} depth={50} count={3000} factor={4} saturation={0} fade speed={1} />
                 <Cloud opacity={0.3} speed={0.2} segments={15} position={[0, 8, -15]} color="#0a2a2a" />
                 
-                <Sparkles 
-                    count={200} 
-                    scale={15} 
-                    size={6} 
-                    speed={0.2} 
-                    opacity={0.8} 
-                    color="#aaffff" 
-                />
+                <Sparkles count={200} scale={15} size={6} speed={0.2} opacity={0.8} color="#aaffff" />
 
-                {/* Interactive Water Surface - Driven by Backend Phase */}
                 <group onClick={handleWaterClick}>
                     <SwampWater phase={liveData.phase} />
                 </group>
 
-                {/* Weather System */}
-                <DecoherenceStorm entropy={effectiveEntropy} />
+                {/* Weather System with Audio Trigger */}
+                <DecoherenceStorm 
+                    entropy={effectiveEntropy} 
+                    onLightning={() => audioRef.current?.triggerThunder()} 
+                />
                 
-                {/* Trees - Driven by Effective Entropy */}
                 {trees.map((tree, i) => (
                     <QuantumTree key={i} position={[tree.x, 0, tree.z]} entropy={effectiveEntropy} />
                 ))}
@@ -420,7 +399,6 @@ export function QuantumSwamp({ entropy: userEntropy = 0.1 }: { entropy?: number 
                     <QuantumLotus key={lily.id} position={lily.position} hue={lily.hue} text={lily.text} />
                 ))}
 
-                {/* Pending Input Lily */}
                 {pendingLily && (
                     <InputLily 
                         position={pendingLily.position} 
@@ -445,7 +423,7 @@ export function QuantumSwamp({ entropy: userEntropy = 0.1 }: { entropy?: number 
                         System Entropy: {effectiveEntropy.toFixed(3)} | Phase: {liveData.phase.toFixed(2)}rad
                         <br/>
                         <span style={{ fontSize: '0.8em', color: '#4ecdc4' }}>
-                            *Click water to whisper a memory*
+                            *Now Playing: Neural Dream (Good Days)*
                         </span>
                     </div>
                 </div>

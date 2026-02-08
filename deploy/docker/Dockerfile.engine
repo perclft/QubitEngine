@@ -56,17 +56,18 @@ RUN ls -R /usr/lib/x86_64-linux-gnu/openmpi/include || echo "MPI Dir Not Found"
 RUN cmake -B build -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_CXX_COMPILER=mpic++ backend && \
     cmake --build build --config Release && \
-    chmod +x /build/build/qubit_engine
+    chmod +x /build/bin/qubit_engine
 
 # --- Stage 2: Optimized Runtime ---
 FROM debian:bookworm-slim
 
-COPY --from=builder /build/build/qubit_engine /usr/local/bin/qubit_engine
+COPY --from=builder /build/bin/qubit_engine /usr/local/bin/qubit_engine
 
 # Install runtime libs
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libstdc++6 libgrpc++1.51 libprotobuf32 libssl3 zlib1g libc-ares2 \
     libgflags2.2 libgoogle-glog0v6 \
+    libopenmpi3 openmpi-bin libgomp1 \
     libopenmpi3 openmpi-bin \
     && rm -rf /var/lib/apt/lists/*
 
