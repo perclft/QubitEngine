@@ -24,7 +24,7 @@ graph TD
         BackendSelector -->|GPU| CudaBackend[CudaBackend]
         
         CpuBackend -->|OpenMP/AVX| CpuExecution[CPU Execution]
-        CudaBackend -->|CUDA Runtime| GateKernels[CUDA Kernels (.cu)]
+        CudaBackend -->|CUDA Runtime| GateKernels[CUDA Kernels.cu]
         
         GateKernels -->|nVidia Driver| GPU[GPU Hardware]
     end
