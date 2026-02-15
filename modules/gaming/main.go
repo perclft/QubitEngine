@@ -14,8 +14,8 @@ import (
 	"time"
 
 	pb "github.com/perclft/QubitEngine/api/generated"
+	"github.com/perclft/QubitEngine/pkg/service"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // ------------------------------------------------------------------
@@ -160,13 +160,11 @@ func (s *GamingServer) AskOracle(ctx context.Context, req *pb.OracleRequest) (*p
 
 // measureQuantumState connects to the Engine service to run a 3-qubit Hadamard circuit
 func (s *GamingServer) measureQuantumState(ctx context.Context) (int32, map[uint32]bool, error) {
-	conn, err := grpc.Dial(s.engineAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, client, err := service.ConnectToEngine(s.engineAddr)
 	if err != nil {
 		return 0, nil, err
 	}
 	defer conn.Close()
-
-	client := pb.NewQuantumComputeClient(conn)
 
 	// Create 3-qubit circuit with H gates on all qubits
 	req := &pb.CircuitRequest{

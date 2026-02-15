@@ -14,8 +14,8 @@ import (
 	"sync"
 
 	pb "github.com/perclft/QubitEngine/api/generated"
+	"github.com/perclft/QubitEngine/pkg/service"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // ------------------------------------------------------------------
@@ -152,13 +152,13 @@ type MusicServer struct {
 }
 
 func NewMusicServer(engineAddr string) *MusicServer {
-	conn, err := grpc.Dial(engineAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, client, err := service.ConnectToEngine(engineAddr)
 	if err != nil {
 		log.Printf("⚠️ Failed to connect to engine: %v", err)
 	}
 
 	return &MusicServer{
-		engineClient: pb.NewQuantumComputeClient(conn),
+		engineClient: client,
 		engineConn:   conn,
 		stateVector:  NewEqualSuperposition(),
 		lastNote:     -1,

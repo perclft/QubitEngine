@@ -56,7 +56,7 @@ services:
     networks:
       - qubit-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U qubit -d quantumcloud"]
+      test: [ "CMD-SHELL", "pg_isready -U qubit -d quantumcloud" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -74,7 +74,7 @@ services:
       - DB_USER=qubit
       - DB_PASS=quantum
       - DB_NAME=quantumcloud
-    command: ["-db-host", "postgres"]
+    command: [ "-db-host", "postgres" ]
     networks:
       - qubit-net
     depends_on:
@@ -89,7 +89,7 @@ services:
     networks:
       - qubit-net
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -101,7 +101,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - "50053:50053"
-    command: ["-redis-addr", "redis:6379", "-engine-addr", "engine:50051"]
+    command: [ "-redis-addr", "redis:6379", "-engine-addr", "engine:50051" ]
     networks:
       - qubit-net
     depends_on:
@@ -117,7 +117,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - "50054:50054"
-    command: ["-redis-addr", "redis:6379", "-default-ttl", "60"]
+    command: [ "-redis-addr", "redis:6379", "-default-ttl", "60" ]
     networks:
       - qubit-net
     depends_on:
@@ -127,11 +127,11 @@ services:
   # 9. Gaming Module (with Oracle)
   gaming:
     build:
-      context: ../../modules/gaming
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: modules/gaming/Dockerfile
     ports:
       - "50061:50061"
-    command: ["-port", "50061", "-engine-addr", "engine:50051"]
+    command: [ "-port", "50061", "-engine-addr", "engine:50051" ]
     networks:
       - qubit-net
     depends_on:
@@ -145,23 +145,23 @@ services:
       dockerfile: Dockerfile
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN:-}
-    command: ["-gaming-addr", "gaming:50061"]
+    command: [ "-gaming-addr", "gaming:50061" ]
     networks:
       - qubit-net
     depends_on:
       gaming:
         condition: service_started
     profiles:
-      - bot  # Only start with `docker compose --profile bot up`
+      - bot # Only start with `docker compose --profile bot up`
 
   # 11. Music Module (Quantum Mozart)
   music:
     build:
-      context: ../../modules/music
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: modules/music/Dockerfile
     ports:
       - "50062:50062"
-    command: ["-port", "50062", "-engine-addr", "engine:50051"]
+    command: [ "-port", "50062", "-engine-addr", "engine:50051" ]
     networks:
       - qubit-net
     depends_on:
@@ -175,7 +175,7 @@ services:
       dockerfile: modules/crypto/Dockerfile
     ports:
       - "50063:50063"
-    command: ["-port", "50063", "-engine-addr", "engine:50051"]
+    command: [ "-port", "50063", "-engine-addr", "engine:50051" ]
     networks:
       - qubit-net
     depends_on:

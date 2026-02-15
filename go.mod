@@ -3,6 +3,7 @@ module github.com/perclft/QubitEngine
 go 1.24.0
 
 require (
+	github.com/perclft/QubitEngine/api v0.0.0-20260208224746-b2f469a30b64
 	google.golang.org/grpc v1.77.0
 	google.golang.org/protobuf v1.36.11
 )
