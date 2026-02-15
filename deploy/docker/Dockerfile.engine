@@ -67,6 +67,8 @@ RUN cmake -B build -DCMAKE_BUILD_TYPE=Release \
 FROM debian:bookworm-slim
 
 COPY --from=builder /build/bin/qubit_engine /usr/local/bin/qubit_engine
+COPY --from=builder /build/bin/tests /usr/local/bin/tests
+COPY --from=builder /build/bin/benchmark /usr/local/bin/benchmark
 # Copy CUDA runtime lib (adjust path if needed, usually in multiarch dir)
 COPY --from=builder /usr/lib/*-linux-gnu/libcudart.so* /usr/local/lib/
 # Also copy nvidia-ml and other potentially needed libs if they are dynamic

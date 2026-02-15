@@ -32,17 +32,7 @@ __global__ void kHadamard(cuDoubleComplex *state, int num_qubits, int target) {
   if (idx >= half_dim)
     return;
 
-  // Convert linear index 'idx' to pair (i0, i1) where i0 has 0 at 'target' bit
-  int mask_low = (1 << target) - 1;
-  int start_low = idx & mask_low;
-  int start_high = (idx >> target) << (target + 1); // fixed: verify shift logic
-  // Actually simpler:
-  // idx mapped to i0: insert 0 at pos 'target'
-  // low part: idx & ((1<<target)-1)
-  // high part: (idx >> target) << (target+1) -> no, just (idx & ~mask_low) << 1
-
-  // Correct mapping:
-  // idx = a_n ... a_0 (n-1 bits) -> insert 0 at target
+  // Mask logic is same as kApplyX
   int i0 = ((idx >> target) << (target + 1)) | (idx & ((1 << target) - 1));
   int i1 = i0 | (1 << target);
 
@@ -84,9 +74,6 @@ __global__ void kApplyY(cuDoubleComplex *state, int num_qubits, int target) {
   cuDoubleComplex v1 = state[i1];
 
   // Y = [[0, -i], [i, 0]]
-  // new_v0 = -i * v1
-  // new_v1 = i * v0
-
   cuDoubleComplex I = make_cuDoubleComplex(0, 1);
   cuDoubleComplex nI = make_cuDoubleComplex(0, -1);
 
@@ -104,10 +91,7 @@ __global__ void kApplyZ(cuDoubleComplex *state, int num_qubits, int target) {
   int i0 = ((idx >> target) << (target + 1)) | (idx & ((1 << target) - 1));
   int i1 = i0 | (1 << target);
 
-  // Z = [[1, 0], [0, -1]]
-  // v0 -> v0
-  // v1 -> -v1
-
+  // Z rule: v1 -> -v1
   state[i1] = scale(state[i1], -1.0);
 }
 
@@ -129,15 +113,30 @@ __global__ void kRotationY(cuDoubleComplex *state, int num_qubits, int target,
   double c = cos(half_theta);
   double s = sin(half_theta);
 
-  // Ry(theta) = [[cos(t/2), -sin(t/2)], [sin(t/2), cos(t/2)]]
-  // new_v0 = c*v0 - s*v1
-  // new_v1 = s*v0 + c*v1
-
   cuDoubleComplex term1 = scale(v0, c);
   cuDoubleComplex term2 = scale(v1, s);
 
   state[i0] = sub(term1, term2);
   state[i1] = add(scale(v0, s), scale(v1, c));
+}
+
+// CNOT Kernel
+__global__ void kCNOT(cuDoubleComplex *state, int num_qubits, int control,
+                      int target) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int half_dim = 1 << (num_qubits - 1);
+  if (idx >= half_dim)
+    return;
+
+  int i0 = ((idx >> target) << (target + 1)) | (idx & ((1 << target) - 1));
+  int i1 = i0 | (1 << target);
+
+  // Check if control bit is set in i0
+  if ((i0 >> control) & 1) {
+    cuDoubleComplex temp = state[i0];
+    state[i0] = state[i1];
+    state[i1] = temp;
+  }
 }
 
 namespace qe {
@@ -147,7 +146,6 @@ void launchHadamard(void *deviceState, int num_qubits, int target) {
   int half_dim = 1 << (num_qubits - 1);
   int blockSize = 256;
   int numBlocks = (half_dim + blockSize - 1) / blockSize;
-
   kHadamard<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState,
                                       num_qubits, target);
   cudaDeviceSynchronize();
@@ -187,6 +185,15 @@ void launchRotationY(void *deviceState, int num_qubits, int target,
   int numBlocks = (half_dim + blockSize - 1) / blockSize;
   kRotationY<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState,
                                        num_qubits, target, angle);
+  cudaDeviceSynchronize();
+}
+
+void launchCNOT(void *deviceState, int num_qubits, int control, int target) {
+  int half_dim = 1 << (num_qubits - 1);
+  int blockSize = 256;
+  int numBlocks = (half_dim + blockSize - 1) / blockSize;
+  kCNOT<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
+                                  control, target);
   cudaDeviceSynchronize();
 }
 

@@ -14,6 +14,7 @@ void launchapplyY(void *deviceState, int num_qubits, int target);
 void launchapplyZ(void *deviceState, int num_qubits, int target);
 void launchRotationY(void *deviceState, int num_qubits, int target,
                      double angle);
+void launchCNOT(void *deviceState, int num_qubits, int control, int target);
 
 } // namespace cuda
 } // namespace qe

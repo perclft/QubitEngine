@@ -217,6 +217,7 @@ grpc_generate_cpp(GRPC_SRC_GENERATED_CPP GRPC_HDR_GENERATED_CPP
 set(GPU_SOURCES "")
 if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
     list(APPEND GPU_SOURCES src/kernels/gate_kernels.cu)
+    list(APPEND GPU_SOURCES src/backends/CudaBackend.cpp)
 endif()
 
 add_executable(qubit_engine 
@@ -305,7 +306,7 @@ endif()
 enable_testing()
 find_package(GTest CONFIG REQUIRED)
 
-add_executable(tests tests/QuantumTests.cpp tests/ServiceTests.cpp)
+add_executable(tests tests/QuantumTests.cpp tests/ServiceTests.cpp tests/CudaTests.cpp)
 
 # Link QubitEngine sources (excluding main.cpp) to tests or link object lib?
 # Easiest is to add sources to tests executable for now, or make a library.
@@ -322,6 +323,7 @@ target_sources(tests PRIVATE
     src/CircuitOptimizer.cpp
     ${PROTO_SRC_GENERATED_CPP}
     ${GRPC_SRC_GENERATED_CPP}
+    ${GPU_SOURCES}
 )
 
 target_include_directories(tests PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
@@ -360,6 +362,7 @@ target_sources(benchmark PRIVATE
     src/CircuitOptimizer.cpp
     ${PROTO_SRC_GENERATED_CPP}
     ${GRPC_SRC_GENERATED_CPP}
+    ${GPU_SOURCES}
 )
 target_include_directories(benchmark PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(benchmark PRIVATE
@@ -391,6 +394,7 @@ if(MPI_FOUND)
         src/CircuitOptimizer.cpp
             ${PROTO_SRC_GENERATED_CPP}
         ${GRPC_SRC_GENERATED_CPP}
+        ${GPU_SOURCES}
     )
     target_include_directories(mpi_test PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
     target_link_libraries(mpi_test PRIVATE

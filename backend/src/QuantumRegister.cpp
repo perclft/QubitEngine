@@ -8,7 +8,7 @@
 // --- Lifecycle ---
 QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
   // Factory Logic
-#ifdef QUAN_CUDA_AVAILABLE
+#ifdef ENABLE_CUDA
   if (!force_local) {
     try {
       // Stub: In real imp, check device count e.g. cudaGetDeviceCount
