@@ -7,11 +7,11 @@ import { QuantumAudio } from './QuantumAudio';
 import { ChaosDice } from './art/ChaosDice';
 import { MatterSculpt } from './art/MatterSculpt';
 import { SoundWaves } from './art/SoundWaves';
-import { QuantumSwamp } from './art/QuantumSwamp';
+
 import './ArtStudio.css';
 
 // Art mode definitions
-type ArtMode = 'chaos' | 'matter' | 'sound' | 'classic' | 'swamp';
+type ArtMode = 'chaos' | 'matter' | 'sound' | 'classic';
 
 interface ModeConfig {
     id: ArtMode;
@@ -21,7 +21,7 @@ interface ModeConfig {
 }
 
 const MODES: ModeConfig[] = [
-    { id: 'swamp', name: 'Build Her Swamp', icon: '🌫️', description: 'Procedural quantum biome generation' },
+
     { id: 'chaos', name: 'Chaos Dice', icon: '🎲', description: 'Quantum random dice with visual bursts' },
     { id: 'matter', name: 'Matter Sculpt', icon: '⚛️', description: 'VQE molecular visualization' },
     { id: 'sound', name: 'Sound Waves', icon: '🎵', description: 'Quantum music as flowing ribbons' },
@@ -122,8 +122,7 @@ export function ArtStudio({ onBack }: ArtStudioProps) {
 
     const renderModeContent = () => {
         switch (activeMode) {
-            case 'swamp':
-                return <QuantumSwamp entropy={entropy} />;
+
             case 'chaos':
                 return <ChaosDice onRollResult={(val) => console.log('Rolled:', val)} />;
             case 'matter':

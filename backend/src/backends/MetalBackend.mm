@@ -249,6 +249,26 @@ void MetalBackend::applyRotationZ(size_t target, Precision angle) {
                  {4, 4});
 }
 
+void MetalBackend::applyRotationX(size_t target, Precision angle) {
+  uint32_t stride = 1 << target;
+  float theta = (float)angle;
+  size_t dim = 1ULL << num_qubits_;
+  dispatchHelper(commandQueue_, rxPipeline_, gpuBuffer_, dim, {&stride, &theta},
+                 {4, 4});
+}
+
+void MetalBackend::applySWAP(size_t qubit1, size_t qubit2) {
+  applyCNOT(qubit1, qubit2);
+  applyCNOT(qubit2, qubit1);
+  applyCNOT(qubit1, qubit2);
+}
+
+void MetalBackend::applyCZ(size_t control, size_t target) {
+  applyHadamard(target);
+  applyCNOT(control, target);
+  applyHadamard(target);
+}
+
 void MetalBackend::applyPhaseS(size_t target) {
   uint32_t stride = 1 << target;
   size_t dim = 1ULL << num_qubits_;
@@ -331,6 +351,9 @@ void MetalBackend::applyPhaseS(size_t t) {}
 void MetalBackend::applyPhaseT(size_t t) {}
 void MetalBackend::applyRotationY(size_t t, Precision a) {}
 void MetalBackend::applyRotationZ(size_t t, Precision a) {}
+void MetalBackend::applyRotationX(size_t t, Precision a) {}
+void MetalBackend::applySWAP(size_t q1, size_t q2) {}
+void MetalBackend::applyCZ(size_t c, size_t t) {}
 void MetalBackend::applyDepolarizingNoise(Precision p) {}
 int MetalBackend::measure(size_t t) { return 0; }
 std::vector<double> MetalBackend::getProbabilities() { return {}; }

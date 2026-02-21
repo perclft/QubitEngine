@@ -4,7 +4,13 @@
 #ifndef QUANTUM_JIT_HPP
 #define QUANTUM_JIT_HPP
 
+#include <array>
+#include <chrono>
+#define _USE_MATH_DEFINES
 #include <cmath>
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 #include <complex>
 #include <memory>
 #include <string>

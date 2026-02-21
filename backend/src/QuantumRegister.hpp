@@ -35,8 +35,11 @@ public:
   void applyToffoli(size_t control1, size_t control2, size_t target);
   void applyPhaseS(size_t target);
   void applyPhaseT(size_t target);
+  void applyRotationX(size_t target, qubit_engine::Precision angle);
   void applyRotationY(size_t target, qubit_engine::Precision angle);
   void applyRotationZ(size_t target, qubit_engine::Precision angle);
+  void applySWAP(size_t qubit1, size_t qubit2);
+  void applyCZ(size_t control, size_t target);
 
   // --- Noise Simulation ---
   void applyDepolarizingNoise(qubit_engine::Precision probability);
@@ -67,7 +70,9 @@ public:
       PHASE_S,
       PHASE_T,
       TOFFOLI,
-      MEASURE
+      MEASURE,
+      SWAP,
+      CZ
     };
     Type type;
     std::vector<size_t> qubits; // [target] or [control, target]

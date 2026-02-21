@@ -306,7 +306,14 @@ endif()
 enable_testing()
 find_package(GTest CONFIG REQUIRED)
 
-add_executable(tests tests/QuantumTests.cpp tests/ServiceTests.cpp tests/CudaTests.cpp)
+add_executable(tests
+    tests/QuantumTests.cpp
+    tests/ServiceTests.cpp
+    tests/CudaTests.cpp
+    tests/JITTests.cpp
+    tests/OpenQASMTests.cpp
+    tests/DifferentiatorTests.cpp
+)
 
 # Link QubitEngine sources (excluding main.cpp) to tests or link object lib?
 # Easiest is to add sources to tests executable for now, or make a library.

@@ -24,8 +24,11 @@ public:
   void applyToffoli(size_t control1, size_t control2, size_t target) override;
   void applyPhaseS(size_t target) override;
   void applyPhaseT(size_t target) override;
+  void applyRotationX(size_t target, Precision angle) override;
   void applyRotationY(size_t target, Precision angle) override;
   void applyRotationZ(size_t target, Precision angle) override;
+  void applySWAP(size_t qubit1, size_t qubit2) override;
+  void applyCZ(size_t control, size_t target) override;
 
   // --- Noise ---
   void applyDepolarizingNoise(Precision probability) override;

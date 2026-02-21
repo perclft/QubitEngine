@@ -122,6 +122,25 @@ void QuantumRegister::applyRotationZ(size_t target,
   backend->applyRotationZ(target, angle);
 }
 
+void QuantumRegister::applyRotationX(size_t target,
+                                     qubit_engine::Precision angle) {
+  if (recording_enabled)
+    tape.push_back({RecordedGate::RX, {target}, {(double)angle}});
+  backend->applyRotationX(target, angle);
+}
+
+void QuantumRegister::applySWAP(size_t qubit1, size_t qubit2) {
+  if (recording_enabled)
+    tape.push_back({RecordedGate::SWAP, {qubit1, qubit2}, {}});
+  backend->applySWAP(qubit1, qubit2);
+}
+
+void QuantumRegister::applyCZ(size_t control, size_t target) {
+  if (recording_enabled)
+    tape.push_back({RecordedGate::CZ, {control, target}, {}});
+  backend->applyCZ(control, target);
+}
+
 // --- Noise ---
 
 void QuantumRegister::applyDepolarizingNoise(
@@ -187,7 +206,12 @@ void QuantumRegister::applyRegisteredGate(const RecordedGate &gate) {
     applyRotationY(gate.qubits[0], gate.params[0]);
   else if (gate.type == RecordedGate::RZ)
     applyRotationZ(gate.qubits[0], gate.params[0]);
-  // Add others if needed
+  else if (gate.type == RecordedGate::RX)
+    applyRotationX(gate.qubits[0], gate.params[0]);
+  else if (gate.type == RecordedGate::SWAP)
+    applySWAP(gate.qubits[0], gate.qubits[1]);
+  else if (gate.type == RecordedGate::CZ)
+    applyCZ(gate.qubits[0], gate.qubits[1]);
 }
 
 void QuantumRegister::applyRegisteredGateInverse(const RecordedGate &gate) {
@@ -205,4 +229,10 @@ void QuantumRegister::applyRegisteredGateInverse(const RecordedGate &gate) {
     applyRotationY(gate.qubits[0], -gate.params[0]);
   else if (gate.type == RecordedGate::RZ)
     applyRotationZ(gate.qubits[0], -gate.params[0]);
+  else if (gate.type == RecordedGate::RX)
+    applyRotationX(gate.qubits[0], -gate.params[0]);
+  else if (gate.type == RecordedGate::SWAP)
+    applySWAP(gate.qubits[0], gate.qubits[1]);
+  else if (gate.type == RecordedGate::CZ)
+    applyCZ(gate.qubits[0], gate.qubits[1]);
 }

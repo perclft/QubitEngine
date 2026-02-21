@@ -24,8 +24,11 @@ public:
                             size_t target) = 0;
   virtual void applyPhaseS(size_t target) = 0;
   virtual void applyPhaseT(size_t target) = 0;
+  virtual void applyRotationX(size_t target, Precision angle) = 0;
   virtual void applyRotationY(size_t target, Precision angle) = 0;
   virtual void applyRotationZ(size_t target, Precision angle) = 0;
+  virtual void applySWAP(size_t qubit1, size_t qubit2) = 0;
+  virtual void applyCZ(size_t control, size_t target) = 0;
 
   // --- Noise ---
   virtual void applyDepolarizingNoise(Precision probability) = 0;

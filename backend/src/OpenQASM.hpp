@@ -4,6 +4,9 @@
 #ifndef OPENQASM_HPP
 #define OPENQASM_HPP
 
+#define _USE_MATH_DEFINES
+#include <cmath>
+
 #include <map>
 #include <regex>
 #include <sstream>

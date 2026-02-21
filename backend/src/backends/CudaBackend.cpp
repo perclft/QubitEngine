@@ -112,6 +112,27 @@ void CudaBackend::applyRotationZ(size_t target, Precision angle) {
   qe::cuda::launchRotationZ(device_state_, num_qubits_, target, angle);
 }
 
+void CudaBackend::applyRotationX(size_t target, Precision angle) {
+  // Rx(θ) = H * Rz(θ) * H
+  applyHadamard(target);
+  applyRotationZ(target, angle);
+  applyHadamard(target);
+}
+
+void CudaBackend::applySWAP(size_t qubit1, size_t qubit2) {
+  // SWAP = CNOT(q1,q2) * CNOT(q2,q1) * CNOT(q1,q2)
+  applyCNOT(qubit1, qubit2);
+  applyCNOT(qubit2, qubit1);
+  applyCNOT(qubit1, qubit2);
+}
+
+void CudaBackend::applyCZ(size_t control, size_t target) {
+  // CZ = H(target) * CNOT(control, target) * H(target)
+  applyHadamard(target);
+  applyCNOT(control, target);
+  applyHadamard(target);
+}
+
 // --- Noise ---
 
 void CudaBackend::applyDepolarizingNoise(Precision probability) {

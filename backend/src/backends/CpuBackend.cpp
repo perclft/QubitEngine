@@ -471,6 +471,74 @@ void CpuBackend::applyRotationZ(size_t target, Precision angle) {
   }
 }
 
+void CpuBackend::applyRotationX(size_t target, Precision angle) {
+  // Rx(θ) = [[cos(θ/2), -i*sin(θ/2)], [-i*sin(θ/2), cos(θ/2)]]
+  size_t local_dim = state.size();
+  size_t stride = 1ULL << target;
+
+  Precision c = std::cos(angle / 2.0f);
+  Precision s = std::sin(angle / 2.0f);
+  Complex neg_is(0, -s); // -i*sin(θ/2)
+
+  if (stride < local_dim) {
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
+    for (long long i = 0; i < static_cast<long long>(local_dim);
+         i += 2 * stride) {
+      for (size_t j = i; j < i + stride; ++j) {
+        Complex a = state[j];
+        Complex b = state[j + stride];
+        state[j] = c * a + neg_is * b;
+        state[j + stride] = neg_is * a + c * b;
+      }
+    }
+  }
+}
+
+void CpuBackend::applySWAP(size_t qubit1, size_t qubit2) {
+  // SWAP = 3 CNOTs: CNOT(q1,q2) * CNOT(q2,q1) * CNOT(q1,q2)
+  // But direct implementation is simpler and more efficient
+  size_t local_dim = state.size();
+  size_t s1 = 1ULL << qubit1;
+  size_t s2 = 1ULL << qubit2;
+
+  if (s1 < local_dim && s2 < local_dim) {
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
+    for (long long i = 0; i < static_cast<long long>(local_dim); ++i) {
+      bool b1 = (i >> qubit1) & 1;
+      bool b2 = (i >> qubit2) & 1;
+      if (b1 != b2) {
+        // Swap bits qubit1 and qubit2
+        size_t partner = i ^ s1 ^ s2;
+        if (i < partner) {
+          std::swap(state[i], state[partner]);
+        }
+      }
+    }
+  }
+}
+
+void CpuBackend::applyCZ(size_t control, size_t target) {
+  // CZ: Apply -1 phase when both qubits are |1>
+  size_t local_dim = state.size();
+  size_t c_stride = 1ULL << control;
+  size_t t_stride = 1ULL << target;
+
+  if (c_stride < local_dim && t_stride < local_dim) {
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
+    for (long long i = 0; i < static_cast<long long>(local_dim); ++i) {
+      if ((i & c_stride) && (i & t_stride)) {
+        state[i] *= -1.0f;
+      }
+    }
+  }
+}
+
 void CpuBackend::applyDepolarizingNoise(Precision probability) {
   std::random_device rd;
   std::mt19937 gen(rd());
