@@ -32,7 +32,6 @@ __global__ void kHadamard(cuDoubleComplex *state, int num_qubits, int target) {
   if (idx >= half_dim)
     return;
 
-  // Mask logic is same as kApplyX
   int i0 = ((idx >> target) << (target + 1)) | (idx & ((1 << target) - 1));
   int i1 = i0 | (1 << target);
 
@@ -120,6 +119,60 @@ __global__ void kRotationY(cuDoubleComplex *state, int num_qubits, int target,
   state[i1] = add(scale(v0, s), scale(v1, c));
 }
 
+// Rotation Z Kernel
+// Rz(theta) = [[e^(-i*theta/2), 0], [0, e^(i*theta/2)]]
+__global__ void kRotationZ(cuDoubleComplex *state, int num_qubits, int target,
+                           double angle) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int half_dim = 1 << (num_qubits - 1);
+  if (idx >= half_dim)
+    return;
+
+  int i0 = ((idx >> target) << (target + 1)) | (idx & ((1 << target) - 1));
+  int i1 = i0 | (1 << target);
+
+  double half_theta = angle / 2.0;
+  // e^(-i*theta/2)
+  cuDoubleComplex phase0 =
+      make_cuDoubleComplex(cos(-half_theta), sin(-half_theta));
+  // e^(i*theta/2)
+  cuDoubleComplex phase1 =
+      make_cuDoubleComplex(cos(half_theta), sin(half_theta));
+
+  state[i0] = mul(phase0, state[i0]);
+  state[i1] = mul(phase1, state[i1]);
+}
+
+// Phase S Kernel: S = [[1, 0], [0, i]]
+__global__ void kPhaseS(cuDoubleComplex *state, int num_qubits, int target) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int half_dim = 1 << (num_qubits - 1);
+  if (idx >= half_dim)
+    return;
+
+  int i0 = ((idx >> target) << (target + 1)) | (idx & ((1 << target) - 1));
+  int i1 = i0 | (1 << target);
+
+  cuDoubleComplex phase = make_cuDoubleComplex(0, 1); // i
+  state[i1] = mul(phase, state[i1]);
+}
+
+// Phase T Kernel: T = [[1, 0], [0, e^(i*pi/4)]]
+__global__ void kPhaseT(cuDoubleComplex *state, int num_qubits, int target) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int half_dim = 1 << (num_qubits - 1);
+  if (idx >= half_dim)
+    return;
+
+  int i0 = ((idx >> target) << (target + 1)) | (idx & ((1 << target) - 1));
+  int i1 = i0 | (1 << target);
+
+  // e^(i*pi/4) = cos(pi/4) + i*sin(pi/4) = (1 + i) / sqrt(2)
+  cuDoubleComplex phase =
+      make_cuDoubleComplex(0.70710678118654752440, 0.70710678118654752440);
+  state[i1] = mul(phase, state[i1]);
+}
+
 // CNOT Kernel
 __global__ void kCNOT(cuDoubleComplex *state, int num_qubits, int control,
                       int target) {
@@ -139,43 +192,74 @@ __global__ void kCNOT(cuDoubleComplex *state, int num_qubits, int control,
   }
 }
 
+// Toffoli Kernel (CCX): Flip target if both controls are set
+__global__ void kToffoli(cuDoubleComplex *state, int num_qubits, int control1,
+                         int control2, int target) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int half_dim = 1 << (num_qubits - 1);
+  if (idx >= half_dim)
+    return;
+
+  int i0 = ((idx >> target) << (target + 1)) | (idx & ((1 << target) - 1));
+  int i1 = i0 | (1 << target);
+
+  // Check if both control bits are set in i0
+  if (((i0 >> control1) & 1) && ((i0 >> control2) & 1)) {
+    cuDoubleComplex temp = state[i0];
+    state[i0] = state[i1];
+    state[i1] = temp;
+  }
+}
+
+// Probability computation kernel: |state[i]|^2
+__global__ void kComputeProbabilities(const cuDoubleComplex *state,
+                                      double *probs, int dim) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= dim)
+    return;
+
+  double re = cuCreal(state[idx]);
+  double im = cuCimag(state[idx]);
+  probs[idx] = re * re + im * im;
+}
+
+// --- Launch Functions ---
+
 namespace qe {
 namespace cuda {
 
-void launchHadamard(void *deviceState, int num_qubits, int target) {
+static void launchKernel1Q(void (*kernel)(cuDoubleComplex *, int, int),
+                           void *deviceState, int num_qubits, int target) {
   int half_dim = 1 << (num_qubits - 1);
   int blockSize = 256;
   int numBlocks = (half_dim + blockSize - 1) / blockSize;
-  kHadamard<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState,
-                                      num_qubits, target);
+  kernel<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
+                                   target);
   cudaDeviceSynchronize();
+}
+
+void launchHadamard(void *deviceState, int num_qubits, int target) {
+  launchKernel1Q(kHadamard, deviceState, num_qubits, target);
 }
 
 void launchapplyX(void *deviceState, int num_qubits, int target) {
-  int half_dim = 1 << (num_qubits - 1);
-  int blockSize = 256;
-  int numBlocks = (half_dim + blockSize - 1) / blockSize;
-  kApplyX<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
-                                    target);
-  cudaDeviceSynchronize();
+  launchKernel1Q(kApplyX, deviceState, num_qubits, target);
 }
 
 void launchapplyY(void *deviceState, int num_qubits, int target) {
-  int half_dim = 1 << (num_qubits - 1);
-  int blockSize = 256;
-  int numBlocks = (half_dim + blockSize - 1) / blockSize;
-  kApplyY<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
-                                    target);
-  cudaDeviceSynchronize();
+  launchKernel1Q(kApplyY, deviceState, num_qubits, target);
 }
 
 void launchapplyZ(void *deviceState, int num_qubits, int target) {
-  int half_dim = 1 << (num_qubits - 1);
-  int blockSize = 256;
-  int numBlocks = (half_dim + blockSize - 1) / blockSize;
-  kApplyZ<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
-                                    target);
-  cudaDeviceSynchronize();
+  launchKernel1Q(kApplyZ, deviceState, num_qubits, target);
+}
+
+void launchPhaseS(void *deviceState, int num_qubits, int target) {
+  launchKernel1Q(kPhaseS, deviceState, num_qubits, target);
+}
+
+void launchPhaseT(void *deviceState, int num_qubits, int target) {
+  launchKernel1Q(kPhaseT, deviceState, num_qubits, target);
 }
 
 void launchRotationY(void *deviceState, int num_qubits, int target,
@@ -188,12 +272,41 @@ void launchRotationY(void *deviceState, int num_qubits, int target,
   cudaDeviceSynchronize();
 }
 
+void launchRotationZ(void *deviceState, int num_qubits, int target,
+                     double angle) {
+  int half_dim = 1 << (num_qubits - 1);
+  int blockSize = 256;
+  int numBlocks = (half_dim + blockSize - 1) / blockSize;
+  kRotationZ<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState,
+                                       num_qubits, target, angle);
+  cudaDeviceSynchronize();
+}
+
 void launchCNOT(void *deviceState, int num_qubits, int control, int target) {
   int half_dim = 1 << (num_qubits - 1);
   int blockSize = 256;
   int numBlocks = (half_dim + blockSize - 1) / blockSize;
   kCNOT<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
                                   control, target);
+  cudaDeviceSynchronize();
+}
+
+void launchToffoli(void *deviceState, int num_qubits, int control1,
+                   int control2, int target) {
+  int half_dim = 1 << (num_qubits - 1);
+  int blockSize = 256;
+  int numBlocks = (half_dim + blockSize - 1) / blockSize;
+  kToffoli<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
+                                     control1, control2, target);
+  cudaDeviceSynchronize();
+}
+
+void launchComputeProbabilities(const void *deviceState, double *deviceProbs,
+                                int dim) {
+  int blockSize = 256;
+  int numBlocks = (dim + blockSize - 1) / blockSize;
+  kComputeProbabilities<<<numBlocks, blockSize>>>(
+      (const cuDoubleComplex *)deviceState, deviceProbs, dim);
   cudaDeviceSynchronize();
 }
 

@@ -3,6 +3,7 @@
 #include "../kernels/GateKernels.hpp"
 #include <cuda_runtime.h>
 #include <iostream>
+#include <random>
 #include <stdexcept>
 #include <string>
 
@@ -20,10 +21,27 @@ CudaBackend::~CudaBackend() {
 }
 
 void CudaBackend::initializeCuda() {
-  size_t size = (1ULL << num_qubits_) * sizeof(Complex);
+  size_t dim = 1ULL << num_qubits_;
+  size_t size = dim * sizeof(Complex);
   cudaError_t err = cudaMalloc(&device_state_, size);
   if (err != cudaSuccess) {
     throw std::runtime_error("CUDA Error: Failed to allocate device memory: " +
+                             std::string(cudaGetErrorString(err)));
+  }
+
+  // Initialize to |00...0> on device: index 0 = (1,0), rest = (0,0)
+  err = cudaMemset(device_state_, 0, size);
+  if (err != cudaSuccess) {
+    throw std::runtime_error("CUDA Error: Failed to zero device memory: " +
+                             std::string(cudaGetErrorString(err)));
+  }
+
+  // Set amplitude of |0...0> to 1.0
+  Complex one(1.0, 0.0);
+  err =
+      cudaMemcpy(device_state_, &one, sizeof(Complex), cudaMemcpyHostToDevice);
+  if (err != cudaSuccess) {
+    throw std::runtime_error("CUDA Error: Failed to set initial state: " +
                              std::string(cudaGetErrorString(err)));
   }
 }
@@ -48,6 +66,8 @@ void CudaBackend::copyStateToHost(std::vector<Complex> &host_state) const {
   }
 }
 
+// --- Core Gates ---
+
 void CudaBackend::applyHadamard(size_t target) {
   qe::cuda::launchHadamard(device_state_, num_qubits_, target);
 }
@@ -68,45 +88,137 @@ void CudaBackend::applyCNOT(size_t control, size_t target) {
   qe::cuda::launchCNOT(device_state_, num_qubits_, control, target);
 }
 
+// --- Advanced Gates ---
+
 void CudaBackend::applyToffoli(size_t control1, size_t control2,
                                size_t target) {
-  // TODO: Implement Toffoli kernel
+  qe::cuda::launchToffoli(device_state_, num_qubits_, control1, control2,
+                          target);
 }
 
 void CudaBackend::applyPhaseS(size_t target) {
-  // S = Rz(pi/2) -> actually Phase gate.
-  // Use RotationKernel with pi/2 or implement specific kernel
-  // qe::cuda::launchPhaseS(device_state_, num_qubits_, target);
+  qe::cuda::launchPhaseS(device_state_, num_qubits_, target);
 }
 
-void CudaBackend::applyPhaseT(size_t target) {}
+void CudaBackend::applyPhaseT(size_t target) {
+  qe::cuda::launchPhaseT(device_state_, num_qubits_, target);
+}
 
 void CudaBackend::applyRotationY(size_t target, Precision angle) {
   qe::cuda::launchRotationY(device_state_, num_qubits_, target, angle);
 }
 
 void CudaBackend::applyRotationZ(size_t target, Precision angle) {
-  // qe::cuda::launchRotationZ(device_state_, num_qubits_, target, angle);
+  qe::cuda::launchRotationZ(device_state_, num_qubits_, target, angle);
 }
 
-void CudaBackend::applyDepolarizingNoise(Precision probability) {}
+// --- Noise ---
+
+void CudaBackend::applyDepolarizingNoise(Precision probability) {
+  // Depolarizing noise: with probability p, apply X, Y, or Z each with p/3
+  // Fallback to host-side random gate selection
+  if (probability <= 0.0)
+    return;
+
+  static std::mt19937 rng(std::random_device{}());
+  std::uniform_real_distribution<double> dist(0.0, 1.0);
+
+  for (size_t q = 0; q < num_qubits_; ++q) {
+    double r = dist(rng);
+    if (r < probability) {
+      double gate_r = dist(rng);
+      if (gate_r < 1.0 / 3.0) {
+        applyX(q);
+      } else if (gate_r < 2.0 / 3.0) {
+        applyY(q);
+      } else {
+        applyZ(q);
+      }
+    }
+  }
+}
+
+// --- Measurement ---
 
 int CudaBackend::measure(size_t target) {
-  return 0; // Stub: Requires random number generation on device or copy back
+  // Copy probabilities to host and sample
+  std::vector<double> probs = getProbabilities();
+
+  // Compute marginal probability of target qubit being |1>
+  double prob_one = 0.0;
+  size_t dim = 1ULL << num_qubits_;
+  for (size_t i = 0; i < dim; ++i) {
+    if ((i >> target) & 1) {
+      prob_one += probs[i];
+    }
+  }
+
+  // Sample
+  static std::mt19937 rng(std::random_device{}());
+  std::uniform_real_distribution<double> dist(0.0, 1.0);
+  int result = (dist(rng) < prob_one) ? 1 : 0;
+
+  // Collapse state: zero out amplitudes inconsistent with measurement
+  std::vector<Complex> state = getStateVector();
+  double norm = 0.0;
+  for (size_t i = 0; i < dim; ++i) {
+    bool bit = (i >> target) & 1;
+    if (bit != result) {
+      state[i] = Complex(0.0, 0.0);
+    } else {
+      norm += std::norm(state[i]);
+    }
+  }
+
+  // Renormalize
+  double inv_norm = 1.0 / std::sqrt(norm);
+  for (size_t i = 0; i < dim; ++i) {
+    state[i] *= inv_norm;
+  }
+
+  // Copy collapsed state back to device
+  copyStateToDevice(state);
+
+  return result;
 }
 
-std::vector<double> CudaBackend::getProbabilities() { return {}; }
+std::vector<double> CudaBackend::getProbabilities() {
+  size_t dim = 1ULL << num_qubits_;
+
+  // Allocate device memory for probabilities
+  double *device_probs = nullptr;
+  cudaError_t err = cudaMalloc(&device_probs, dim * sizeof(double));
+  if (err != cudaSuccess) {
+    throw std::runtime_error("CUDA Error: Failed to allocate probs: " +
+                             std::string(cudaGetErrorString(err)));
+  }
+
+  // Launch probability kernel
+  qe::cuda::launchComputeProbabilities(device_state_, device_probs, dim);
+
+  // Copy back to host
+  std::vector<double> probs(dim);
+  err = cudaMemcpy(probs.data(), device_probs, dim * sizeof(double),
+                   cudaMemcpyDeviceToHost);
+  cudaFree(device_probs);
+
+  if (err != cudaSuccess) {
+    throw std::runtime_error("CUDA Error: Failed to copy probs to host: " +
+                             std::string(cudaGetErrorString(err)));
+  }
+
+  return probs;
+}
+
+// --- Expectation Value ---
 
 double CudaBackend::expectationValue(const std::string &pauli_string) {
-  // Fallback: Copy to host and compute on CPU (until custom kernel is
-  // implemented)
-  std::vector<Complex> state = getStateVector(); // Copies from device
+  // Fallback: Copy to host and compute on CPU
+  std::vector<Complex> state = getStateVector();
 
   Complex expected_value = 0.0;
   size_t local_dim = state.size();
 
-  // Copy of CpuBackend logic (Basic OMP reduction not available here without
-  // OpenMP header) Just serial for fallback
   for (size_t i = 0; i < local_dim; ++i) {
     size_t j = i;
     Complex coeff = 1.0;
@@ -122,7 +234,6 @@ double CudaBackend::expectationValue(const std::string &pauli_string) {
         j ^= (1ULL << q);
       } else if (op == 'Y') {
         j ^= (1ULL << q);
-        // Y|0> = i|1>, Y|1> = -i|0>
         coeff *= (bit_set ? Complex(0, -1) : Complex(0, 1));
       } else if (op == 'Z') {
         if (bit_set)
@@ -131,12 +242,13 @@ double CudaBackend::expectationValue(const std::string &pauli_string) {
     }
 
     if (j < local_dim) {
-      // <psi|P|psi> = sum_i conj(psi[i]) * coeff * psi[j]
       expected_value += std::conj(state[i]) * coeff * state[j];
     }
   }
   return expected_value.real();
 }
+
+// --- State Access ---
 
 std::vector<Complex> CudaBackend::getStateVector() const {
   size_t dim = 1ULL << num_qubits_;
