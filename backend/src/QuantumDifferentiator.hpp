@@ -2,10 +2,10 @@
 
 #include "MolecularHamiltonian.hpp"
 #include "QuantumRegister.hpp"
+#include "Types.hpp"
 #define _USE_MATH_DEFINES
 #include <cmath>
 #include <functional>
-#include <iostream>
 #include <vector>
 
 // Fallback for M_PI if not defined (Windows compatibility)
@@ -95,22 +95,12 @@ private:
                                const std::vector<double> &params,
                                AnsatzFunction applyAnsatz,
                                const std::vector<PauliTerm> &hamiltonian) {
-    // 1. Initialize Register |0...0>
-    // CRITICAL: Force Local mode because we are running parallel INDEPENDENT
-    // circuits request. If we used distributed mode here, all ranks would try
-    // to cooperate on ONE circuit, causing deadlock because different ranks are
-    // working on different parameters (different circuits).
     QuantumRegister qreg(num_qubits, true);
-
-    // 2. Apply Ansatz Circuit with specific params
     applyAnsatz(params, qreg);
-
-    // 3. Measure Expectation Value of Hamiltonian
     double energy = 0.0;
     for (const auto &term : hamiltonian) {
       energy += term.coefficient * qreg.expectationValue(term.pauli_string);
     }
-
     return energy;
   }
 
@@ -120,74 +110,318 @@ public:
   using AnsatzFunc =
       std::function<void(const std::vector<double> &, RegisterType &)>;
 
-  // Calculates gradients using the Adjoint Method (Reversible Computing)
-  template <typename RegisterType>
+  // ========================================================================
+  // Adjoint Differentiation Method
+  // ========================================================================
+  template <typename RegisterType = QuantumRegister>
   static std::vector<double>
   calculateGradientsAdjoint(int num_qubits,
                             const std::vector<double> &current_params,
-                            AnsatzFunc<RegisterType> applyAnsatz,
+                            AnsatzFunc<QuantumRegister> applyAnsatz,
                             const std::vector<PauliTerm> &hamiltonian) {
 
-    // 1. Record the Circuit (Trace) using CPU Register (always fast for just
-    // recording)
-    QuantumRegister trace_reg(num_qubits);
-    trace_reg.enableRecording(true);
-    // trace_reg expects AnsatzFunction = function<void(params,
-    // QuantumRegister&)>
+    using Complex = qubit_engine::Complex;
+    using P = qubit_engine::Precision;
 
-    // We need to bridge the types if RegisterType is NOT QuantumRegister.
-    // However, the ansatz function provided by user might be generic or
-    // specific. If the user provides a Python function, we wrappped it in
-    // python_bindings. We should pass a "recording" version of the ansatz.
-    // Problem: applyAnsatz is typed to RegisterType.
-    // Solution: The user (python bindings) should provide TWO functions or a
-    // generic one? Simplified: Just instantiate generic lambda in bindings.
+    size_t num_params = current_params.size();
+    std::vector<double> gradients(num_params, 0.0);
 
-    // BUT: Here we need to call applyAnsatz with trace_reg.
-    // If applyAnsatz expects GPUQuantumRegister, passing QuantumRegister will
-    // fail.
+    if (hamiltonian.empty() || num_params == 0) {
+      return gradients;
+    }
 
-    // Hack for MVP: We assume we can construct a "Tape" externally or we use
-    // RegisterType for recording too? GPUQuantumRegister doesn't support
-    // recording logic yet (it has applyRegisteredGate but not enableRecording).
+    // --- Step 1: Record the circuit tape ---
+    QuantumRegister tape_reg(num_qubits, true);
+    tape_reg.enableRecording(true);
+    applyAnsatz(current_params, tape_reg);
+    tape_reg.enableRecording(false);
 
-    // Better: We admit that QuantumDifferentiator is "Adjoint on CPU" or
-    // "Adjoint on GPU". If GPU, we STILL need a Tape. Let's assume we pass in
-    // the TAPE directly? No, signature change.
+    const auto &tape = tape_reg.getTape();
 
-    // Let's try to assume RegisterType supports enableRecording.
-    // I'll add enableRecording to GPUQuantumRegister (dummy or delegate to CPU
-    // shadow).
+    // Build map: tape index -> parameter index
+    std::vector<int> tape_param_index(tape.size(), -1);
+    int param_counter = 0;
+    for (size_t i = 0; i < tape.size(); ++i) {
+      auto t = tape[i].type;
+      if (t == QuantumRegister::RecordedGate::RX ||
+          t == QuantumRegister::RecordedGate::RY ||
+          t == QuantumRegister::RecordedGate::RZ) {
+        if (param_counter < static_cast<int>(num_params)) {
+          tape_param_index[i] = param_counter++;
+        }
+      }
+    }
 
-    // Actually, simpler: Use 'RegisterType' for the trace too.
-    RegisterType trace_instance(num_qubits);
-    // trace_instance.enableRecording(true); // GPU Reg needs this method.
+    // --- Step 2: Forward pass to get |ψ⟩ ---
+    QuantumRegister psi_reg(num_qubits, true);
+    applyAnsatz(current_params, psi_reg);
+    auto psi_state = psi_reg.getStateVector();
 
-    // Wait, GPUQuantumRegister is strictly execution.
-    // Mixed approach: The Python bindings usually define the ansatz logic.
-    // If I change the signature to take "Ansatz for Tracing" and "Ansatz for
-    // Execution", it's clean.
+    size_t dim = psi_state.size();
 
-    // Let's stick to CPU recording for now.
-    // We simply reconstruct the tape by running a "fake" pass if possible.
-    // But applyAnsatz takes RegisterType&.
-    // If RegisterType=GPUQuantumRegister, we can't pass QuantumRegister.
+    // --- Step 3: Compute |λ⟩ = H|ψ⟩ ---
+    std::vector<Complex> lambda_state(dim, Complex(0, 0));
 
-    // CRITICAL FIX: The wrapper in python_bindings converts python func to C++
-    // lambda. We can create a NEW C++ lambda for QuantumRegister inside
-    // bindings? No, calculateGradientsAdjoint is called with ONE function.
+    for (const auto &term : hamiltonian) {
+      std::vector<Complex> pauli_psi(dim, Complex(0, 0));
+      for (size_t i = 0; i < dim; ++i) {
+        size_t j = i;
+        Complex coeff(1, 0);
 
-    // To support this without massive refactor:
-    // We add 'getTape' capability to GPUQuantumRegister?
-    // Or we make QuantumDifferentiator take a `Tape` as input?
-    // Or we accept `std::function<void(QuantumRegister&)>` for tracing as an
-    // extra arg.
+        for (size_t q = 0; q < static_cast<size_t>(num_qubits) &&
+                           q < term.pauli_string.size();
+             ++q) {
+          char op = term.pauli_string[q];
+          if (op == 'I')
+            continue;
 
-    // Let's add an overloaded `calculateGradientsAdjoint` that takes a `tape`.
-    // Then python_bindings generates the tape using CPU reg, and passes it to
-    // GPU solver.
+          bool bit_set = (i >> q) & 1;
+          if (op == 'X') {
+            j ^= (1ULL << q);
+          } else if (op == 'Y') {
+            j ^= (1ULL << q);
+            coeff *= (bit_set ? Complex(0, -1) : Complex(0, 1));
+          } else if (op == 'Z') {
+            if (bit_set)
+              coeff *= Complex(-1, 0);
+          }
+        }
 
-    return std::vector<double>(); // Placeholder for this thought block tool
-                                  // update
+        if (j < dim) {
+          pauli_psi[j] += coeff * psi_state[i];
+        }
+      }
+
+      // Accumulate: |λ⟩ += coeff * P|ψ⟩
+      P tc = static_cast<P>(term.coefficient);
+      for (size_t i = 0; i < dim; ++i) {
+        lambda_state[i] += tc * pauli_psi[i];
+      }
+    }
+
+    // --- Step 4: Backward pass ---
+    for (int i = static_cast<int>(tape.size()) - 1; i >= 0; --i) {
+      const auto &gate = tape[i];
+
+      // a. Un-apply gate from |ψ⟩
+      applyGateInverseToState(psi_state, gate, num_qubits);
+
+      // b. If parameterized, compute gradient contribution
+      if (tape_param_index[i] >= 0) {
+        int pidx = tape_param_index[i];
+
+        // Compute dU/dθ |ψ⟩
+        std::vector<Complex> dpsi(dim, Complex(0, 0));
+        applyGateDerivativeToState(dpsi, psi_state, gate, num_qubits);
+
+        // grad[pidx] += 2 * Re(⟨λ|dU/dθ|ψ⟩)
+        Complex inner(0, 0);
+        for (size_t k = 0; k < dim; ++k) {
+          inner += std::conj(lambda_state[k]) * dpsi[k];
+        }
+        gradients[pidx] += 2.0 * static_cast<double>(inner.real());
+      }
+
+      // c. Un-apply gate from |λ⟩
+      applyGateInverseToState(lambda_state, gate, num_qubits);
+    }
+
+    return gradients;
+  }
+
+private:
+  // ========================================================================
+  // Gate derivative and inverse helpers for raw state vectors
+  // ========================================================================
+
+  using Complex = qubit_engine::Complex;
+  using P = qubit_engine::Precision; // float
+
+  // Apply U_gate† (inverse) to a raw state vector
+  static void applyGateInverseToState(std::vector<Complex> &state,
+                                      const QuantumRegister::RecordedGate &gate,
+                                      int num_qubits) {
+    size_t dim = state.size();
+
+    switch (gate.type) {
+    case QuantumRegister::RecordedGate::H: {
+      size_t target = gate.qubits[0];
+      P is2 = static_cast<P>(1.0 / std::sqrt(2.0));
+      for (size_t idx = 0; idx < dim / 2; ++idx) {
+        size_t i0 =
+            ((idx >> target) << (target + 1)) | (idx & ((1ULL << target) - 1));
+        size_t i1 = i0 | (1ULL << target);
+        Complex v0 = state[i0], v1 = state[i1];
+        state[i0] = is2 * (v0 + v1);
+        state[i1] = is2 * (v0 - v1);
+      }
+      break;
+    }
+    case QuantumRegister::RecordedGate::X: {
+      size_t target = gate.qubits[0];
+      for (size_t idx = 0; idx < dim / 2; ++idx) {
+        size_t i0 =
+            ((idx >> target) << (target + 1)) | (idx & ((1ULL << target) - 1));
+        size_t i1 = i0 | (1ULL << target);
+        std::swap(state[i0], state[i1]);
+      }
+      break;
+    }
+    case QuantumRegister::RecordedGate::Y: {
+      size_t target = gate.qubits[0];
+      for (size_t idx = 0; idx < dim / 2; ++idx) {
+        size_t i0 =
+            ((idx >> target) << (target + 1)) | (idx & ((1ULL << target) - 1));
+        size_t i1 = i0 | (1ULL << target);
+        Complex v0 = state[i0], v1 = state[i1];
+        state[i0] = Complex(0, -1) * v1;
+        state[i1] = Complex(0, 1) * v0;
+      }
+      break;
+    }
+    case QuantumRegister::RecordedGate::Z: {
+      size_t target = gate.qubits[0];
+      for (size_t idx = 0; idx < dim / 2; ++idx) {
+        size_t i0 =
+            ((idx >> target) << (target + 1)) | (idx & ((1ULL << target) - 1));
+        size_t i1 = i0 | (1ULL << target);
+        state[i1] *= Complex(-1, 0);
+      }
+      break;
+    }
+    case QuantumRegister::RecordedGate::CNOT: {
+      size_t control = gate.qubits[0], target = gate.qubits[1];
+      for (size_t idx = 0; idx < dim / 2; ++idx) {
+        size_t i0 =
+            ((idx >> target) << (target + 1)) | (idx & ((1ULL << target) - 1));
+        size_t i1 = i0 | (1ULL << target);
+        if ((i0 >> control) & 1)
+          std::swap(state[i0], state[i1]);
+      }
+      break;
+    }
+    case QuantumRegister::RecordedGate::SWAP: {
+      size_t q1 = gate.qubits[0], q2 = gate.qubits[1];
+      for (size_t idx = 0; idx < dim; ++idx) {
+        int b1 = (idx >> q1) & 1, b2 = (idx >> q2) & 1;
+        if (b1 == 0 && b2 == 1) {
+          size_t sw = idx ^ (1ULL << q1) ^ (1ULL << q2);
+          std::swap(state[idx], state[sw]);
+        }
+      }
+      break;
+    }
+    case QuantumRegister::RecordedGate::CZ: {
+      size_t control = gate.qubits[0], target = gate.qubits[1];
+      for (size_t idx = 0; idx < dim; ++idx) {
+        if (((idx >> control) & 1) && ((idx >> target) & 1))
+          state[idx] *= Complex(-1, 0);
+      }
+      break;
+    }
+    case QuantumRegister::RecordedGate::RY: {
+      size_t target = gate.qubits[0];
+      P angle = static_cast<P>(-gate.params[0]);
+      P c = std::cos(angle / P(2)), s = std::sin(angle / P(2));
+      for (size_t idx = 0; idx < dim / 2; ++idx) {
+        size_t i0 =
+            ((idx >> target) << (target + 1)) | (idx & ((1ULL << target) - 1));
+        size_t i1 = i0 | (1ULL << target);
+        Complex v0 = state[i0], v1 = state[i1];
+        state[i0] = c * v0 - s * v1;
+        state[i1] = s * v0 + c * v1;
+      }
+      break;
+    }
+    case QuantumRegister::RecordedGate::RX: {
+      size_t target = gate.qubits[0];
+      P angle = static_cast<P>(-gate.params[0]);
+      P c = std::cos(angle / P(2)), s = std::sin(angle / P(2));
+      Complex neg_is(0, -s);
+      for (size_t idx = 0; idx < dim / 2; ++idx) {
+        size_t i0 =
+            ((idx >> target) << (target + 1)) | (idx & ((1ULL << target) - 1));
+        size_t i1 = i0 | (1ULL << target);
+        Complex v0 = state[i0], v1 = state[i1];
+        state[i0] = c * v0 + neg_is * v1;
+        state[i1] = neg_is * v0 + c * v1;
+      }
+      break;
+    }
+    case QuantumRegister::RecordedGate::RZ: {
+      size_t target = gate.qubits[0];
+      P angle = static_cast<P>(-gate.params[0]);
+      Complex phase0 = std::exp(Complex(0, -angle / P(2)));
+      Complex phase1 = std::exp(Complex(0, angle / P(2)));
+      for (size_t idx = 0; idx < dim / 2; ++idx) {
+        size_t i0 =
+            ((idx >> target) << (target + 1)) | (idx & ((1ULL << target) - 1));
+        size_t i1 = i0 | (1ULL << target);
+        state[i0] *= phase0;
+        state[i1] *= phase1;
+      }
+      break;
+    }
+    default:
+      break;
+    }
+  }
+
+  // Apply dU/dθ (gate derivative) to |ψ⟩, accumulating into |out⟩
+  static void applyGateDerivativeToState(
+      std::vector<Complex> &out, const std::vector<Complex> &psi,
+      const QuantumRegister::RecordedGate &gate, int num_qubits) {
+    size_t dim = psi.size();
+
+    switch (gate.type) {
+    case QuantumRegister::RecordedGate::RY: {
+      size_t target = gate.qubits[0];
+      P angle = static_cast<P>(gate.params[0]);
+      P c = std::cos(angle / P(2)), s = std::sin(angle / P(2));
+      P h = P(0.5);
+      for (size_t idx = 0; idx < dim / 2; ++idx) {
+        size_t i0 =
+            ((idx >> target) << (target + 1)) | (idx & ((1ULL << target) - 1));
+        size_t i1 = i0 | (1ULL << target);
+        Complex v0 = psi[i0], v1 = psi[i1];
+        out[i0] += h * (-s * v0 - c * v1);
+        out[i1] += h * (c * v0 - s * v1);
+      }
+      break;
+    }
+    case QuantumRegister::RecordedGate::RX: {
+      size_t target = gate.qubits[0];
+      P angle = static_cast<P>(gate.params[0]);
+      P c = std::cos(angle / P(2)), s = std::sin(angle / P(2));
+      Complex neg_ic(0, -c * P(0.5));
+      P neg_s_half = -s * P(0.5);
+      for (size_t idx = 0; idx < dim / 2; ++idx) {
+        size_t i0 =
+            ((idx >> target) << (target + 1)) | (idx & ((1ULL << target) - 1));
+        size_t i1 = i0 | (1ULL << target);
+        Complex v0 = psi[i0], v1 = psi[i1];
+        out[i0] += neg_s_half * v0 + neg_ic * v1;
+        out[i1] += neg_ic * v0 + neg_s_half * v1;
+      }
+      break;
+    }
+    case QuantumRegister::RecordedGate::RZ: {
+      size_t target = gate.qubits[0];
+      P angle = static_cast<P>(gate.params[0]);
+      Complex d0 =
+          P(0.5) * Complex(0, -1) * std::exp(Complex(0, -angle / P(2)));
+      Complex d1 = P(0.5) * Complex(0, 1) * std::exp(Complex(0, angle / P(2)));
+      for (size_t idx = 0; idx < dim / 2; ++idx) {
+        size_t i0 =
+            ((idx >> target) << (target + 1)) | (idx & ((1ULL << target) - 1));
+        size_t i1 = i0 | (1ULL << target);
+        out[i0] += d0 * psi[i0];
+        out[i1] += d1 * psi[i1];
+      }
+      break;
+    }
+    default:
+      break;
+    }
   }
 };

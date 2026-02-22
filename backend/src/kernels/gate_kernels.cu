@@ -211,6 +211,68 @@ __global__ void kToffoli(cuDoubleComplex *state, int num_qubits, int control1,
   }
 }
 
+// Rotation X Kernel
+// Rx(theta) = [[cos(θ/2), -i·sin(θ/2)], [-i·sin(θ/2), cos(θ/2)]]
+__global__ void kRotationX(cuDoubleComplex *state, int num_qubits, int target,
+                           double angle) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int half_dim = 1 << (num_qubits - 1);
+  if (idx >= half_dim)
+    return;
+
+  int i0 = ((idx >> target) << (target + 1)) | (idx & ((1 << target) - 1));
+  int i1 = i0 | (1 << target);
+
+  cuDoubleComplex v0 = state[i0];
+  cuDoubleComplex v1 = state[i1];
+
+  double half_theta = angle / 2.0;
+  double c = cos(half_theta);
+  double s = sin(half_theta);
+
+  // -i·sin(θ/2)
+  cuDoubleComplex neg_is = make_cuDoubleComplex(0.0, -s);
+
+  state[i0] = add(scale(v0, c), mul(neg_is, v1));
+  state[i1] = add(mul(neg_is, v0), scale(v1, c));
+}
+
+// SWAP Kernel: Swap amplitudes between qubit1 and qubit2
+__global__ void kSWAP(cuDoubleComplex *state, int num_qubits, int qubit1,
+                      int qubit2) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int dim = 1 << num_qubits;
+  if (idx >= dim)
+    return;
+
+  // Only process indices where qubit1=0, qubit2=1 (swap with qubit1=1,
+  // qubit2=0)
+  int bit1 = (idx >> qubit1) & 1;
+  int bit2 = (idx >> qubit2) & 1;
+
+  if (bit1 == 0 && bit2 == 1) {
+    // Swap this index with the one where bits are flipped
+    int swapped = idx ^ (1 << qubit1) ^ (1 << qubit2);
+    cuDoubleComplex temp = state[idx];
+    state[idx] = state[swapped];
+    state[swapped] = temp;
+  }
+}
+
+// CZ Kernel: Apply phase flip (-1) when both control and target are |1⟩
+__global__ void kCZ(cuDoubleComplex *state, int num_qubits, int control,
+                    int target) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int dim = 1 << num_qubits;
+  if (idx >= dim)
+    return;
+
+  // If both control and target bits are set, negate amplitude
+  if (((idx >> control) & 1) && ((idx >> target) & 1)) {
+    state[idx] = scale(state[idx], -1.0);
+  }
+}
+
 // Probability computation kernel: |state[i]|^2
 __global__ void kComputeProbabilities(const cuDoubleComplex *state,
                                       double *probs, int dim) {
@@ -298,6 +360,34 @@ void launchToffoli(void *deviceState, int num_qubits, int control1,
   int numBlocks = (half_dim + blockSize - 1) / blockSize;
   kToffoli<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
                                      control1, control2, target);
+  cudaDeviceSynchronize();
+}
+
+void launchRotationX(void *deviceState, int num_qubits, int target,
+                     double angle) {
+  int half_dim = 1 << (num_qubits - 1);
+  int blockSize = 256;
+  int numBlocks = (half_dim + blockSize - 1) / blockSize;
+  kRotationX<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState,
+                                       num_qubits, target, angle);
+  cudaDeviceSynchronize();
+}
+
+void launchSWAP(void *deviceState, int num_qubits, int qubit1, int qubit2) {
+  int dim = 1 << num_qubits;
+  int blockSize = 256;
+  int numBlocks = (dim + blockSize - 1) / blockSize;
+  kSWAP<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
+                                  qubit1, qubit2);
+  cudaDeviceSynchronize();
+}
+
+void launchCZ(void *deviceState, int num_qubits, int control, int target) {
+  int dim = 1 << num_qubits;
+  int blockSize = 256;
+  int numBlocks = (dim + blockSize - 1) / blockSize;
+  kCZ<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
+                                control, target);
   cudaDeviceSynchronize();
 }
 

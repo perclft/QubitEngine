@@ -36,6 +36,8 @@ std::vector<std::complex<double>> GPUQuantumRegister::getStateVector() const {
   return host_state;
 }
 
+// --- Core Gates ---
+
 void GPUQuantumRegister::applyHadamard(size_t target) {
 #ifdef ENABLE_CUDA
   launchHadamard(device_state, num_qubits, target);
@@ -60,8 +62,59 @@ void GPUQuantumRegister::applyZ(size_t target) {
 #endif
 }
 
+void GPUQuantumRegister::applyCNOT(size_t control, size_t target) {
+#ifdef ENABLE_CUDA
+  launchCNOT(device_state, num_qubits, control, target);
+#endif
+}
+
+// --- Advanced Gates ---
+
+void GPUQuantumRegister::applyToffoli(size_t control1, size_t control2,
+                                      size_t target) {
+#ifdef ENABLE_CUDA
+  launchToffoli(device_state, num_qubits, control1, control2, target);
+#endif
+}
+
+void GPUQuantumRegister::applyPhaseS(size_t target) {
+#ifdef ENABLE_CUDA
+  launchPhaseS(device_state, num_qubits, target);
+#endif
+}
+
+void GPUQuantumRegister::applyPhaseT(size_t target) {
+#ifdef ENABLE_CUDA
+  launchPhaseT(device_state, num_qubits, target);
+#endif
+}
+
+void GPUQuantumRegister::applyRotationX(size_t target, double angle) {
+#ifdef ENABLE_CUDA
+  launchRotationX(device_state, num_qubits, target, angle);
+#endif
+}
+
 void GPUQuantumRegister::applyRotationY(size_t target, double angle) {
 #ifdef ENABLE_CUDA
   launchRotationY(device_state, num_qubits, target, angle);
+#endif
+}
+
+void GPUQuantumRegister::applyRotationZ(size_t target, double angle) {
+#ifdef ENABLE_CUDA
+  launchRotationZ(device_state, num_qubits, target, angle);
+#endif
+}
+
+void GPUQuantumRegister::applySWAP(size_t qubit1, size_t qubit2) {
+#ifdef ENABLE_CUDA
+  launchSWAP(device_state, num_qubits, qubit1, qubit2);
+#endif
+}
+
+void GPUQuantumRegister::applyCZ(size_t control, size_t target) {
+#ifdef ENABLE_CUDA
+  launchCZ(device_state, num_qubits, control, target);
 #endif
 }

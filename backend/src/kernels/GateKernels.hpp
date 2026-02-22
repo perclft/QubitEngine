@@ -22,8 +22,12 @@ void launchPhaseS(void *deviceState, int num_qubits, int target);
 void launchPhaseT(void *deviceState, int num_qubits, int target);
 void launchRotationY(void *deviceState, int num_qubits, int target,
                      double angle);
+void launchRotationX(void *deviceState, int num_qubits, int target,
+                     double angle);
 void launchRotationZ(void *deviceState, int num_qubits, int target,
                      double angle);
+void launchSWAP(void *deviceState, int num_qubits, int qubit1, int qubit2);
+void launchCZ(void *deviceState, int num_qubits, int control, int target);
 
 // --- Measurement Helpers ---
 void launchComputeProbabilities(const void *deviceState, double *deviceProbs,

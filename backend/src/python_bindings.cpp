@@ -151,14 +151,18 @@ PYBIND11_MODULE(qubit_engine, m) {
         for (const auto &item : hamiltonian_data) {
           hamiltonian.push_back({item.first, item.second});
         }
-        QuantumDifferentiator::AnsatzFunc<GPUQuantumRegister> cpp_ansatz =
-            [&](const std::vector<double> &p, GPUQuantumRegister &q) {
+        // Note: GPU adjoint currently delegates to CPU adjoint.
+        // The ansatz is executed with QuantumRegister (CPU).
+        // Future: Add GPU-accelerated adjoint path.
+        QuantumDifferentiator::AnsatzFunc<QuantumRegister> cpp_ansatz =
+            [&](const std::vector<double> &p, QuantumRegister &q) {
               ansatz_func(p, &q);
             };
-        return QuantumDifferentiator::calculateGradientsAdjoint<
-            GPUQuantumRegister>(num_qubits, params, cpp_ansatz, hamiltonian);
+        return QuantumDifferentiator::calculateGradientsAdjoint(
+            num_qubits, params, cpp_ansatz, hamiltonian);
       },
-      "Calculate analytical gradients using Adjoint Method (GPU)");
+      "Calculate analytical gradients using Adjoint Method (GPU - currently "
+      "delegates to CPU)");
 
   // --- AdamOptimizer Binding ---
   using qubit_engine::optimizers::AdamOptimizer;

@@ -315,6 +315,7 @@ add_executable(tests
     tests/DifferentiatorTests.cpp
     tests/OptimizerTests.cpp
     tests/CircuitOptimizerTests.cpp
+    tests/AdjointTests.cpp
 )
 
 # Link QubitEngine sources (excluding main.cpp) to tests or link object lib?
