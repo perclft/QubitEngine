@@ -50,6 +50,8 @@ bool CircuitOptimizer::areInverses(const QuantumRegister::RecordedGate &g1,
     case QuantumRegister::RecordedGate::Z:
     case QuantumRegister::RecordedGate::CNOT:
     case QuantumRegister::RecordedGate::TOFFOLI:
+    case QuantumRegister::RecordedGate::SWAP:
+    case QuantumRegister::RecordedGate::CZ:
       return true;
     default:
       break;
