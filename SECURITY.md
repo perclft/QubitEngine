@@ -1,6 +1,5 @@
 # Security Policy
 
-I am not sure if I am being honest guys. I kinda just told gemini what to do when designing it.
 
 ## Supported Versions
 
