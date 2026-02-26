@@ -59,3 +59,64 @@
 | 22     | 4,194,304  | 0.06 GB       | [OK]   | 7.5 ms    | 2.44 ms   |
 | 24     | 16,777,216 | 0.25 GB       | [OK]   | 29.1 ms   | 17.75 ms  |
 | 26     | 67,108,864 | 1.00 GB       | [OK]   | 117.9 ms  | 90.37 ms  |
+
+## Apple Silicon Performance (Mac)
+
+**Date:** 2026-02-26
+**Environment:** macOS (M3 Air) - Metal Backend (GPU)
+
+### 1. Scaling Test: State Vector Size vs Performance
+
+| Qubits | State Size  | Memory (KB) | Init Time  | H Gate Time |
+|--------|-------------|-------------|------------|-------------|
+| 4      | 16          | 0.2         | 47.636 ms  | 0.0405 ms   |
+| 8      | 256         | 4.0         | 0.479 ms   | 0.0172 ms   |
+| 12     | 4,096       | 64.0        | 0.519 ms   | 0.0186 ms   |
+| 16     | 65,536      | 1,024.0     | 1.041 ms   | 0.0219 ms   |
+| 18     | 262,144     | 4,096.0     | 2.837 ms   | 0.0276 ms   |
+| 20     | 1,048,576   | 16,384.0    | 12.458 ms  | 0.0873 ms   |
+| 22     | 4,194,304   | 65,536.0    | 37.931 ms  | 0.2971 ms   |
+
+### 2. Gate Throughput Test (16 qubits, 100 iterations)
+
+| Gate       | Total Gates | Duration | Gates/sec | µs/gate |
+|------------|-------------|----------|-----------|---------|
+| Hadamard   | 1,600       | 0.0841 s | 19.02K    | 52.58   |
+| Pauli-X    | 1,600       | 0.0352 s | 45.41K    | 22.02   |
+| Pauli-Y    | 1,600       | 0.0352 s | 45.51K    | 21.98   |
+| Pauli-Z    | 1,600       | 0.0344 s | 46.45K    | 21.53   |
+| Rotation-Y | 1,600       | 0.0357 s | 44.77K    | 22.34   |
+| Rotation-Z | 1,600       | 0.0356 s | 44.99K    | 22.23   |
+| CNOT       | 1,500       | 0.0327 s | 45.82K    | 21.82   |
+
+### 3. Entanglement Benchmarks
+
+| Circuit    | Qubits | Time     | Gates | Gates/sec |
+|------------|--------|----------|-------|-----------|
+| Bell Pairs | 8      | 0.055 ms | 8     | 146.45K   |
+| GHZ State  | 8      | 0.050 ms | 8     | 160.53K   |
+| Bell Pairs | 12     | 0.069 ms | 12    | 174.44K   |
+| GHZ State  | 12     | 0.070 ms | 12    | 172.04K   |
+| Bell Pairs | 16     | 0.088 ms | 16    | 181.22K   |
+| GHZ State  | 16     | 0.092 ms | 16    | 174.78K   |
+| Bell Pairs | 20     | 0.133 ms | 20    | 149.95K   |
+| GHZ State  | 20     | 0.174 ms | 20    | 115.00K   |
+
+### 4. Random Circuit Benchmark (circuit depth = 20)
+
+| Qubits | Total Gates | Duration | Gates/sec |
+|--------|-------------|----------|-----------|
+| 8      | 240         | 4.44 ms  | 54.10K    |
+| 12     | 360         | 7.16 ms  | 50.27K    |
+| 16     | 480         | 9.98 ms  | 48.08K    |
+| 18     | 540         | 14.37 ms | 37.57K    |
+| 20     | 600         | 80.65 ms | 7.44K     |
+
+### 5. Stress Test: Maximum Qubit Count
+
+| Qubits | State Size (Amps) | Memory (GB) | Status | Init Time | Gate Time |
+|--------|-------------------|-------------|--------|-----------|-----------|
+| 20     | 1,048,576         | 0.02        | [OK]   | 9.1 ms    | 0.07 ms   |
+| 22     | 4,194,304         | 0.06        | [OK]   | 38.0 ms   | 0.05 ms   |
+| 24     | 16,777,216        | 0.25        | [OK]   | 165.4 ms  | 0.06 ms   |
+| 26     | 67,108,864        | 1.00        | [OK]   | 837.6 ms  | 0.11 ms   |
