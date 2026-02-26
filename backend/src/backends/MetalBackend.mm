@@ -54,10 +54,20 @@ void MetalBackend::initializeMetal() {
     std::cout << "MetalBackend::initializeMetal - Main Bundle Library not "
                  "found, trying file..."
               << std::endl;
-    // Try to load from "default.metallib" in current dir
-    NSString *path = @"default.metallib";
-    NSURL *url = [NSURL fileURLWithPath:path];
-    library = [device newLibraryWithURL:url error:&error];
+    // Try to load from "default.metallib" in multiple locs
+    NSArray<NSString *> *paths = @[
+      @"default.metallib", @"bin/default.metallib", @"../bin/default.metallib",
+      @"backend/build/default.metallib"
+    ];
+    for (NSString *path in paths) {
+      NSURL *url = [NSURL fileURLWithPath:path];
+      library = [device newLibraryWithURL:url error:&error];
+      if (library) {
+        std::cout << "MetalBackend::initializeMetal - Loaded from "
+                  << [path UTF8String] << std::endl;
+        break;
+      }
+    }
   }
   if (!library) {
     std::cerr << "MetalBackend::initializeMetal - Failed to load library: " <<
@@ -226,6 +236,9 @@ void MetalBackend::applyZ(size_t target) {
 }
 
 void MetalBackend::applyCNOT(size_t control, size_t target) {
+  if (control == target)
+    throw std::invalid_argument(
+        "Control and target qubits cannot be the same.");
   uint32_t t_stride = 1 << target;
   uint32_t c_stride = 1 << control;
   size_t dim = 1ULL << num_qubits_;

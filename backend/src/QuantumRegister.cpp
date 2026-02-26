@@ -4,6 +4,8 @@
 #include "backends/MetalBackend.hpp" // Added for MetalBackend
 #include <fstream>
 #include <iostream>
+#include <string>
+#include <vector>
 
 // --- Lifecycle ---
 QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
@@ -27,9 +29,15 @@ QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
   bool metalAvailable = false;
   if (!force_local) {
     // Check for metallib file in current directory or common locations
-    std::ifstream metallib("default.metallib");
-    if (metallib.good()) {
-      metalAvailable = true;
+    std::vector<std::string> paths = {
+        "default.metallib", "bin/default.metallib", "../bin/default.metallib",
+        "backend/build/default.metallib"};
+    for (const auto &path : paths) {
+      std::ifstream metallib(path);
+      if (metallib.good()) {
+        metalAvailable = true;
+        break;
+      }
     }
   }
 

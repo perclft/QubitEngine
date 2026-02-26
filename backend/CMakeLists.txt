@@ -12,6 +12,9 @@ find_package(Threads REQUIRED)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
 
+# Hotfix for Abseil headers missing from Protobuf/gRPC include paths on macOS Homebrew
+include_directories(/opt/homebrew/include)
+
 option(MPI_ENABLED "Enable MPI Distributed Computing" OFF)
 if(MPI_ENABLED)
     find_package(MPI REQUIRED)
