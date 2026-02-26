@@ -64,8 +64,8 @@ services:
   # 5. Circuit Registry Service
   registry:
     build:
-      context: ../../services/registry
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: services/registry/Dockerfile
     ports:
       - "50052:50052"
     environment:
@@ -97,8 +97,8 @@ services:
   # 7. Job Scheduler Service
   scheduler:
     build:
-      context: ../../services/scheduler
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: services/scheduler/Dockerfile
     ports:
       - "50053:50053"
     command: [ "-redis-addr", "redis:6379", "-engine-addr", "engine:50051" ]
@@ -113,8 +113,8 @@ services:
   # 8. Result Cache Service
   cache:
     build:
-      context: ../../services/cache
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: services/cache/Dockerfile
     ports:
       - "50054:50054"
     command: [ "-redis-addr", "redis:6379", "-default-ttl", "60" ]

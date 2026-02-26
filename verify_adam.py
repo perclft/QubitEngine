@@ -2,13 +2,14 @@ import sys
 import os
 import math
 
-# Add build directory to path
-build_dir = os.path.join(os.getcwd(), 'backend/build')
-sys.path.append(build_dir)
+# Add build directories to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'bin'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'bin', 'Release'))
+sys.path.append(os.path.join(os.getcwd(), 'backend/build'))
 
 try:
     import qubit_engine as qe
-    print("Successfully imported qubit_engine from", build_dir)
+    print("Successfully imported qubit_engine")
 except ImportError as e:
     print(f"Failed to import qubit_engine: {e}")
     sys.exit(1)
