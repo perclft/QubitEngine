@@ -4,6 +4,7 @@
 package backends
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -457,5 +458,4 @@ func (r *BackendRegistry) List() []string {
 	return names
 }
 
-// Import bytes package
-import "bytes"
+

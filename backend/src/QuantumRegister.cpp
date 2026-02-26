@@ -91,6 +91,8 @@ void QuantumRegister::applyZ(size_t target) {
 }
 
 void QuantumRegister::applyCNOT(size_t control, size_t target) {
+  if (control == target)
+    throw std::invalid_argument("Control and target qubits must be distinct");
   if (recording_enabled)
     tape.push_back({RecordedGate::CNOT, {control, target}, {}});
   backend->applyCNOT(control, target);
@@ -99,6 +101,8 @@ void QuantumRegister::applyCNOT(size_t control, size_t target) {
 // --- Advanced Gates ---
 
 void QuantumRegister::applyToffoli(size_t c1, size_t c2, size_t t) {
+  if (c1 == c2 || c1 == t || c2 == t)
+    throw std::invalid_argument("Control and target qubits must be distinct");
   if (recording_enabled)
     tape.push_back({RecordedGate::TOFFOLI, {c1, c2, t}, {}});
   backend->applyToffoli(c1, c2, t);
@@ -138,12 +142,16 @@ void QuantumRegister::applyRotationX(size_t target,
 }
 
 void QuantumRegister::applySWAP(size_t qubit1, size_t qubit2) {
+  if (qubit1 == qubit2)
+    throw std::invalid_argument("Qubits must be distinct");
   if (recording_enabled)
     tape.push_back({RecordedGate::SWAP, {qubit1, qubit2}, {}});
   backend->applySWAP(qubit1, qubit2);
 }
 
 void QuantumRegister::applyCZ(size_t control, size_t target) {
+  if (control == target)
+    throw std::invalid_argument("Control and target qubits must be distinct");
   if (recording_enabled)
     tape.push_back({RecordedGate::CZ, {control, target}, {}});
   backend->applyCZ(control, target);

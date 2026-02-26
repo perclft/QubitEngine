@@ -82,6 +82,7 @@ if(ENABLE_CUDA)
     check_language(CUDA)
     if(CMAKE_CUDA_COMPILER)
         enable_language(CUDA)
+        set(CMAKE_CUDA_ARCHITECTURES "native")
         find_package(CUDAToolkit REQUIRED)
         add_compile_definitions(ENABLE_CUDA)
         message(STATUS "CUDA Detected. GPU Acceleration Enabled.")
@@ -363,6 +364,10 @@ if(OpenMP_CXX_FOUND)
     target_link_libraries(tests PRIVATE OpenMP::OpenMP_CXX)
 endif()
 
+if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
+   target_link_libraries(tests PRIVATE CUDA::cudart)
+endif()
+
 add_test(NAME CoreTests COMMAND tests)
 
 add_executable(benchmark tests/Benchmark.cpp)
@@ -398,6 +403,10 @@ if(OpenMP_CXX_FOUND)
     target_link_libraries(benchmark PRIVATE OpenMP::OpenMP_CXX)
 endif()
 
+if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
+    target_link_libraries(benchmark PRIVATE CUDA::cudart)
+endif()
+
 # --- MPI Verification Executable ---
 if(MPI_FOUND)
     add_executable(mpi_test mpi_test.cpp)
@@ -419,6 +428,9 @@ if(MPI_FOUND)
         Threads::Threads
         $<$<BOOL:${UNIX}>:dl>
     )
+    if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
+        target_link_libraries(mpi_test PRIVATE CUDA::cudart)
+    endif()
 
 
 endif()
