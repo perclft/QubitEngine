@@ -4,7 +4,7 @@
 # Define paths
 PROTO_DIR=./api/proto
 CPP_OUT=./backend/src/generated
-GO_OUT=./cli/internal/generated
+GO_OUT=./api/generated
 
 echo "Generating C++ Protobufs..."
 mkdir -p $CPP_OUT
