@@ -596,7 +596,11 @@ int CpuBackend::measure(size_t target) {
 }
 
 std::vector<double> CpuBackend::getProbabilities() {
-  return {}; // Not implemented
+  std::vector<double> probs(state.size(), 0.0);
+  for (size_t i = 0; i < state.size(); ++i) {
+    probs[i] = std::norm(state[i]);
+  }
+  return probs;
 }
 
 double CpuBackend::expectationValue(const std::string &pauli_string) {

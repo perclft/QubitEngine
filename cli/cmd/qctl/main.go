@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	pb "github.com/perclft/QubitEngine/cli/internal/generated"
+	pb "github.com/perclft/QubitEngine/api/generated"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"

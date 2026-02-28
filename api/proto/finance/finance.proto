@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package qubit_engine.finance;
 
-option go_package = "github.com/perclft/QubitEngine/modules/finance/generated";
+option go_package = "github.com/perclft/QubitEngine/api/generated/finance";
 
 // ------------------------------------------------------------------
 // Quantum Finance Service

@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "generate": "npx protoc --ts_out=src/generated --ts_opt=generate_dependencies --proto_path=../ ../api/proto/*.proto ../api/proto/crypto/*.proto ../api/proto/education/*.proto ../api/proto/finance/*.proto ../api/proto/physics/*.proto"
   },
   "dependencies": {
     "@protobuf-ts/grpcweb-transport": "^2.11.1",

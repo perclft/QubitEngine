@@ -1,0 +1,139 @@
+---
+# Gaming
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gaming
+  namespace: qubit-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gaming
+  template:
+    metadata:
+      labels:
+        app: gaming
+    spec:
+      containers:
+      - name: gaming
+        image: docker-gaming:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 50061
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gaming
+  namespace: qubit-engine
+spec:
+  ports:
+  - port: 50061
+  selector:
+    app: gaming
+
+---
+# Music
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: music
+  namespace: qubit-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: music
+  template:
+    metadata:
+      labels:
+        app: music
+    spec:
+      containers:
+      - name: music
+        image: docker-music:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 50062
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: music
+  namespace: qubit-engine
+spec:
+  ports:
+  - port: 50062
+  selector:
+    app: music
+
+---
+# Crypto
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crypto
+  namespace: qubit-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crypto
+  template:
+    metadata:
+      labels:
+        app: crypto
+    spec:
+      containers:
+      - name: crypto
+        image: docker-crypto:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 50063
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: crypto
+  namespace: qubit-engine
+spec:
+  ports:
+  - port: 50063
+  selector:
+    app: crypto
+
+---
+# Physics (VQE)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: physics
+  namespace: qubit-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: physics
+  template:
+    metadata:
+      labels:
+        app: physics
+    spec:
+      containers:
+      - name: physics
+        image: docker-physics:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 50060
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: physics
+  namespace: qubit-engine
+spec:
+  ports:
+  - port: 50060
+  selector:
+    app: physics

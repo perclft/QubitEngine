@@ -1,8 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Text, Html } from '@react-three/drei';
-import { QuantumComputeClient } from '../../generated/quantum.client';
-import { VQERequest, VQERequest_Molecule, VQEResponse } from '../../generated/quantum';
+import { VQESolverClient } from '../../generated/api/proto/physics/vqe.client';
+import { VQERequest, AnsatzType, OptimizerType } from '../../generated/api/proto/physics/vqe';
 import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport";
 import './QuantumChemistry.css';
 
@@ -54,19 +54,32 @@ export const QuantumChemistry: React.FC = () => {
         setEnergyData([]);
         setLogs(["Starting Quantum VQE Simulation for Hydrogen (H₂)..."]);
 
-        const transport = new GrpcWebFetchTransport({ baseUrl: "http://localhost:8080" });
-        const client = new QuantumComputeClient(transport);
+        // Base URL is empty so it fetches from the same origin serving the React app.
+        // Nginx will catch /qubit_engine.physics... and proxy it to Envoy internally.
+        const transport = new GrpcWebFetchTransport({ baseUrl: "" });
+        const client = new VQESolverClient(transport);
 
         abortController.current = new AbortController();
 
         const request = VQERequest.create({
-            molecule: VQERequest_Molecule.H2,
+            target: {
+                oneofKind: "molecule",
+                molecule: {
+                    name: "H2",
+                    atoms: [],
+                    charge: 0,
+                    multiplicity: 1,
+                    basisSet: "sto-3g"
+                }
+            },
+            ansatz: AnsatzType.ANSATZ_UCCSD,
+            optimizer: OptimizerType.OPTIMIZER_COBYLA,
             maxIterations: 100,
-            learningRate: 0.1
+            convergenceThreshold: 1e-6
         });
 
         try {
-            const stream = client.runVQE(request, { abort: abortController.current.signal });
+            const stream = client.findGroundState(request, { abort: abortController.current.signal });
 
             for await (const response of stream.responses) {
                 setEnergyData(prev => [...prev, {

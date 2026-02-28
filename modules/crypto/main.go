@@ -14,8 +14,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/perclft/QubitEngine/modules/crypto/generated/crypto"
-	engine "github.com/perclft/QubitEngine/modules/crypto/generated/engine"
+	engine "github.com/perclft/QubitEngine/api/generated"
+	pb "github.com/perclft/QubitEngine/api/generated/crypto"
 )
 
 type Basis int

@@ -25,7 +25,7 @@ service CircuitRegistry {
     rpc ForkCircuit(ForkCircuitRequest) returns (CircuitMetadata);
     
     // Delete a circuit (owner only)
-    rpc DeleteCircuit(DeleteCircuitRequest) returns (Empty);
+    rpc DeleteCircuit(DeleteCircuitRequest) returns (RegistryEmpty);
 }
 
 // ------------------------------------------------------------------
@@ -88,4 +88,4 @@ message CircuitList {
     int32 page_size = 4;
 }
 
-message Empty {}
+message RegistryEmpty {}

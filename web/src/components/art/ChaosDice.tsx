@@ -171,6 +171,7 @@ function ParticleBurst({ active, color }: { active: boolean; color: string }) {
     return (
         <points ref={particlesRef}>
             <bufferGeometry>
+                {/* @ts-ignore - fiber types expect args array but it is not necessary here */}
                 <bufferAttribute
                     attach="attributes-position"
                     count={100}

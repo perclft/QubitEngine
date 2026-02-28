@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package qubit_engine.physics;
 
-option go_package = "github.com/perclft/QubitEngine/modules/physics/generated";
+option go_package = "github.com/perclft/QubitEngine/api/generated/physics";
 
 import "api/proto/quantum.proto";
 

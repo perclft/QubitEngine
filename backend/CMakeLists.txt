@@ -82,7 +82,7 @@ if(ENABLE_CUDA)
     check_language(CUDA)
     if(CMAKE_CUDA_COMPILER)
         enable_language(CUDA)
-        set(CMAKE_CUDA_ARCHITECTURES "native")
+        set(CMAKE_CUDA_ARCHITECTURES "75")
         find_package(CUDAToolkit REQUIRED)
         add_compile_definitions(ENABLE_CUDA)
         message(STATUS "CUDA Detected. GPU Acceleration Enabled.")
@@ -320,6 +320,9 @@ add_executable(tests
     tests/OptimizerTests.cpp
     tests/CircuitOptimizerTests.cpp
     tests/AdjointTests.cpp
+    tests/CpuBackendTests.cpp
+    tests/MockHardwareBackendTests.cpp
+    tests/GPUQuantumRegisterTests.cpp
 )
 
 # Link QubitEngine sources (excluding main.cpp) to tests or link object lib?
@@ -331,6 +334,7 @@ add_executable(tests
 target_sources(tests PRIVATE
     src/QuantumRegister.cpp
     src/backends/CpuBackend.cpp
+    src/backends/GPUQuantumRegister.cpp
     ${METAL_SOURCES}
     src/ServiceImpl.cpp
     src/ServiceImpl_Visualize.cpp

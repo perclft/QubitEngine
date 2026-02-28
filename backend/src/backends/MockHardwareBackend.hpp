@@ -1,60 +1,103 @@
 #pragma once
 #include "IQuantumBackend.hpp"
+#include "../Types.hpp"
 #include <chrono>
+#include <complex>
 #include <random>
 #include <thread>
+#include <string>
+#include <vector>
+
+namespace qubit_engine {
 
 class MockHardwareBackend : public IQuantumBackend {
 private:
   int num_qubits;
-  // We simulate state crudely just to return something valid-ish
-  // Or we just return a "Noisy" zeros state
+  std::mt19937 gen;
+  std::normal_distribution<double> noise;
 
 public:
-  explicit MockHardwareBackend(int n) : num_qubits(n) {}
+  explicit MockHardwareBackend(int n)
+      : num_qubits(n), gen(std::random_device{}()), noise(0.0, 0.05) {}
 
-  void applyGate(const qubit_engine::GateOperation &op) override {
-    // Mock Hardware doesn't execute gate-by-gate in real-time usually,
-    // it queues the whole circuit.
-    // But for our interface streaming compatibility, we'll just sleep a tiny
-    // bit per gate to simulate "transmission" or execution time.
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  // --- Core Gates ---
+  void applyHadamard(size_t target) override { simulateExecutionDelay(); }
+  void applyX(size_t target) override { simulateExecutionDelay(); }
+  void applyY(size_t target) override { simulateExecutionDelay(); }
+  void applyZ(size_t target) override { simulateExecutionDelay(); }
+  void applyCNOT(size_t control, size_t target) override {
+    simulateExecutionDelay();
   }
 
-  void getResult(qubit_engine::StateResponse *response) override {
-    // Simulate Queue Wait Time
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+  // --- Advanced Gates ---
+  void applyToffoli(size_t control1, size_t control2, size_t target) override {
+    simulateExecutionDelay();
+  }
+  void applyPhaseS(size_t target) override { simulateExecutionDelay(); }
+  void applyPhaseT(size_t target) override { simulateExecutionDelay(); }
+  void applyRotationX(size_t target, Precision angle) override {
+    simulateExecutionDelay();
+  }
+  void applyRotationY(size_t target, Precision angle) override {
+    simulateExecutionDelay();
+  }
+  void applyRotationZ(size_t target, Precision angle) override {
+    simulateExecutionDelay();
+  }
+  void applySWAP(size_t qubit1, size_t qubit2) override {
+    simulateExecutionDelay();
+  }
+  void applyCZ(size_t control, size_t target) override {
+    simulateExecutionDelay();
+  }
 
-    response->clear_state_vector();
+  // --- Noise ---
+  void applyDepolarizingNoise(Precision probability) override {}
 
-    // Return a "Noisy" |0...0> state
-    // In reality, hardware returns counts (shots), not state vector.
-    // But our frontend expects a state vector for visualization.
-    // We will fake a state vector that looks slightly noisy around |0...0>
+  // --- Measurement & Analysis ---
+  int measure(size_t target) override { return 0; }
 
-    // Size = 2^N
+  std::vector<double> getProbabilities() override {
     size_t size = 1ULL << num_qubits;
+    std::vector<double> probs(size, 0.0);
+    probs[0] = 1.0;
+    return probs;
+  }
 
-    // Limit size for safety (Mock shouldn't crash on large N)
+  double expectationValue(const std::string &pauli_string) override {
+    return 1.0;
+  }
+
+  // --- State Access ---
+  std::vector<qubit_engine::Complex> getStateVector() const override {
+    // Return a noisy |0...0> state to mock a hardware return struct
+    size_t size = 1ULL << num_qubits;
     if (size > 1024)
-      size = 1024; // Cap for demo
+      size = 1024; // Cap for demo safety
 
-    std::mt19937 gen(std::random_device{}());
-    std::normal_distribution<> noise(0.0, 0.05);
+    std::vector<qubit_engine::Complex> state(size);
+
+    // Need mutable RNG for const method, so we use a local one
+    // just for state vector extraction payload
+    std::mt19937 local_gen(std::random_device{}());
+    std::normal_distribution<double> local_noise(0.0, 0.05);
 
     for (size_t i = 0; i < size; ++i) {
-      auto *c = response->add_state_vector();
       if (i == 0) {
-        // Mostly |0...0>
-        c->set_real(0.9 + noise(gen));
-        c->set_imag(noise(gen));
+        state[i] = qubit_engine::Complex(0.9 + local_noise(local_gen),
+                                         local_noise(local_gen));
       } else {
-        // Noise floor
-        c->set_real(noise(gen));
-        c->set_imag(noise(gen));
+        state[i] = qubit_engine::Complex(local_noise(local_gen),
+                                         local_noise(local_gen));
       }
     }
+    return state;
+  }
 
-    response->set_server_id("Mock-IBM-Q-System-One");
+private:
+  void simulateExecutionDelay() const {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
 };
+
+} // namespace qubit_engine

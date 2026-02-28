@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package qubit_engine.crypto;
 
-option go_package = "github.com/perclft/QubitEngine/modules/crypto/generated/crypto";
+option go_package = "github.com/perclft/QubitEngine/api/generated/crypto";
 
 // ------------------------------------------------------------------
 // Quantum Cryptography Service

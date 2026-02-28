@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package qubit_engine.education;
 
-option go_package = "github.com/perclft/QubitEngine/modules/education/generated";
+option go_package = "github.com/perclft/QubitEngine/api/generated/education";
 
 // ------------------------------------------------------------------
 // Quantum Education Service

@@ -1,9 +1,11 @@
-FROM golang:1.23-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
-# Copy shared code (CLI generated bindings)
+# Copy shared code (CLI generated bindings and API)
+COPY api api
 COPY cli cli
+COPY go.mod go.sum ./
 
 # Copy module code
 COPY modules/crypto modules/crypto

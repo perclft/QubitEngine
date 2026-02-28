@@ -22,7 +22,7 @@ service ResultCache {
     rpc InvalidateCache(CacheLookup) returns (CacheResponse);
     
     // Get cache statistics
-    rpc GetCacheStats(Empty) returns (CacheStats);
+    rpc GetCacheStats(CacheEmpty) returns (CacheStats);
 }
 
 // ------------------------------------------------------------------
@@ -55,7 +55,7 @@ message CacheHit {
     int32 hit_count = 5;          // How many times this was retrieved
 }
 
-message Empty {}
+message CacheEmpty {}
 
 message CacheStats {
     int64 total_entries = 1;
