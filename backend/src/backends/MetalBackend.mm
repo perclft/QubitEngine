@@ -6,6 +6,13 @@
 #include <cmath>
 #include <iostream>
 
+// Metal GPU struct uses float; C++ Complex uses double.
+// We must convert explicitly during upload/download.
+struct MetalComplex {
+  float real;
+  float imag;
+};
+
 namespace qubit_engine {
 
 // --- Lifecycle ---
@@ -23,6 +30,8 @@ MetalBackend::MetalBackend(size_t num_qubits)
 }
 
 MetalBackend::~MetalBackend() {
+  if (lastCommandBuffer_)
+    CFRelease(lastCommandBuffer_);
   if (gpuBuffer_)
     CFRelease(gpuBuffer_);
   if (device_)
@@ -131,7 +140,8 @@ void MetalBackend::initializeBuffer(const std::vector<Complex> &initialState) {
 void MetalBackend::uploadState(const std::vector<Complex> &cpuState) {
   id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
   size_t num_elements = cpuState.size();
-  size_t bufferSize = num_elements * sizeof(Complex);
+  // Metal buffer uses float pairs (MetalComplex), not double pairs
+  size_t bufferSize = num_elements * sizeof(MetalComplex);
 
   if (gpuBuffer_)
     CFRelease(gpuBuffer_);
@@ -142,24 +152,32 @@ void MetalBackend::uploadState(const std::vector<Complex> &cpuState) {
   gpuBuffer_ = (void *)CFBridgingRetain(mtlBuf);
   capacity_ = num_elements;
 
-  void *ptr = [mtlBuf contents];
-  std::memcpy(ptr, cpuState.data(), bufferSize);
+  // Convert double -> float for Metal
+  MetalComplex *ptr = (MetalComplex *)[mtlBuf contents];
+  for (size_t i = 0; i < num_elements; ++i) {
+    ptr[i].real = static_cast<float>(cpuState[i].real());
+    ptr[i].imag = static_cast<float>(cpuState[i].imag());
+  }
 }
 
 void MetalBackend::downloadState(std::vector<Complex> &cpuState) const {
+  // SYNC: Wait for the last committed GPU command buffer to finish
+  if (lastCommandBuffer_) {
+    id<MTLCommandBuffer> lastBuf =
+        (__bridge id<MTLCommandBuffer>)lastCommandBuffer_;
+    [lastBuf waitUntilCompleted];
+  }
+
   id<MTLBuffer> mtlBuf = (__bridge id<MTLBuffer>)gpuBuffer_;
-
-  // SYNC: Wait for all pending GPU work to finish
-  id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)commandQueue_;
-  id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
-  [cmdBuf commit];
-  [cmdBuf waitUntilCompleted];
-
-  void *ptr = [mtlBuf contents];
+  MetalComplex *ptr = (MetalComplex *)[mtlBuf contents];
   size_t num_elements = 1ULL << num_qubits_;
 
+  // Convert float -> double for C++
   cpuState.resize(num_elements);
-  std::memcpy(cpuState.data(), ptr, num_elements * sizeof(Complex));
+  for (size_t i = 0; i < num_elements; ++i) {
+    cpuState[i] = Complex(static_cast<double>(ptr[i].real),
+                          static_cast<double>(ptr[i].imag));
+  }
 }
 
 std::vector<Complex> MetalBackend::getStateVector() const {
@@ -202,7 +220,12 @@ void MetalBackend::dispatchHelper(void *queuePtr, void *psoPtr, void *bufPtr,
   [enc dispatchThreads:gridSize threadsPerThreadgroup:threadsPerGroup];
   [enc endEncoding];
   [cmdBuf commit];
-  // Removed [cmdBuf waitUntilCompleted] for Async Execution!
+
+  // Track the last command buffer so downloadState can wait on it
+  if (lastCommandBuffer_) {
+    CFRelease(lastCommandBuffer_);
+  }
+  lastCommandBuffer_ = (void *)CFBridgingRetain(cmdBuf);
 }
 
 // --- Gate Implementations ---

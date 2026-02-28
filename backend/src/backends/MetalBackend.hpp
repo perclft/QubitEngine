@@ -44,6 +44,7 @@ private:
   void *device_;
   void *commandQueue_;
   void *gpuBuffer_;
+  mutable void *lastCommandBuffer_ = nullptr; // For GPU sync
   size_t num_qubits_;
   size_t capacity_;
 
