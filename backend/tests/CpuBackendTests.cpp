@@ -1,7 +1,8 @@
-#include "../src/backends/CpuBackend.hpp"
-#include <gtest/gtest.h>
 #define _USE_MATH_DEFINES
+#include "../src/backends/CpuBackend.hpp"
 #include <cmath>
+#include <gtest/gtest.h>
+
 
 using namespace qubit_engine;
 
