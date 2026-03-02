@@ -1,0 +1,193 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Convert to and from different string cases."><title>convert_case - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="convert_case" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.1 (01f6ddf75 2026-02-11) (Homebrew)" data-channel="1.93.1" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate convert_case</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../convert_case/index.html">convert_<wbr>case</a><span class="version">0.10.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#basic-usage" title="Basic Usage">Basic Usage</a></li><li><a href="#splitting-conditions" title="Splitting Conditions">Splitting Conditions</a></li><li><a href="#other-behavior" title="Other Behavior">Other Behavior</a><ul><li><a href="#acronyms" title="Acronyms">Acronyms</a></li><li><a href="#digits" title="Digits">Digits</a></li><li><a href="#unicode" title="Unicode">Unicode</a></li><li><a href="#symbols" title="Symbols">Symbols</a></li><li><a href="#delimiters" title="Delimiters">Delimiters</a></li></ul></li><li><a href="#customizing-behavior" title="Customizing Behavior">Customizing Behavior</a><ul><li><a href="#patterns" title="Patterns">Patterns</a></li><li><a href="#boundaries" title="Boundaries">Boundaries</a></li><li><a href="#cases" title="Cases">Cases</a></li><li><a href="#converter" title="Converter">Converter</a></li></ul></li><li><a href="#associated-projects" title="Associated Projects">Associated Projects</a><ul><li><a href="#rust-library-convert_case_extras" title="Rust library `convert_case_extras`">Rust library <code>convert_case_extras</code></a></li><li><a href="#stringcaseorg" title="stringcase.org">stringcase.org</a></li><li><a href="#command-line-utility-ccase" title="Command Line Utility `ccase`">Command Line Utility <code>ccase</code></a></li></ul></li></ul><h3><a href="#macros">Crate Items</a></h3><ul class="block"><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>convert_<wbr>case</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/convert_case/lib.rs.html#1-930">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Convert to and from different string cases.</p>
+<h2 id="basic-usage"><a class="doc-anchor" href="#basic-usage">§</a>Basic Usage</h2>
+<p>The most common use of this crate is to just convert a string into a
+particular case, like snake, camel, or kebab.  You can use the <a href="macro.ccase.html" title="macro convert_case::ccase"><code>ccase</code></a>
+macro to convert most string types into the new case.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>convert_case::ccase;
+
+<span class="kw">let </span>s = <span class="string">"myVarName"</span>;
+<span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(snake, s),  <span class="string">"my_var_name"</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(kebab, s),  <span class="string">"my-var-name"</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(pascal, s), <span class="string">"MyVarName"</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(title, s),  <span class="string">"My Var Name"</span>);</code></pre></div>
+<p>For more explicit conversion, import the <a href="trait.Casing.html" title="trait convert_case::Casing"><code>Casing</code></a> trait which adds methods
+to string types that perform the conversion based on a variant of the <a href="enum.Case.html" title="enum convert_case::Case"><code>Case</code></a> enum.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>convert_case::{Case, Casing};
+
+<span class="kw">let </span>s = <span class="string">"myVarName"</span>;
+<span class="macro">assert_eq!</span>(s.to_case(Case::Snake),  <span class="string">"my_var_name"</span>);
+<span class="macro">assert_eq!</span>(s.to_case(Case::Kebab),  <span class="string">"my-var-name"</span>);
+<span class="macro">assert_eq!</span>(s.to_case(Case::Pascal), <span class="string">"MyVarName"</span>);
+<span class="macro">assert_eq!</span>(s.to_case(Case::Title),  <span class="string">"My Var Name"</span>);</code></pre></div>
+<p>For a full list of cases, see <a href="enum.Case.html" title="enum convert_case::Case"><code>Case</code></a>.</p>
+<h2 id="splitting-conditions"><a class="doc-anchor" href="#splitting-conditions">§</a>Splitting Conditions</h2>
+<p>Case conversion starts by splitting a single identifier into a list of words.  The
+condition for when to split and how to perform the split is defined by a <a href="enum.Boundary.html" title="enum convert_case::Boundary"><code>Boundary</code></a>.</p>
+<p>By default, <a href="macro.ccase.html" title="macro convert_case::ccase"><code>ccase</code></a> and <a href="trait.Casing.html#tymethod.to_case" title="method convert_case::Casing::to_case"><code>Casing::to_case</code></a> will split identifiers at all locations
+based on a list of <a href="enum.Boundary.html#method.defaults" title="associated function convert_case::Boundary::defaults">default boundaries</a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>convert_case::ccase;
+
+<span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(pascal, <span class="string">"hyphens-and_underscores"</span>), <span class="string">"HyphensAndUnderscores"</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(pascal, <span class="string">"lowerUpper space"</span>), <span class="string">"LowerUpperSpace"</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(snake, <span class="string">"HTTPRequest"</span>), <span class="string">"http_request"</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(snake, <span class="string">"vector4d"</span>), <span class="string">"vector_4_d"</span>)</code></pre></div>
+<p>Associated with each case is a <a href="enum.Case.html#method.boundaries" title="method convert_case::Case::boundaries">list of boundaries</a> that can be
+used to split identifiers instead of the defaults.  We can use the following notation
+with the <a href="macro.ccase.html" title="macro convert_case::ccase"><code>ccase</code></a> macro.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>convert_case::ccase;
+
+<span class="macro">assert_eq!</span>(
+    <span class="macro">ccase!</span>(title, <span class="string">"1999-25-01_family_photo.png"</span>),
+    <span class="string">"1999 25 01 Family Photo.png"</span>,
+);
+<span class="macro">assert_eq!</span>(
+    <span class="macro">ccase!</span>(snake -&gt; title, <span class="string">"1999-25-01_family_photo.png"</span>),
+    <span class="string">"1999-25-01 Family Photo.png"</span>,
+);</code></pre></div>
+<p>Or we can use the <a href="trait.Casing.html#tymethod.from_case" title="method convert_case::Casing::from_case"><code>from_case</code></a> method on <code>Casing</code> before calling
+<code>to_case</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>convert_case::{Case, Casing};
+
+<span class="macro">assert_eq!</span>(
+    <span class="string">"John McCarthy"</span>.to_case(Case::Snake),
+    <span class="string">"john_mc_carthy"</span>,
+);
+<span class="macro">assert_eq!</span>(
+    <span class="string">"John McCarthy"</span>.from_case(Case::Title).to_case(Case::Snake),
+    <span class="string">"john_mccarthy"</span>,
+);</code></pre></div>
+<p>You can remove boundaries from the list of defaults with <a href="trait.Casing.html#tymethod.remove_boundaries" title="method convert_case::Casing::remove_boundaries"><code>Casing::remove_boundaries</code></a>.  See
+the list of constants on <a href="enum.Boundary.html" title="enum convert_case::Boundary"><code>Boundary</code></a> for splitting conditions.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>convert_case::{Boundary, Case, Casing};
+
+<span class="macro">assert_eq!</span>(
+    <span class="string">"Vector4D"</span>.remove_boundaries(<span class="kw-2">&amp;</span>[Boundary::DigitUpper]).to_case(Case::Snake),
+    <span class="string">"vector_4d"</span>,
+);</code></pre></div><h2 id="other-behavior"><a class="doc-anchor" href="#other-behavior">§</a>Other Behavior</h2><h4 id="acronyms"><a class="doc-anchor" href="#acronyms">§</a>Acronyms</h4>
+<p>Part of the default list of boundaries is <a href="enum.Boundary.html#variant.Acronym" title="variant convert_case::Boundary::Acronym"><code>acronym</code></a> which
+will detect two capital letters followed by a lowercase letter.  But there is no memory
+that the word itself was parsed considered an acronym.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(snake, <span class="string">"HTTPRequest"</span>), <span class="string">"http_request"</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(pascal, <span class="string">"HTTPRequest"</span>), <span class="string">"HttpRequest"</span>);</code></pre></div><h4 id="digits"><a class="doc-anchor" href="#digits">§</a>Digits</h4>
+<p>The default list of boundaries includes splitting before and after digits.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(title, <span class="string">"word2vec"</span>), <span class="string">"Word 2 Vec"</span>);</code></pre></div><h4 id="unicode"><a class="doc-anchor" href="#unicode">§</a>Unicode</h4>
+<p>Conversion works on <em>graphemes</em> as defined by the
+<a href="unicode_segmentation::UnicodeSegmentation::graphemes"><code>unicode_segmentation</code></a> library.
+This means that transforming letters to lowercase or uppercase works on all unicode
+characters, which also means that the number of characters isn’t necessarily the
+same after conversion.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(kebab, <span class="string">"GranatÄpfel"</span>), <span class="string">"granat-äpfel"</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(title, <span class="string">"ПЕРСПЕКТИВА24"</span>), <span class="string">"Перспектива 24"</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(lower, <span class="string">"ὈΔΥΣΣΕΎΣ"</span>), <span class="string">"ὀδυσσεύς"</span>);</code></pre></div><h4 id="symbols"><a class="doc-anchor" href="#symbols">§</a>Symbols</h4>
+<p>All symbols that are not part of the default boundary conditions are ignored.  This
+is any symbol that isn’t an underscore, hyphen, or space.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(snake, <span class="string">"dots.arent.default"</span>), <span class="string">"dots.arent.default"</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(pascal, <span class="string">"path/to/file_name"</span>), <span class="string">"Path/to/fileName"</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(pascal, <span class="string">"list\nof\nwords"</span>),   <span class="string">"List\nof\nwords"</span>);</code></pre></div><h4 id="delimiters"><a class="doc-anchor" href="#delimiters">§</a>Delimiters</h4>
+<p>Leading, trailing, and duplicate delimiters create empty words.
+This propogates and the converted string will share the behavior.  <strong>This can cause
+unintuitive behavior for patterns that transform words based on index.</strong></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(constant, <span class="string">"_leading_score"</span>), <span class="string">"_LEADING_SCORE"</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(ada, <span class="string">"trailing-dash-"</span>), <span class="string">"Trailing_Dash_"</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(train, <span class="string">"duplicate----hyphens"</span>), <span class="string">"Duplicate----Hyphens"</span>);
+
+<span class="comment">// not what you might expect!
+</span><span class="macro">assert_eq!</span>(<span class="macro">ccase!</span>(camel, <span class="string">"_empty__first_word"</span>), <span class="string">"EmptyFirstWord"</span>);</code></pre></div><h2 id="customizing-behavior"><a class="doc-anchor" href="#customizing-behavior">§</a>Customizing Behavior</h2>
+<p>Case conversion takes place in three steps:</p>
+<ol>
+<li>Splitting the identifier into a list of words</li>
+<li>Mutating the letter case of graphemes within each word</li>
+<li>Joining the words back into an identifier using a delimiter</li>
+</ol>
+<p>Those are defined by boundaries, patterns, and delimiters respectively.  Graphically:</p>
+<div class="example-wrap"><pre class="language-md"><code>Identifier        Identifier&#39;
+    |                 ^
+    | boundaries      | delimiter
+    V                 |
+  Words ----------&gt; Words&#39;
+          pattern</code></pre></div><h3 id="patterns"><a class="doc-anchor" href="#patterns">§</a>Patterns</h3>
+<p>How to change the case of letters across a list of words is called a <em>pattern</em>.
+A pattern is a function that when passed a <code>&amp;[&amp;str]</code>, produces a
+<code>Vec&lt;String&gt;</code>.  The <a href="enum.Pattern.html" title="enum convert_case::Pattern"><code>Pattern</code></a> enum encapsulates the common transformations
+used across all cases.  Although custom functions can be supplied with the
+<a href="enum.Pattern.html#variant.Custom" title="variant convert_case::Pattern::Custom"><code>Custom</code></a> variant.</p>
+<h3 id="boundaries"><a class="doc-anchor" href="#boundaries">§</a>Boundaries</h3>
+<p>The condition for splitting at part of an identifier, where to perform
+the split, and if any characters are removed are defined by <a href="enum.Boundary.html" title="enum convert_case::Boundary">boundaries</a>.
+By default, identifiers are split based on <a href="enum.Boundary.html#method.defaults" title="associated function convert_case::Boundary::defaults"><code>Boundary::defaults</code></a>.  This list
+contains word boundaries that you would likely see after creating a multi-word
+identifier of typical cases.</p>
+<p>Custom boundary conditions can also be created.  Commonly, you might split based on some
+character or list of characters.  The <a href="macro.delim_boundary.html" title="macro convert_case::delim_boundary"><code>delim_boundary</code></a> macro builds
+a boundary that splits on the presence of a string, and then removes the string
+while producing the list of words.</p>
+<p>You can also use <a href="enum.Boundary.html#variant.Custom" title="variant convert_case::Boundary::Custom"><code>Boundary::Custom</code></a> to explicitly define boundary
+conditions.  If you actually need to create a
+boundary condition from scratch, you should file an issue to let the author know
+how you used it.  I’m not certain what other boundary condition would be helpful.</p>
+<h3 id="cases"><a class="doc-anchor" href="#cases">§</a>Cases</h3>
+<p>A case is defined by a list of boundaries, a pattern, and a <em>delimiter</em>: the string to
+intersperse between words before concatenation. <a href="enum.Case.html#variant.Custom" title="variant convert_case::Case::Custom"><code>Case::Custom</code></a> is a struct enum variant with
+exactly those three fields.  You could create your own case like so.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>convert_case::{Case, Casing, delim_boundary, Pattern};
+
+<span class="kw">let </span>dot_case = Case::Custom {
+    boundaries: <span class="kw-2">&amp;</span>[<span class="macro">delim_boundary!</span>(<span class="string">"."</span>)],
+    pattern: Pattern::Lowercase,
+    delim: <span class="string">"."</span>,
+};
+
+<span class="macro">assert_eq!</span>(<span class="string">"AnimalFactoryFactory"</span>.to_case(dot_case), <span class="string">"animal.factory.factory"</span>);
+
+<span class="macro">assert_eq!</span>(
+    <span class="string">"pd.options.mode.copy_on_write"
+        </span>.from_case(dot_case)
+        .to_case(Case::Title),
+    <span class="string">"Pd Options Mode Copy_on_write"</span>,
+)</code></pre></div><h3 id="converter"><a class="doc-anchor" href="#converter">§</a>Converter</h3>
+<p>Case conversion with <code>convert_case</code> allows using attributes from two cases.  From
+the first case is how you split the identifier (the <em>from</em> case), and
+from the second is how to mutate and join the words (the <em>to</em> case.)  The
+<a href="struct.Converter.html" title="struct convert_case::Converter"><code>Converter</code></a> is used to define the <em>conversion</em> process, not a case directly.</p>
+<p>It has the same fields as case, but is exposed via a builder interface
+and can be used to apply a conversion on a string directly, without
+specifying all the parameters at the time of conversion.</p>
+<p>In the below example, we build a converter that maps the double colon
+delimited module path in rust into a series of file directories.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>convert_case::{Case, Converter, delim_boundary};
+
+<span class="kw">let </span>modules_into_path = Converter::new()
+    .set_boundaries(<span class="kw-2">&amp;</span>[<span class="macro">delim_boundary!</span>(<span class="string">"::"</span>)])
+    .set_delim(<span class="string">"/"</span>);
+
+<span class="macro">assert_eq!</span>(
+    modules_into_path.convert(<span class="string">"std::os::unix"</span>),
+    <span class="string">"std/os/unix"</span>,
+);</code></pre></div><h2 id="associated-projects"><a class="doc-anchor" href="#associated-projects">§</a>Associated Projects</h2><h3 id="rust-library-convert_case_extras"><a class="doc-anchor" href="#rust-library-convert_case_extras">§</a>Rust library <code>convert_case_extras</code></h3>
+<p>Some extra utilties for convert_case that don’t need to be in the main library.
+You can read more here: <a href="https://docs.rs/convert_case_extras"><code>convert_case_extras</code></a>.</p>
+<h3 id="stringcaseorg"><a class="doc-anchor" href="#stringcaseorg">§</a>stringcase.org</h3>
+<p>While developing <code>convert_case</code>, the author became fascinated in the naming conventions
+used for cases as well as different implementations for conversion.  On <a href="https://stringcase.org">stringcase.org</a>
+is documentation of the history of naming conventions, a catalogue of case conversion tools,
+and a more rigorous definition of what it means to “convert the case of an identifier.”</p>
+<h3 id="command-line-utility-ccase"><a class="doc-anchor" href="#command-line-utility-ccase">§</a>Command Line Utility <code>ccase</code></h3>
+<p><code>convert_case</code> was originally developed for the purposes of a command line utility
+for converting the case of strings and filenames.  You can check out
+<a href="https://github.com/rutrum/ccase"><code>ccase</code> on Github</a>.</p>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.case.html" title="macro convert_case::case">case</a></dt><dd>The variant of <code>case</code> from a token.</dd><dt><a class="macro" href="macro.ccase.html" title="macro convert_case::ccase">ccase</a></dt><dd>Convert an identifier into a case.</dd><dt><a class="macro" href="macro.delim_boundary.html" title="macro convert_case::delim_boundary">delim_<wbr>boundary</a></dt><dd>Create a new boundary based on a delimiter.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Converter.html" title="struct convert_case::Converter">Converter</a></dt><dd>The parameters for performing a case conversion.</dd><dt><a class="struct" href="struct.StateConverter.html" title="struct convert_case::StateConverter">State<wbr>Converter</a></dt><dd>Holds information about parsing before converting into a case.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.Boundary.html" title="enum convert_case::Boundary">Boundary</a></dt><dd>Conditions for splitting an identifier into words.</dd><dt><a class="enum" href="enum.Case.html" title="enum convert_case::Case">Case</a></dt><dd>Defines the case of an identifier.</dd><dt><a class="enum" href="enum.Pattern.html" title="enum convert_case::Pattern">Pattern</a></dt><dd>Transformations on a list of words.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Casing.html" title="trait convert_case::Casing">Casing</a></dt><dd>Describes items that can be converted into a case.  This trait is used
+in conjunction with the <a href="struct.StateConverter.html" title="struct convert_case::StateConverter"><code>StateConverter</code></a> struct which is returned from a couple
+methods on <code>Casing</code>.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.split.html" title="fn convert_case::split">split</a></dt><dd>Split an identifier into a list of words using the list of boundaries.</dd></dl></section></div></main></body></html>

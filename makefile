@@ -56,21 +56,7 @@ docker-build:
 	docker build -t $(ENGINE_IMAGE) -f deploy/docker/Dockerfile.engine .
 	docker build -t $(CLI_IMAGE) -f deploy/docker/Dockerfile.cli .
 
-# Generate Web Clients (TypeScript)
-web-proto:
-	@echo "Generating Web Clients..."
-	@mkdir -p web/src/generated
-	@rm -rf web/src/generated/*
-	$(PROTOC) -I $(PROTO_DIR) \
-		--ts_out=web/src/generated \
-		--plugin=protoc-gen-ts=./web/node_modules/.bin/protoc-gen-ts \
-		$(PROTO_DIR)/quantum.proto \
-		$(PROTO_DIR)/crypto/crypto.proto
 
-# Run the full stack (Engine + Envoy + Web)
-run-web:
-	@echo "Starting Full Stack..."
-	docker compose -f deploy/docker/docker-compose.yaml up --build
 
 deploy:
 	@echo "Deploying to Kubernetes..."

@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
+<a href="#overview">Overview</a> •
 <a href="#architecture">Architecture</a> •
-<a href="#modules">Application Modules</a> •
 <a href="#performance">Benchmarks</a> •
 <a href="#quick-start">Quick Start</a>
 </p>
@@ -19,7 +19,9 @@
 
 ## 🌟 Overview
 
-**QubitEngine** is a high-performance quantum simulation platform designed to bridge the gap between low-level hardware acceleration and cloud-native application design. It features a unified C++20 physics kernel with **automatic hardware detection**, enabling seamless execution across **Linux (CUDA)**, **macOS (Metal)**, and **Windows (AVX2)**.
+**QubitEngine** is a high-performance quantum simulation platform built specifically as a robust R&D tool for researchers. It features a unified C++20 physics kernel with **automatic hardware detection**, enabling seamless execution across **Linux (CUDA)**, **macOS (Metal)**, and **Windows (AVX2)**.
+
+To easily explore and trace internal wavefunctions, QubitEngine provides a native interactive **Terminal User Interface (TUI)** written in **Rust** (Ratatui), connecting directly to the core simulator over gRPC streaming.
 
 ## 🏗️ Architecture Design
 
@@ -40,12 +42,7 @@ A modular microservices architecture handles high-level logic and orchestration:
 
 * **Scheduler**: A priority-aware job queue backed by **Redis**.
 * **Registry**: Persistent circuit storage using **PostgreSQL**.
-
-## 🧩 Application Modules
-
-* **Quantum Music Composer**: Generates melodic sequences and MIDI files using quantum superposition and entanglement probabilities.
-* **Quantum Cryptography**: A sandbox for testing **BB84 QKD** protocols with real-time eavesdropping detection.
-* **Quantum Education**: Interactive learning platform with a circuit library, gamified quizzes, and step-by-step state snapshots.
+* **TUI Dashboard**: A Rust Ratatui client that streams live probability matrix data for immediate graphical analysis.
 
 ## ⚡ Performance Benchmarks
 
@@ -60,13 +57,19 @@ QubitEngine is optimized for maximum memory bandwidth, essential for large-scale
 
 ## 🚀 Quick Start
 
-```bash
-# Start the full microservices mesh with Docker Compose
-docker compose -f deploy/docker/docker-compose.yaml up --build
+1. Start the distributed backend engine natively or via Makefile:
 
+```bash
+make build-engine
+./build/qubit_engine
 ```
 
-Access the **Visual Dashboard** at `http://localhost:5173`.
+1. Boot the Rust terminal user interface to stream executions interactively:
+
+```bash
+cd cli-rs
+cargo run
+```
 
 ## 📄 License
 

@@ -16,31 +16,7 @@ services:
     depends_on:
       - postgres
 
-  # 2. Envoy Proxy (Bridge gRPC-Web -> gRPC)
-  envoy:
-    image: envoyproxy/envoy:v1.25-latest
-    volumes:
-      - ./envoy.yaml:/etc/envoy/envoy.yaml
-    ports:
-      - "8080:8080"
-      - "9901:9901"
-    networks:
-      - qubit-net
-    depends_on:
-      - engine
-      - registry
 
-  # 3. Web Dashboard (Frontend)
-  web:
-    build:
-      context: ../../web
-      dockerfile: ../deploy/docker/Dockerfile.web
-    ports:
-      - "5173:80" # Map Nginx 80 to host 5173
-    networks:
-      - qubit-net
-    depends_on:
-      - envoy
 
   # 4. PostgreSQL (Circuit Registry Backend)
   postgres:
@@ -124,35 +100,7 @@ services:
       redis:
         condition: service_healthy
 
-  # 9. Gaming Module (with Oracle)
-  gaming:
-    build:
-      context: ../..
-      dockerfile: modules/gaming/Dockerfile
-    ports:
-      - "50061:50061"
-    command: [ "-port", "50061", "-engine-addr", "engine:50051" ]
-    networks:
-      - qubit-net
-    depends_on:
-      engine:
-        condition: service_started
 
-  # 10. Discord Bot (Quantum 8-Ball)
-  discord-bot:
-    build:
-      context: ../../bot/discord
-      dockerfile: Dockerfile
-    environment:
-      - DISCORD_TOKEN=${DISCORD_TOKEN:-}
-    command: [ "-gaming-addr", "gaming:50061" ]
-    networks:
-      - qubit-net
-    depends_on:
-      gaming:
-        condition: service_started
-    profiles:
-      - bot # Only start with `docker compose --profile bot up`
 
   # 11. Music Module (Quantum Mozart)
   music:

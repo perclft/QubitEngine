@@ -59,10 +59,15 @@ endif()
 set(BACKEND_SOURCES
     ../backend/src/QuantumRegister.cpp
     ../backend/src/backends/CpuBackend.cpp
-    ../backend/src/backends/CudaBackend.cpp
     ../backend/src/backends/GPUQuantumRegister.cpp
+    ../backend/src/CircuitOptimizer.cpp
     ${METAL_SOURCES}
 )
+
+if(ENABLE_CUDA)
+    find_package(CUDA REQUIRED)
+    list(APPEND BACKEND_SOURCES ../backend/src/backends/CudaBackend.cpp)
+endif()
 
 # Benchmark executables
 add_executable(memory_benchmark MemoryWallBenchmark.cpp ${BACKEND_SOURCES})

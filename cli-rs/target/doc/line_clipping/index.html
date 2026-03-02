@@ -1,0 +1,45 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A rust crate to implement several line clipping algorithms. See the documentation for more information. The choice of algorithms is based on the following article which contains a good summary of the options:"><title>line_clipping - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="line_clipping" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.1 (01f6ddf75 2026-02-11) (Homebrew)" data-channel="1.93.1" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate line_clipping</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../line_clipping/index.html">line_<wbr>clipping</a><span class="version">0.3.5</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#installation" title="Installation">Installation</a></li><li><a href="#minimum-supported-rust-version" title="Minimum supported Rust version">Minimum supported Rust version</a></li><li><a href="#usage" title="Usage">Usage</a></li><li><a href="#license" title="License">License</a></li><li><a href="#contribution" title="Contribution">Contribution</a></li></ul><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>line_<wbr>clipping</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/line_clipping/lib.rs.html#1-129">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A rust crate to implement several line clipping algorithms. See the
+<a href="https://docs.rs/line_clipping">documentation</a> for more information. The choice of algorithms is
+based on the following article which contains a good summary of the options:</p>
+<p>Matthes D, Drakopoulos V. <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9605407/">Line Clipping in 2D: Overview, Techniques and
+Algorithms</a>. J Imaging. 2022 Oct
+17;8(10):286. doi: 10.3390/jimaging8100286. PMID: 36286380; PMCID: PMC9605407.</p>
+<p>Supports:</p>
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+<a href="cohen_sutherland/index.html" title="mod line_clipping::cohen_sutherland">Cohen-Sutherland</a></li>
+</ul>
+<p>TODO</p>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Cyrus-Beck</li>
+<li><input disabled="" type="checkbox"/>
+Liang-Barsky</li>
+<li><input disabled="" type="checkbox"/>
+Nicholl-Lee-Nicholl</li>
+<li><input disabled="" type="checkbox"/>
+More comprehensive testing</li>
+</ul>
+<h2 id="installation"><a class="doc-anchor" href="#installation">§</a>Installation</h2><div class="example-wrap"><pre class="language-shell"><code>cargo add line-clipping</code></pre></div><h2 id="minimum-supported-rust-version"><a class="doc-anchor" href="#minimum-supported-rust-version">§</a>Minimum supported Rust version</h2>
+<p>The crate is built with Rust 1.85 to match the 2024 edition. The MSRV may increase in a
+future minor release, but will be noted in the changelog.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>line_clipping::cohen_sutherland::clip_line;
+<span class="kw">use </span>line_clipping::{LineSegment, Point, Window};
+
+<span class="kw">let </span>line = LineSegment::new(Point::new(-<span class="number">10.0</span>, -<span class="number">10.0</span>), Point::new(<span class="number">20.0</span>, <span class="number">20.0</span>));
+<span class="kw">let </span>window = Window::new(<span class="number">0.0</span>, <span class="number">10.0</span>, <span class="number">0.0</span>, <span class="number">10.0</span>);
+<span class="kw">let </span>clipped_line = clip_line(line, window);</code></pre></div><h2 id="license"><a class="doc-anchor" href="#license">§</a>License</h2>
+<p>Copyright (c) Josh McKinney</p>
+<p>This project is licensed under either of</p>
+<ul>
+<li>MIT license (<a href="LICENSE-MIT">LICENSE-MIT</a> or <a href="http://opensource.org/licenses/MIT">http://opensource.org/licenses/MIT</a>)</li>
+<li>Apache License, Version 2.0 (<a href="LICENSE-APACHE">LICENSE-APACHE</a> or <a href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a>)</li>
+</ul>
+<p>at your option.</p>
+<h2 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h2>
+<p>Contributions are welcome! Please open an issue or submit a pull request.</p>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in
+the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without
+any additional terms or conditions.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="cohen_sutherland/index.html" title="mod line_clipping::cohen_sutherland">cohen_<wbr>sutherland</a></dt><dd>Implements the Cohen-Sutherland line clipping algorithm.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.LineSegment.html" title="struct line_clipping::LineSegment">Line<wbr>Segment</a></dt><dd>A line segment in 2D space.</dd><dt><a class="struct" href="struct.Point.html" title="struct line_clipping::Point">Point</a></dt><dd>A point in 2D space.</dd><dt><a class="struct" href="struct.Window.html" title="struct line_clipping::Window">Window</a></dt><dd>A rectangular region to clip lines against.</dd></dl></section></div></main></body></html>

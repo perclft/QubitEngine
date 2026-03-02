@@ -5,7 +5,7 @@
 PROTO_DIR=./api/proto
 CPP_OUT=./backend/src/generated
 GO_OUT=./api/generated
-TS_OUT=./web/src/generated
+PYTHON_OUT=./python/qubit_engine/proto
 
 echo "Cleaning up old generated folders..."
 rm -rf ./modules/*/generated
@@ -21,9 +21,4 @@ protoc -I . --go_out=. --go_opt=module=github.com/perclft/QubitEngine \
     --go-grpc_out=. --go-grpc_opt=module=github.com/perclft/QubitEngine \
     api/proto/*.proto api/proto/*/*.proto
 
-echo "Generating TypeScript/Web Protobufs..."
-mkdir -p $TS_OUT
-# Use protobuf-ts for grpc-web TS generation
-npx --prefix web protoc --ts_out=$TS_OUT --ts_opt=generate_dependencies --proto_path=. $(find api/proto -name "*.proto")
-
-echo "Done."
+echo "Protobuf generation complete!"

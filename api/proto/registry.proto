@@ -36,7 +36,7 @@ message SaveCircuitRequest {
     string name = 1;
     string description = 2;
     CircuitRequest circuit = 3;
-    string domain = 4;  // "physics", "gaming", "finance", "education", "music", "crypto"
+    string domain = 4;  // "physics", "finance", "education", "chemistry", "crypto"
     repeated string tags = 5;
     bool is_public = 6;
 }

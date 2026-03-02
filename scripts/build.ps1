@@ -169,12 +169,6 @@ function Build-CPP {
 function Build-Go {
     Write-Host "Building Go Services..." -ForegroundColor Cyan
     
-    if (Test-Path "$Root\modules\gaming") {
-        cd "$Root\modules\gaming"
-        go build -o "$Root\bin\gaming_service.exe" .
-        Write-Host "   Built gaming_service.exe" -ForegroundColor Gray
-    }
-    
     if (Test-Path "$Root\cli") {
         cd "$Root\cli"
         go build -o "$Root\bin\qctl.exe" ./cmd/qctl
