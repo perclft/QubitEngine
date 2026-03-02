@@ -1,57 +1,98 @@
-# QubitEngine Architecture
-
-This document provides a high-level overview of the QubitEngine architecture, illustrating the data flow from the user interface down to the hardware execution layers.
+# QubitEngine Architecture Guide
 
 ## System Overview
 
-The system is composed of three main layers:
-1.  **Frontend**: A React-based web interface for users to design circuits and view results.
-2.  **Orchestrator**: A Go-based microservice that schedules jobs and manages state.
-3.  **Engine**: A high-performance C++ application that executes quantum simulations.
+QubitEngine is a multi-language quantum simulation platform with five major layers:
 
-## Data Flow Diagram
-
-```mermaid
-graph TD
-    User([User / Frontend]) -->|HTTP/gRPC| GoScheduler[Go Scheduler Service]
-    GoScheduler -->|gRPC| CppEngine[C++ Qubit Engine]
-    
-    subgraph "C++ Execution Engine"
-        CppEngine -->|Job Request| QuantumRegister[QuantumRegister Facade]
-        QuantumRegister -->|Select Backend| BackendSelector{Backend Selector}
-        
-        BackendSelector -->|CPU| CpuBackend[CpuBackend]
-        BackendSelector -->|GPU| CudaBackend[CudaBackend]
-        
-        CpuBackend -->|OpenMP/AVX| CpuExecution[CPU Execution]
-        CudaBackend -->|CUDA Runtime| GateKernels[CUDA Kernels.cu]
-        
-        GateKernels -->|nVidia Driver| GPU[GPU Hardware]
-    end
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Rust TUI (Ratatui)                    │
+│              Interactive terminal dashboard              │
+└────────────────────────┬────────────────────────────────┘
+                         │ gRPC Streaming
+┌────────────────────────▼────────────────────────────────┐
+│             Go Application Mesh (gRPC)                  │
+│  ┌──────────┐  ┌──────────┐  ┌───────┐                 │
+│  │Scheduler │  │ Registry │  │ Cache │                  │
+│  │  (Redis) │  │(Postgres)│  │(Redis)│                  │
+│  └──────────┘  └──────────┘  └───────┘                  │
+└────────────────────────┬────────────────────────────────┘
+                         │ gRPC
+┌────────────────────────▼────────────────────────────────┐
+│              C++ Physics Kernel (C++20)                  │
+│  ┌────────────────────────────────────────────────────┐ │
+│  │ QuantumRegister → IQuantumBackend (polymorphic)    │ │
+│  │  ├─ CpuBackend   (AVX2/NEON + OpenMP)              │ │
+│  │  ├─ CudaBackend  (NVIDIA GPU)                      │ │
+│  │  ├─ MetalBackend (Apple GPU)                       │ │
+│  │  ├─ SimulatorBackend (noise injection)             │ │
+│  │  ├─ MockHardwareBackend (testing)                  │ │
+│  │  └─ CloudBackend (remote execution)                │ │
+│  ├─ QuantumJIT     (gate fusion compiler)             │ │
+│  ├─ QuantumDifferentiator (parameter-shift + adjoint) │ │
+│  ├─ OpenQASM       (parser/exporter 2.0 & 3.0)       │ │
+│  └─ CircuitOptimizer (gate peephole optimization)     │ │
+│  ┌────────────────────────────────────────────────────┐ │
+│  │ Python Bindings (pybind11) → qubit_engine module   │ │
+│  └────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
 ```
 
-## Component Details
+## Backend Selection
 
-### 1. Go Scheduler
-- **Role**: Acts as the API gateway and job queue.
-- **Communication**: Receives JSON/gRPC requests from the frontend.
-- **Responsibility**: Dispatches simulation tasks to available C++ Engine instances.
+`QuantumRegister` acts as a proxy that creates the appropriate backend at construction time. The selection logic in `QuantumRegister.cpp` follows this priority chain:
 
-### 2. C++ Qubit Engine
-- **Role**: The core computational unit.
-- **QuantumRegister**: The main entry point for quantum operations. It abstracts the underlying backend hardware.
-- **Backend Selection**:
-    - Automatic detection based on build flags (`ENABLE_CUDA`) and hardware availability.
-    - Fallback to CPU if GPU is unavailable.
+1. **CUDA** — If compiled with `ENABLE_CUDA` and a CUDA device is detected
+2. **Metal** — If compiled with `ENABLE_METAL` (Apple platforms)
+3. **MPI** — If compiled with `MPI_ENABLED` and `force_local` is `false`
+4. **CPU** — Default fallback with AVX2/NEON + OpenMP
 
-### 3. Backends
-- **CpuBackend**:
-    - Optimized with OpenMP for multi-threading.
-    - Uses AVX2/NEON intrinsics for vectorization.
-- **CudaBackend**:
-    - leverages NVIDIA GPUs for massive parallelism.
-    - Implemented using CUDA C++ kernels (`gate_kernels.cu`).
-    - Explicit memory management between Host (CPU) and Device (GPU).
+The `force_local` constructor parameter bypasses distributed (MPI) execution, useful for gradient calculations where each parameter evaluation needs an independent register.
 
-## Build System
-The project uses **CMake** for build configuration, handling dependencies like `gRPC`, `Protobuf`, and `NVIDIA CUDA Toolkit`.
+## JIT Compiler Optimization Tiers
+
+The `QuantumJIT` compiler operates on `CircuitIR` (intermediate representation) with four optimization levels:
+
+| Level | Name | Strategy |
+|-------|------|----------|
+| **O0** | None | Pass-through; builds `CompiledGate` structs only |
+| **O1** | Cancel | Adjacent inverse gate cancellation (X·X = I, H·H = I) |
+| **O2** | Fuse | Consecutive single-qubit gates on the same qubit are fused via 2×2 matrix multiplication |
+| **O3** | Aggressive | Reorders independent gates + applies O2 fusion again |
+
+Gate matrices are stored as `std::array<Complex, 4>` (2×2) or `std::array<Complex, 16>` (4×4).
+
+## gRPC API Surface
+
+Defined in `api/proto/quantum.proto`:
+
+| RPC | Type | Description |
+|-----|------|-------------|
+| `RunCircuit` | Unary | Synchronous circuit execution |
+| `StreamGates` | Bidi Stream | Send gates, receive state vectors |
+| `VisualizeCircuit` | Server Stream | Execute circuit, stream state after each step |
+| `RunVQE` | Server Stream | Run VQE optimization, stream energy per iteration |
+
+Defined in `api/proto/scheduler.proto`:
+
+| RPC | Type | Description |
+|-----|------|-------------|
+| `SubmitJob` | Unary | Submit circuit to Redis priority queue |
+| `GetJobStatus` | Unary | Poll job state |
+| `CancelJob` | Unary | Cancel queued or running job |
+| `StreamJobResults` | Server Stream | Stream results as engine produces them |
+| `ListJobs` | Unary | List jobs by user with pagination |
+
+## Differentiator Methods
+
+`QuantumDifferentiator` provides two gradient computation strategies:
+
+- **Parameter Shift Rule** (`calculateGradients`): O(2P) circuit evaluations for P parameters. Supports MPI distribution across ranks. Exact for gates of the form exp(-iθP/2).
+- **Adjoint Differentiation** (`calculateGradientsAdjoint`): O(1) forward pass + O(L) backward pass over L gates. Records a circuit tape, then walks it in reverse computing ⟨λ|dU/dθ|ψ⟩ contributions.
+
+## Deployment
+
+- **Docker Compose** (`deploy/docker/docker-compose.yaml`): Full local stack (engine, scheduler, registry, cache, Redis, PostgreSQL, Envoy proxy)
+- **Helm Chart** (`deploy/helm/`): Kubernetes deployment with configurable replicas, resource limits, and service discovery
+- **Kubernetes Manifests** (`deploy/k8s/`): Raw manifests for namespace, services, deployments, and PVCs
+- **Envoy** (`deploy/docker/envoy.yaml`): gRPC-Web transcoding for browser clients

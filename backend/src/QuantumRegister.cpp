@@ -1,11 +1,14 @@
 #include "QuantumRegister.hpp"
+#include "CircuitOptimizer.hpp"
 #include "backends/CpuBackend.hpp"
-#include "backends/CudaBackend.hpp"  // Added for CudaBackend
-#include "backends/MetalBackend.hpp" // Added for MetalBackend
+#include "backends/CudaBackend.hpp"
+#include "backends/MetalBackend.hpp"
 #include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
+
+namespace qubit_engine {
 
 // --- Lifecycle ---
 QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
@@ -14,7 +17,7 @@ QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
   if (!force_local) {
     try {
       // Stub: In real imp, check device count e.g. cudaGetDeviceCount
-      backend = std::make_unique<qubit_engine::CudaBackend>(n);
+      backend = std::make_unique<CudaBackend>(n);
       std::cout << "QuantumRegister: Using CudaBackend (GPU)" << std::endl;
       return;
     } catch (...) {
@@ -43,22 +46,22 @@ QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
 
   if (metalAvailable) {
     try {
-      backend = std::make_unique<qubit_engine::MetalBackend>(n);
+      backend = std::make_unique<MetalBackend>(n);
       std::cout << "QuantumRegister: Using MetalBackend (GPU)" << std::endl;
     } catch (const std::exception &e) {
       std::cerr << "QuantumRegister: MetalBackend failed to initialize ("
                 << e.what() << "). Falling back to CpuBackend." << std::endl;
-      backend = std::make_unique<qubit_engine::CpuBackend>(n, force_local);
+      backend = std::make_unique<CpuBackend>(n, force_local);
     }
   } else {
-    backend = std::make_unique<qubit_engine::CpuBackend>(n, force_local);
+    backend = std::make_unique<CpuBackend>(n, force_local);
     std::cout
         << "QuantumRegister: Using CpuBackend (Metal shaders not available)"
         << std::endl;
   }
 #else
   // Default to CPU on Linux/Windows for now
-  backend = std::make_unique<qubit_engine::CpuBackend>(n, force_local);
+  backend = std::make_unique<CpuBackend>(n, force_local);
 #endif
 }
 
@@ -120,22 +123,19 @@ void QuantumRegister::applyPhaseT(size_t target) {
   backend->applyPhaseT(target);
 }
 
-void QuantumRegister::applyRotationY(size_t target,
-                                     qubit_engine::Precision angle) {
+void QuantumRegister::applyRotationY(size_t target, Precision angle) {
   if (recording_enabled)
     tape.push_back({RecordedGate::RY, {target}, {(double)angle}});
   backend->applyRotationY(target, angle);
 }
 
-void QuantumRegister::applyRotationZ(size_t target,
-                                     qubit_engine::Precision angle) {
+void QuantumRegister::applyRotationZ(size_t target, Precision angle) {
   if (recording_enabled)
     tape.push_back({RecordedGate::RZ, {target}, {(double)angle}});
   backend->applyRotationZ(target, angle);
 }
 
-void QuantumRegister::applyRotationX(size_t target,
-                                     qubit_engine::Precision angle) {
+void QuantumRegister::applyRotationX(size_t target, Precision angle) {
   if (recording_enabled)
     tape.push_back({RecordedGate::RX, {target}, {(double)angle}});
   backend->applyRotationX(target, angle);
@@ -159,8 +159,7 @@ void QuantumRegister::applyCZ(size_t control, size_t target) {
 
 // --- Noise ---
 
-void QuantumRegister::applyDepolarizingNoise(
-    qubit_engine::Precision probability) {
+void QuantumRegister::applyDepolarizingNoise(Precision probability) {
   backend->applyDepolarizingNoise(probability);
 }
 
@@ -185,7 +184,7 @@ int QuantumRegister::getRank() const { return backend->getRank(); }
 int QuantumRegister::getSize() const { return backend->getSize(); }
 
 // --- Debugging ---
-std::vector<qubit_engine::Complex> QuantumRegister::getStateVector() const {
+std::vector<Complex> QuantumRegister::getStateVector() const {
   return backend->getStateVector();
 }
 
@@ -200,10 +199,7 @@ QuantumRegister::getTape() const {
   return tape;
 }
 
-#include "CircuitOptimizer.hpp"
-void QuantumRegister::optimize() {
-  qubit_engine::CircuitOptimizer::optimize(tape);
-}
+void QuantumRegister::optimize() { CircuitOptimizer::optimize(tape); }
 
 // --- Replay Logic (Kept purely on proxy as it uses public API) ---
 
@@ -252,3 +248,5 @@ void QuantumRegister::applyRegisteredGateInverse(const RecordedGate &gate) {
   else if (gate.type == RecordedGate::CZ)
     applyCZ(gate.qubits[0], gate.qubits[1]);
 }
+
+} // namespace qubit_engine

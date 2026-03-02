@@ -36,3 +36,9 @@ modules/music/music
 # Local Setup
 vcpkg/
 *.log
+
+# Compiled Binaries
+*.exe
+
+# Rust Build Artifacts
+cli-rs/target/

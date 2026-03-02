@@ -16,9 +16,9 @@ using grpc::ServerContext;
 using grpc::Status;
 using qubit_engine::CircuitRequest;
 using qubit_engine::GateOperation;
+using qubit_engine::QuantumRegister;
 using qubit_engine::StateResponse;
 
-// HELPER: Check if the server has enough free RAM for the requested qubits
 // HELPER: Check if the server has enough free RAM for the requested qubits
 bool hasEnoughMemory(int num_qubits) {
 #ifdef __linux__
@@ -81,6 +81,24 @@ void QubitEngineServiceImpl::applyGate(QuantumRegister &qreg,
     break;
   case qubit_engine::GateOperation::ROTATION_Z:
     qreg.applyRotationZ(op.target_qubit(), op.angle());
+    break;
+  case qubit_engine::GateOperation::PAULI_Y:
+    qreg.applyY(op.target_qubit());
+    break;
+  case qubit_engine::GateOperation::PAULI_Z:
+    qreg.applyZ(op.target_qubit());
+    break;
+  case qubit_engine::GateOperation::ROTATION_X:
+    qreg.applyRotationX(op.target_qubit(), op.angle());
+    break;
+  case qubit_engine::GateOperation::SWAP:
+    qreg.applySWAP(op.target_qubit(), op.second_target_qubit());
+    break;
+  case qubit_engine::GateOperation::CZ:
+    qreg.applyCZ(op.control_qubit(), op.target_qubit());
+    break;
+  case qubit_engine::GateOperation::DEPOLARIZING_NOISE:
+    qreg.applyDepolarizingNoise(op.noise_probability());
     break;
   default:
     throw std::invalid_argument("Unknown Gate Type");

@@ -1,6 +1,7 @@
 #include "../src/MolecularHamiltonian.hpp"
 #include "../src/QuantumDifferentiator.hpp"
 #include "../src/QuantumRegister.hpp"
+using qubit_engine::QuantumRegister;
 #include "Types.hpp"
 #include <complex>
 #include <gtest/gtest.h>

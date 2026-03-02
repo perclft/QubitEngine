@@ -11,6 +11,8 @@
 #include "GPUContext.hpp"
 #include <vector>
 
+using qubit_engine::QuantumRegister;
+
 class GPUQuantumRegister {
 public:
   explicit GPUQuantumRegister(size_t n); // Defined in .cpp

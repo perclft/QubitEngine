@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 project(QubitEngine)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 find_package(gRPC REQUIRED)
 find_package(Protobuf REQUIRED)
@@ -56,8 +56,6 @@ if(ENABLE_HW_ACCEL)
             add_compile_options(-mavx2 -mfma)
         elseif(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm64" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
             message(STATUS "Enabling NEON instructions for ARM64")
-            # NEON is usually default on ARM64, but we can be explicit if needed
-            # add_compile_options(-march=armv8-a+simd) 
         endif()
     endif()
 endif()
@@ -122,21 +120,18 @@ else()
     set(METAL_SOURCES "")
 endif()
 
+# --- Protobuf / gRPC Code Generation ---
 set(PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../api/proto/quantum.proto)
 
-# Define the location where the generated files will land inside the build folder
 set(GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
-file(MAKE_DIRECTORY ${GENERATED_DIR}) # Ensure the directory exists
+file(MAKE_DIRECTORY ${GENERATED_DIR})
 
-# Generate files into the build directory's generated subdirectory
 protobuf_generate_cpp(PROTO_SRC_GENERATED_CPP PROTO_HDR_GENERATED_CPP
     ${PROTO_FILE}
     IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/../api/proto
     OUTPUT_DIRECTORY ${GENERATED_DIR}
 )
 
-# Define helper function for generating gRPC files if not present
-# Define helper function for generating gRPC files if not present
 function(grpc_generate_cpp srcs hdrs)
     cmake_parse_arguments(grpc "" "OUTPUT_DIRECTORY;IMPORT_DIRS" "" ${ARGN})
     set(_proto_files "${grpc_UNPARSED_ARGUMENTS}")
@@ -153,7 +148,6 @@ function(grpc_generate_cpp srcs hdrs)
 
     set(_g_import_dirs)
     if(grpc_IMPORT_DIRS)
-        # Resolve canonical path to fix protoc matching issues
         get_filename_component(_abs_import "${grpc_IMPORT_DIRS}" REALPATH)
         list(APPEND _g_import_dirs "-I${_abs_import}")
     else()
@@ -163,7 +157,6 @@ function(grpc_generate_cpp srcs hdrs)
     set(${srcs})
     set(${hdrs})
     
-    # Locate the gRPC C++ plugin
     if(TARGET gRPC::grpc_cpp_plugin)
         get_target_property(gRPC_CPP_PLUGIN_EXECUTABLE gRPC::grpc_cpp_plugin IMPORTED_LOCATION_RELEASE)
         if(NOT gRPC_CPP_PLUGIN_EXECUTABLE)
@@ -204,19 +197,12 @@ function(grpc_generate_cpp srcs hdrs)
     set(${hdrs} ${${hdrs}} PARENT_SCOPE)
 endfunction()
 
-# Generate C++ gRPC files
 grpc_generate_cpp(GRPC_SRC_GENERATED_CPP GRPC_HDR_GENERATED_CPP
     ${PROTO_FILE}
     IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/../api/proto
     OUTPUT_DIRECTORY ${GENERATED_DIR}
 )
-# -----------------------------------------------------------------
 
-# 2. Include Directories
-# The C++ compiler needs to find the generated headers.
-# Generated headers MUST be found in the directory *before* the package name.
-# 3. Define Executable with ALL Sources (CRITICAL FIX)
-# We must include the generated C++ source files (.cc)
 # --- GPU Sources ---
 set(GPU_SOURCES "")
 if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
@@ -224,18 +210,51 @@ if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
     list(APPEND GPU_SOURCES src/backends/CudaBackend.cpp)
 endif()
 
-add_executable(qubit_engine 
+# =================================================================
+# Core Library — shared across all targets to eliminate duplication
+# =================================================================
+add_library(qubit_engine_core STATIC
     src/QuantumRegister.cpp
     src/backends/CpuBackend.cpp
-    src/ServiceImpl.cpp
-    src/ServiceImpl_Visualize.cpp
-    ${METAL_SOURCES}
     src/backends/GPUQuantumRegister.cpp
     src/CircuitOptimizer.cpp
+    src/QuantumDifferentiator.cpp
+    src/QuantumJIT.cpp
+    src/OpenQASM.cpp
+    ${METAL_SOURCES}
+    ${GPU_SOURCES}
+)
+
+target_include_directories(qubit_engine_core PUBLIC src)
+
+# Platform-specific link libraries for core
+if(APPLE)
+    target_link_libraries(qubit_engine_core PUBLIC ${METAL_LIB} ${FOUNDATION_LIB})
+endif()
+
+if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
+    target_link_libraries(qubit_engine_core PUBLIC CUDA::cudart)
+endif()
+
+if(MPI_FOUND)
+    target_link_libraries(qubit_engine_core PUBLIC MPI::MPI_CXX)
+endif()
+
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(qubit_engine_core PUBLIC OpenMP::OpenMP_CXX)
+endif()
+
+target_link_libraries(qubit_engine_core PUBLIC Threads::Threads)
+
+# =================================================================
+# Main Executable
+# =================================================================
+add_executable(qubit_engine
+    src/ServiceImpl.cpp
+    src/ServiceImpl_Visualize.cpp
     src/main.cpp
     ${PROTO_SRC_GENERATED_CPP}
     ${GRPC_SRC_GENERATED_CPP}
-    ${GPU_SOURCES}
 )
 
 target_include_directories(qubit_engine PUBLIC
@@ -246,6 +265,7 @@ target_include_directories(qubit_engine PUBLIC
 
 target_link_libraries(qubit_engine
     PRIVATE
+    qubit_engine_core
     gRPC::grpc++
     gRPC::grpc
     gRPC::gpr
@@ -255,58 +275,25 @@ target_link_libraries(qubit_engine
     glog::glog 
     OpenSSL::SSL
     OpenSSL::Crypto
-    Threads::Threads
     $<$<BOOL:${UNIX}>:dl>
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
-    $<$<PLATFORM_ID:Darwin>:${METAL_LIB}>
-    $<$<PLATFORM_ID:Darwin>:${FOUNDATION_LIB}>
 )
 
-if(OpenMP_CXX_FOUND)
-    target_link_libraries(qubit_engine PRIVATE OpenMP::OpenMP_CXX)
-endif()
-
-if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
-   target_link_libraries(qubit_engine PRIVATE CUDA::cudart)
-endif()
-
-if(MPI_FOUND)
-    target_link_libraries(qubit_engine PRIVATE MPI::MPI_CXX)
-endif()
-
-# --- Python Bindings ---
+# =================================================================
+# Python Bindings
+# =================================================================
 pybind11_add_module(qubit_engine_module MODULE
     src/python_bindings.cpp
-    src/QuantumRegister.cpp
-    src/backends/CpuBackend.cpp
-    ${METAL_SOURCES}
-    src/backends/GPUQuantumRegister.cpp
-    src/CircuitOptimizer.cpp
-    ${GPU_SOURCES}
 )
 set_target_properties(qubit_engine_module PROPERTIES OUTPUT_NAME "qubit_engine")
 
 target_include_directories(qubit_engine_module PRIVATE src)
+target_link_libraries(qubit_engine_module PRIVATE qubit_engine_core)
 
-if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
-    target_link_libraries(qubit_engine_module PRIVATE CUDA::cudart)
-endif()
-
-if(APPLE)
-    target_link_libraries(qubit_engine_module PRIVATE ${METAL_LIB} ${FOUNDATION_LIB})
-endif()
-
-# Ensure MPI if needed
-if(MPI_FOUND)
-    target_link_libraries(qubit_engine_module PRIVATE MPI::MPI_CXX)
-endif()
-
-if(OpenMP_CXX_FOUND)
-    target_link_libraries(qubit_engine_module PRIVATE OpenMP::OpenMP_CXX)
-endif()
-
-# --- Testing ---
+# =================================================================
+# Testing
+# =================================================================
 enable_testing()
 find_package(GTest CONFIG REQUIRED)
 
@@ -325,116 +312,72 @@ add_executable(tests
     tests/GPUQuantumRegisterTests.cpp
 )
 
-# Link QubitEngine sources (excluding main.cpp) to tests or link object lib?
-# Easiest is to add sources to tests executable for now, or make a library.
-# Given main.cpp has main(), we can't link qubit_engine executable.
-# We should probably define a library for core logic.
-
-# Solution: Add core sources to tests target.
+# Service tests need gRPC generated headers + ServiceImpl sources
 target_sources(tests PRIVATE
-    src/QuantumRegister.cpp
-    src/backends/CpuBackend.cpp
-    src/backends/GPUQuantumRegister.cpp
-    ${METAL_SOURCES}
     src/ServiceImpl.cpp
     src/ServiceImpl_Visualize.cpp
-    src/CircuitOptimizer.cpp
     ${PROTO_SRC_GENERATED_CPP}
     ${GRPC_SRC_GENERATED_CPP}
-    ${GPU_SOURCES}
 )
 
 target_include_directories(tests PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(tests PRIVATE
+    qubit_engine_core
     GTest::gtest
     GTest::gtest_main
     gRPC::grpc++
     protobuf::libprotobuf
     OpenSSL::SSL
     OpenSSL::Crypto
-    Threads::Threads
     $<$<BOOL:${UNIX}>:dl>
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
-    $<$<PLATFORM_ID:Darwin>:${METAL_LIB}>
-    $<$<PLATFORM_ID:Darwin>:${FOUNDATION_LIB}>
 )
-
-if(MPI_FOUND)
-    target_link_libraries(tests PRIVATE MPI::MPI_CXX)
-endif()
-
-if(OpenMP_CXX_FOUND)
-    target_link_libraries(tests PRIVATE OpenMP::OpenMP_CXX)
-endif()
-
-if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
-   target_link_libraries(tests PRIVATE CUDA::cudart)
-endif()
 
 add_test(NAME CoreTests COMMAND tests)
 
+# =================================================================
+# Benchmark
+# =================================================================
 add_executable(benchmark tests/Benchmark.cpp)
+
 target_sources(benchmark PRIVATE
-    src/QuantumRegister.cpp
-    src/backends/CpuBackend.cpp
-    ${METAL_SOURCES}
     src/ServiceImpl.cpp
     src/ServiceImpl_Visualize.cpp
-    src/CircuitOptimizer.cpp
     ${PROTO_SRC_GENERATED_CPP}
     ${GRPC_SRC_GENERATED_CPP}
-    ${GPU_SOURCES}
 )
+
 target_include_directories(benchmark PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(benchmark PRIVATE
+    qubit_engine_core
     gRPC::grpc++
     protobuf::libprotobuf
     OpenSSL::SSL
     OpenSSL::Crypto
-    Threads::Threads
     $<$<BOOL:${UNIX}>:dl>
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
-    $<$<PLATFORM_ID:Darwin>:${METAL_LIB}>
-    $<$<PLATFORM_ID:Darwin>:${FOUNDATION_LIB}>
 )
-if(MPI_FOUND)
-    target_link_libraries(benchmark PRIVATE MPI::MPI_CXX)
-endif()
 
-if(OpenMP_CXX_FOUND)
-    target_link_libraries(benchmark PRIVATE OpenMP::OpenMP_CXX)
-endif()
-
-if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
-    target_link_libraries(benchmark PRIVATE CUDA::cudart)
-endif()
-
-# --- MPI Verification Executable ---
+# =================================================================
+# MPI Verification Executable
+# =================================================================
 if(MPI_FOUND)
     add_executable(mpi_test mpi_test.cpp)
+
     target_sources(mpi_test PRIVATE
-        src/QuantumRegister.cpp
-        src/backends/CpuBackend.cpp
-        src/CircuitOptimizer.cpp
-            ${PROTO_SRC_GENERATED_CPP}
+        ${PROTO_SRC_GENERATED_CPP}
         ${GRPC_SRC_GENERATED_CPP}
-        ${GPU_SOURCES}
     )
+
     target_include_directories(mpi_test PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
     target_link_libraries(mpi_test PRIVATE
-        MPI::MPI_CXX
+        qubit_engine_core
         gRPC::grpc++
         protobuf::libprotobuf
         OpenSSL::SSL
         OpenSSL::Crypto
-        Threads::Threads
         $<$<BOOL:${UNIX}>:dl>
     )
-    if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
-        target_link_libraries(mpi_test PRIVATE CUDA::cudart)
-    endif()
-
-
 endif()

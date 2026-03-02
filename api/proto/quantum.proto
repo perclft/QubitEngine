@@ -55,24 +55,35 @@ message GateOperation {
     PAULI_X = 1;
     CNOT = 2;
     MEASURE = 3;
-    // New Gates
     TOFFOLI = 4;
-    PHASE_S = 5; // S Gate (Z90)
-    PHASE_T = 6; // T Gate (Z45)
+    PHASE_S = 5;            // S Gate (Z90)
+    PHASE_T = 6;            // T Gate (Z45)
     ROTATION_Y = 7;
     ROTATION_Z = 8;
+    PAULI_Y = 9;
+    PAULI_Z = 10;
+    ROTATION_X = 11;
+    SWAP = 12;
+    CZ = 13;
+    DEPOLARIZING_NOISE = 14;
   }
   GateType type = 1;
   uint32 target_qubit = 2;
   uint32 control_qubit = 3;
-  // Optional: Register to store the classical result (useful for complex circuits)
+  // Register to store the classical measurement result
   uint32 classical_register = 4;
-  
-  // For Rotations
-  double angle = 5; // Rotation angle in radians
-  
-  // For Toffoli (3rd qubit)
+
+  // Rotation angle in radians (for RX, RY, RZ gates)
+  double angle = 5;
+
+  // For Toffoli (second control qubit)
   uint32 second_control_qubit = 6;
+
+  // For SWAP and two-target gates (second target qubit)
+  uint32 second_target_qubit = 7;
+
+  // For DEPOLARIZING_NOISE (error probability 0.0 - 1.0)
+  double noise_probability = 8;
 }
 
 message StateResponse {

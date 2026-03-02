@@ -1,19 +1,15 @@
 # Variables
-CXX = g++
 GO = go
 PROTOC = protoc
 PROTO_DIR = api/proto
-CPP_OUT_DIR = backend/src/generated
-GO_OUT_DIR = cli/internal/generated
+GO_OUT_DIR = api/generated
 ENGINE_IMAGE = qubit-engine:latest
-CLI_IMAGE = qctl:latest
 
-.PHONY: all clean proto build-cpp build-go docker-build deploy test
+.PHONY: all clean proto build-engine build-tui docker-build deploy test
 
-all: proto build-cpp build-go
+all: proto build-engine
 
-# Note: Proto generation is now handled by CMake for C++, 
-# but we keep this target for Go and manual checks.
+# Generate Go protobuf stubs
 proto:
 	@echo "Generating Protobufs..."
 	@mkdir -p $(GO_OUT_DIR)
@@ -22,30 +18,18 @@ proto:
     --go-grpc_out=$(GO_OUT_DIR) --go-grpc_opt=paths=source_relative \
     $(PROTO_DIR)/quantum.proto
 
-proto-crypto:
-	mkdir -p modules/crypto/generated/crypto
-	mkdir -p modules/crypto/generated/engine
-	protoc -I api/proto \
-		--go_out=modules/crypto/generated/crypto --go_opt=paths=source_relative \
-		--go-grpc_out=modules/crypto/generated/crypto --go-grpc_opt=paths=source_relative \
-		api/proto/crypto/crypto.proto
-	cd api/proto && protoc \
-		--go_out=../../modules/crypto/generated/engine --go_opt=paths=source_relative \
-		--go-grpc_out=../../modules/crypto/generated/engine --go-grpc_opt=paths=source_relative \
-		--go_opt=Mquantum.proto=github.com/perclft/QubitEngine/modules/crypto/generated/engine \
-		--go-grpc_opt=Mquantum.proto=github.com/perclft/QubitEngine/modules/crypto/generated/engine \
-		quantum.proto
-
-build-cpp:
+# Build C++ engine (requires vcpkg toolchain)
+build-engine:
 	@echo "Building C++ Engine..."
 	@mkdir -p backend/build
-	# Assumes vcpkg toolchain is set in environment or handled by user config
-	cd backend/build && cmake .. && make
+	cd backend/build && cmake .. && cmake --build . --config Release
 
-build-go: proto
-	@echo "Building Go CLI..."
-	cd cli && $(GO) build -o ../bin/qctl ./cmd/qctl
+# Build Rust TUI
+build-tui:
+	@echo "Building Rust TUI..."
+	cd cli-rs && cargo build --release
 
+# Run C++ unit tests
 test:
 	@echo "Running C++ Unit Tests..."
 	cd backend/build && ctest --output-on-failure
@@ -53,12 +37,15 @@ test:
 # Build Docker Images
 docker-build:
 	@echo "Building Docker Images..."
-	docker build -t $(ENGINE_IMAGE) -f deploy/docker/Dockerfile.engine .
-	docker build -t $(CLI_IMAGE) -f deploy/docker/Dockerfile.cli .
+	docker compose -f deploy/docker/docker-compose.yaml build
 
-
-
+# Deploy to Kubernetes
 deploy:
 	@echo "Deploying to Kubernetes..."
 	kubectl apply -f deploy/k8s/namespace.yaml
 	kubectl apply -f deploy/k8s/
+
+clean:
+	@echo "Cleaning build artifacts..."
+	rm -rf backend/build
+	cd cli-rs && cargo clean

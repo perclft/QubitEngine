@@ -7,15 +7,9 @@
 #include <string>
 #include <vector>
 
-// Global Type Alias
-// Global Type Alias
 #include "Types.hpp"
-// using Complex = std::complex<double>; // REMOVED
 
-// Forward declaration of backend logic
 namespace qubit_engine {
-class IQuantumBackend;
-}
 
 class QuantumRegister {
 public:
@@ -31,18 +25,17 @@ public:
   void applyCNOT(size_t control, size_t target);
 
   // --- Advanced Gates ---
-  // --- Advanced Gates ---
   void applyToffoli(size_t control1, size_t control2, size_t target);
   void applyPhaseS(size_t target);
   void applyPhaseT(size_t target);
-  void applyRotationX(size_t target, qubit_engine::Precision angle);
-  void applyRotationY(size_t target, qubit_engine::Precision angle);
-  void applyRotationZ(size_t target, qubit_engine::Precision angle);
+  void applyRotationX(size_t target, Precision angle);
+  void applyRotationY(size_t target, Precision angle);
+  void applyRotationZ(size_t target, Precision angle);
   void applySWAP(size_t qubit1, size_t qubit2);
   void applyCZ(size_t control, size_t target);
 
   // --- Noise Simulation ---
-  void applyDepolarizingNoise(qubit_engine::Precision probability);
+  void applyDepolarizingNoise(Precision probability);
 
   // --- Measurement & Analysis ---
   int measure(size_t target);
@@ -54,7 +47,7 @@ public:
   int getSize() const;
 
   // --- Debugging ---
-  std::vector<qubit_engine::Complex> getStateVector() const;
+  std::vector<Complex> getStateVector() const;
 
   // --- Recording / Tape Helper ---
   struct RecordedGate {
@@ -91,11 +84,9 @@ public:
 
 private:
   size_t num_qubits;
-
-  // New Backend Architecture
-  std::unique_ptr<qubit_engine::IQuantumBackend> backend;
-
-  // Recorder logic remains in proxy
+  std::unique_ptr<IQuantumBackend> backend;
   bool recording_enabled = false;
   std::vector<RecordedGate> tape;
 };
+
+} // namespace qubit_engine

@@ -216,10 +216,6 @@ func (s *SchedulerServer) CancelJob(ctx context.Context, handle *pb.JobHandle) (
 // ListJobs - List jobs for a user
 // ------------------------------------------------------------------
 
-// ------------------------------------------------------------------
-// ListJobs - List jobs for a user
-// ------------------------------------------------------------------
-
 func (s *SchedulerServer) ListJobs(ctx context.Context, req *pb.ListJobsRequest) (*pb.JobList, error) {
 	// Get all job IDs for user (we'd normally have a user index, simplified here)
 	pattern := "job:*"
@@ -276,7 +272,45 @@ func (s *SchedulerServer) ListJobs(ctx context.Context, req *pb.ListJobsRequest)
 }
 
 func (s *SchedulerServer) StreamJobResults(handle *pb.JobHandle, stream pb.QuantumScheduler_StreamJobResultsServer) error {
-	return status.Errorf(codes.Unimplemented, "method StreamJobResults not implemented")
+	jobID := handle.JobId
+
+	// Verify job exists
+	exists, err := s.rdb.Exists(stream.Context(), "job:"+jobID).Result()
+	if err != nil || exists == 0 {
+		return status.Errorf(codes.NotFound, "job not found: %s", jobID)
+	}
+
+	// Create a buffered channel for this stream client
+	resultCh := make(chan *pb.JobResult, 64)
+
+	s.mu.Lock()
+	s.jobResults[jobID] = resultCh
+	s.mu.Unlock()
+
+	defer func() {
+		s.mu.Lock()
+		delete(s.jobResults, jobID)
+		s.mu.Unlock()
+	}()
+
+	log.Printf("📡 Client streaming results for job: %s", jobID)
+
+	for {
+		select {
+		case result, ok := <-resultCh:
+			if !ok {
+				// Channel closed — job finished
+				return nil
+			}
+			if err := stream.Send(result); err != nil {
+				log.Printf("⚠️  Stream send error for job %s: %v", jobID, err)
+				return err
+			}
+		case <-stream.Context().Done():
+			log.Printf("📡 Client disconnected from job %s stream", jobID)
+			return stream.Context().Err()
+		}
+	}
 }
 
 // ------------------------------------------------------------------
@@ -373,7 +407,7 @@ func (s *SchedulerServer) executeOnEngine(ctx context.Context, job *Job) error {
 		measurements[int32(k)] = v
 	}
 
-	// Convert Response to JobResult (store first shot)
+	// Build result
 	result := &pb.JobResult{
 		JobId:        job.ID,
 		ShotNumber:   1,
@@ -381,7 +415,19 @@ func (s *SchedulerServer) executeOnEngine(ctx context.Context, job *Job) error {
 		Measurements: measurements,
 	}
 
-	_ = result // In production we would broadcast this
+	// Broadcast to any listening stream clients
+	s.mu.RLock()
+	ch, hasListener := s.jobResults[job.ID]
+	s.mu.RUnlock()
+
+	if hasListener {
+		select {
+		case ch <- result:
+		default:
+			log.Printf("⚠️  Result channel full for job %s, dropping result", job.ID)
+		}
+		close(ch)
+	}
 
 	return nil
 }
@@ -407,14 +453,6 @@ func (s *SchedulerServer) saveJob(ctx context.Context, job *Job) {
 	jobBytes, _ := json.Marshal(job)
 	s.rdb.Set(ctx, "job:"+job.ID, jobBytes, 24*time.Hour)
 }
-
-// ------------------------------------------------------------------
-// Placeholder types (would be generated from protobuf)
-// ------------------------------------------------------------------
-
-// ------------------------------------------------------------------
-// Placeholder types REPLACED BY Generated PB Types
-// ------------------------------------------------------------------
 
 // ------------------------------------------------------------------
 // Main

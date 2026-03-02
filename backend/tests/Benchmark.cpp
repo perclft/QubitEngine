@@ -1,5 +1,5 @@
-
 #include "../src/QuantumRegister.hpp"
+using qubit_engine::QuantumRegister;
 #include <chrono>
 #include <cmath>
 #include <iostream>

@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # 1. Quantum Engine (Backend)
@@ -16,8 +16,6 @@ services:
     depends_on:
       - postgres
 
-
-
   # 4. PostgreSQL (Circuit Registry Backend)
   postgres:
     image: postgres:16-alpine
@@ -32,7 +30,7 @@ services:
     networks:
       - qubit-net
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U qubit -d quantumcloud" ]
+      test: ["CMD-SHELL", "pg_isready -U qubit -d quantumcloud"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -50,7 +48,7 @@ services:
       - DB_USER=qubit
       - DB_PASS=quantum
       - DB_NAME=quantumcloud
-    command: [ "-db-host", "postgres" ]
+    command: ["-db-host", "postgres"]
     networks:
       - qubit-net
     depends_on:
@@ -65,7 +63,7 @@ services:
     networks:
       - qubit-net
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -77,7 +75,7 @@ services:
       dockerfile: services/scheduler/Dockerfile
     ports:
       - "50053:50053"
-    command: [ "-redis-addr", "redis:6379", "-engine-addr", "engine:50051" ]
+    command: ["-redis-addr", "redis:6379", "-engine-addr", "engine:50051"]
     networks:
       - qubit-net
     depends_on:
@@ -93,42 +91,12 @@ services:
       dockerfile: services/cache/Dockerfile
     ports:
       - "50054:50054"
-    command: [ "-redis-addr", "redis:6379", "-default-ttl", "60" ]
+    command: ["-redis-addr", "redis:6379", "-default-ttl", "60"]
     networks:
       - qubit-net
     depends_on:
       redis:
         condition: service_healthy
-
-
-
-  # 11. Music Module (Quantum Mozart)
-  music:
-    build:
-      context: ../..
-      dockerfile: modules/music/Dockerfile
-    ports:
-      - "50062:50062"
-    command: [ "-port", "50062", "-engine-addr", "engine:50051" ]
-    networks:
-      - qubit-net
-    depends_on:
-      engine:
-        condition: service_started
-
-  # 12. Crypto Module (BB84 Protocol)
-  crypto:
-    build:
-      context: ../..
-      dockerfile: modules/crypto/Dockerfile
-    ports:
-      - "50063:50063"
-    command: [ "-port", "50063", "-engine-addr", "engine:50051" ]
-    networks:
-      - qubit-net
-    depends_on:
-      engine:
-        condition: service_started
 
 networks:
   qubit-net:
