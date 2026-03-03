@@ -5,6 +5,8 @@
 #include <mpi.h>
 #include <vector>
 
+using qubit_engine::QuantumRegister;
+
 // Simple mock or usage of QuantumRegister directly to verify shared state
 // logic. We don't need the full gRPC server for this unit test of distributed
 // logic.
