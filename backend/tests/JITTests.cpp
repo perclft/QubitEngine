@@ -101,10 +101,10 @@ TEST(JITTest, HadamardMatrixValues) {
 
   // H = 1/sqrt(2) * [[1, 1], [1, -1]]
   double inv_sqrt2 = 1.0 / std::sqrt(2.0);
-  EXPECT_NEAR(std::abs(m[0] - inv_sqrt2), 0.0, 1e-10);
-  EXPECT_NEAR(std::abs(m[1] - inv_sqrt2), 0.0, 1e-10);
-  EXPECT_NEAR(std::abs(m[2] - inv_sqrt2), 0.0, 1e-10);
-  EXPECT_NEAR(std::abs(m[3] + inv_sqrt2), 0.0, 1e-10);
+  EXPECT_NEAR(std::abs(Complex(m[0]) - Complex(inv_sqrt2, 0.0)), 0.0, 1e-10);
+  EXPECT_NEAR(std::abs(Complex(m[1]) - Complex(inv_sqrt2, 0.0)), 0.0, 1e-10);
+  EXPECT_NEAR(std::abs(Complex(m[2]) - Complex(inv_sqrt2, 0.0)), 0.0, 1e-10);
+  EXPECT_NEAR(std::abs(Complex(m[3]) + Complex(inv_sqrt2, 0.0)), 0.0, 1e-10);
 }
 
 TEST(JITTest, PauliXMatrixValues) {
@@ -116,10 +116,10 @@ TEST(JITTest, PauliXMatrixValues) {
   auto &m = ir.gates[0].single_matrix;
 
   // X = [[0, 1], [1, 0]]
-  EXPECT_NEAR(std::abs(m[0]), 0.0, 1e-10);
-  EXPECT_NEAR(std::abs(m[1] - 1.0), 0.0, 1e-10);
-  EXPECT_NEAR(std::abs(m[2] - 1.0), 0.0, 1e-10);
-  EXPECT_NEAR(std::abs(m[3]), 0.0, 1e-10);
+  EXPECT_NEAR(std::abs(Complex(m[0])), 0.0, 1e-10);
+  EXPECT_NEAR(std::abs(Complex(m[1]) - Complex(1.0, 0.0)), 0.0, 1e-10);
+  EXPECT_NEAR(std::abs(Complex(m[2]) - Complex(1.0, 0.0)), 0.0, 1e-10);
+  EXPECT_NEAR(std::abs(Complex(m[3])), 0.0, 1e-10);
 }
 
 // ===== Optimization: Adjacent Gate Cancellation =====

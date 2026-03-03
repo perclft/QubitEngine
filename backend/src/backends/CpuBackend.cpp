@@ -278,7 +278,7 @@ void CpuBackend::applyX(size_t target) {
     MPI_Sendrecv(state.data(), local_dim * 2, MPI_FLOAT, partner, 0,
                  recv_buf.data(), local_dim * 2, MPI_FLOAT, partner, 0,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    state = recv_buf;
+    state.assign(recv_buf.begin(), recv_buf.end());
 #else
     std::cerr << "Error: Global X requested but MPI not enabled." << std::endl;
 #endif
