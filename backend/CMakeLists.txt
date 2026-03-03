@@ -42,10 +42,12 @@ option(ENABLE_HW_ACCEL "Enable Hardware Acceleration (AVX2/NEON)" ON)
 if(ENABLE_HW_ACCEL)
     if(MSVC)
          # Windows (MSVC)
+        add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/utf-8>)
         cmake_host_system_information(RESULT HOST_ARCH QUERY OS_PLATFORM)
         if(${HOST_ARCH} MATCHES "AMD64" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "AMD64")
              message(STATUS "Enabling AVX2 instructions for MSVC")
-             add_compile_options(/arch:AVX2)
+             # Use generator expression to avoid passing this to nvcc
+             add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/arch:AVX2>)
         else()
              message(STATUS "Not x64, skipping AVX2 for MSVC")
         endif()
@@ -93,14 +95,14 @@ endif()
 # --- Metal (MacOS) ---
 if(APPLE)
     enable_language(OBJCXX)
-    find_library(METAL_LIB Metal)
-    find_library(FOUNDATION_LIB Foundation)
+    find_library(METAL_LIB Metal REQUIRED)
+    find_library(FOUNDATION_LIB Foundation REQUIRED)
     
     option(SKIP_METAL_SHADERS "Skip Metal shader compilation (use precompiled or fallback)" OFF)
     
     if(NOT SKIP_METAL_SHADERS)
         # Metal Shader Compilation
-        set(METAL_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders.metal)
+        set(METAL_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels/metal/gate_kernels.metal)
         set(METAL_LIB_OUT ${CMAKE_CURRENT_BINARY_DIR}/default.metallib)
         
         add_custom_command(
@@ -116,7 +118,7 @@ if(APPLE)
     endif()
     
     add_compile_definitions(ENABLE_METAL)
-    set(METAL_SOURCES src/backends/MetalBackend.mm)
+    set(METAL_SOURCES src/backends/metal/MetalContext.mm)
 else()
     set(METAL_SOURCES "")
 endif()
@@ -361,6 +363,7 @@ target_link_libraries(benchmark PRIVATE
     $<$<BOOL:${UNIX}>:dl>
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
+    spdlog::spdlog
 )
 
 # =================================================================

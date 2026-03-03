@@ -26,6 +26,21 @@
 #define gpuMemcpy hipMemcpy
 #define gpuMemcpyHostToDevice hipMemcpyHostToDevice
 #define gpuMemcpyDeviceToHost hipMemcpyDeviceToHost
+#elif defined(ENABLE_METAL)
+// Metal specifics are hidden behind the pure C++ context interface
+// to prevent Objective-C pollution in core C++ files.
+#include "metal/MetalContext.h"
+#define GPU_SUCCESS 0
+#define GPU_Error_t int
+#define gpuGetErrorString(err) "Metal Error"
+#define gpuMalloc(ptr, size) MetalContext::getInstance().allocate(ptr, size)
+#define gpuFree(ptr) MetalContext::getInstance().free(ptr)
+#define gpuMemcpyHostToDevice 1
+#define gpuMemcpyDeviceToHost 2
+#define gpuMemcpy(dst, src, size, dir)                                         \
+  ((dir == gpuMemcpyHostToDevice)                                              \
+       ? MetalContext::getInstance().copyToDevice(dst, src, size)              \
+       : MetalContext::getInstance().copyToHost(dst, src, size))
 #endif
 
 class GPUContext {
@@ -38,14 +53,17 @@ public:
   void initialize() {
     if (initialized)
       return;
-#if defined(ENABLE_CUDA) || defined(ENABLE_ROCM)
+#if defined(ENABLE_CUDA) || defined(ENABLE_ROCM) || defined(ENABLE_METAL)
     // Check for device count
     int deviceCount = 0;
 #ifdef ENABLE_CUDA
     cudaGetDeviceCount(&deviceCount);
-#else
+#elif defined(ENABLE_ROCM)
     hipGetDeviceCount(&deviceCount);
+#elif defined(ENABLE_METAL)
+    deviceCount = MetalContext::getInstance().getDeviceCount();
 #endif
+
     if (deviceCount == 0) {
       std::cerr << "Warning: No GPU devices found." << std::endl;
       return;
@@ -54,8 +72,10 @@ public:
     // Select device 0
 #ifdef ENABLE_CUDA
     cudaSetDevice(0);
-#else
+#elif defined(ENABLE_ROCM)
     hipSetDevice(0);
+#elif defined(ENABLE_METAL)
+    MetalContext::getInstance().initializeDevice(0);
 #endif
     std::cout << "GPU Context Initialized. Devices: " << deviceCount
               << std::endl;
@@ -66,7 +86,7 @@ public:
   }
 
   void *allocate(size_t size) {
-#if defined(ENABLE_CUDA) || defined(ENABLE_ROCM)
+#if defined(ENABLE_CUDA) || defined(ENABLE_ROCM) || defined(ENABLE_METAL)
     void *ptr = nullptr;
     GPU_Error_t err = gpuMalloc(&ptr, size);
     if (err != GPU_SUCCESS) {
@@ -80,20 +100,20 @@ public:
   }
 
   void free(void *ptr) {
-#if defined(ENABLE_CUDA) || defined(ENABLE_ROCM)
+#if defined(ENABLE_CUDA) || defined(ENABLE_ROCM) || defined(ENABLE_METAL)
     if (ptr)
       gpuFree(ptr);
 #endif
   }
 
   void copyToDevice(void *dst, const void *src, size_t size) {
-#if defined(ENABLE_CUDA) || defined(ENABLE_ROCM)
+#if defined(ENABLE_CUDA) || defined(ENABLE_ROCM) || defined(ENABLE_METAL)
     gpuMemcpy(dst, src, size, gpuMemcpyHostToDevice);
 #endif
   }
 
   void copyToHost(void *dst, const void *src, size_t size) {
-#if defined(ENABLE_CUDA) || defined(ENABLE_ROCM)
+#if defined(ENABLE_CUDA) || defined(ENABLE_ROCM) || defined(ENABLE_METAL)
     gpuMemcpy(dst, src, size, gpuMemcpyDeviceToHost);
 #endif
   }
