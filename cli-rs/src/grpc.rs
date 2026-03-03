@@ -99,7 +99,9 @@ pub async fn run_circuit(server_addr: String, circuit_path: String, tx: mpsc::Se
             target_qubit: op.target,
             control_qubit: op.control,
             second_control_qubit: op.control2,
+            second_target_qubit: 0,
             angle: op.angle,
+            noise_probability: 0.0,
             classical_register: op.classical_reg,
         });
     }
