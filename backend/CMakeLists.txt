@@ -119,6 +119,7 @@ if(APPLE)
     
     add_compile_definitions(ENABLE_METAL)
     set(METAL_SOURCES src/backends/metal/MetalContext.mm)
+    set_source_files_properties(${METAL_SOURCES} PROPERTIES COMPILE_FLAGS "-fobjc-arc")
 else()
     set(METAL_SOURCES "")
 endif()

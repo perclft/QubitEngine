@@ -2,8 +2,8 @@
 using namespace metal;
 
 struct Complex {
-    double real;
-    double imag;
+    float real;
+    float imag;
 };
 
 // Simple Hadamard Gate Kernel for Metal
