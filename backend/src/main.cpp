@@ -6,13 +6,15 @@
 #include <grpcpp/grpcpp.h>
 #include <iostream>
 #include <memory>
+#include <spdlog/spdlog.h>
 #include <string>
 #include <thread>
+
 
 std::atomic<bool> shutdown_requested(false);
 
 void signalHandler(int signal) {
-  std::cout << "\nShutdown signal received (" << signal << ")..." << std::endl;
+  spdlog::info("Shutdown signal received ({})...", signal);
   shutdown_requested = true;
 }
 
@@ -28,8 +30,12 @@ void RunServer() {
   // grpc::reflection::InitProtoReflectionServerBuilderPlugin();
 
   std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-  std::cout << "QubitEngine (C++) listening on " << server_address << std::endl;
-  std::cout << "QubitEngine v2 (Debug) - VisualizeCircuit enabled" << std::endl;
+
+  spdlog::set_level(spdlog::level::debug);
+  spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [thread %t] %v");
+
+  spdlog::info("QubitEngine (C++) listening on {}", server_address);
+  spdlog::info("QubitEngine v2 (Debug) - VisualizeCircuit enabled");
 
   // Start Prometheus Metrics Exposer
   QuantumMetrics::Instance().Start();
@@ -43,7 +49,7 @@ void RunServer() {
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
   }
 
-  std::cout << "Stopping gRPC server..." << std::endl;
+  spdlog::info("Stopping gRPC server...");
   server->Shutdown();
 }
 
@@ -65,14 +71,14 @@ int main(int argc, char **argv) {
   MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
   if (world_rank == 0) {
-    std::cout << "MPI Initialized with size: " << world_size << std::endl;
+    spdlog::info("MPI Initialized with size: {}", world_size);
     RunServer();
   } else {
     // Worker nodes wait for instructions (or just run loop if architected that
     // way) For now, let's just have rank 0 run the server and others wait or
     // exit. In a real distributed kernel, the server would dispatch commands to
     // workers. We'll keep them alive to receive MPI calls.
-    std::cout << "Worker Node " << world_rank << " started." << std::endl;
+    spdlog::info("Worker Node {} started.", world_rank);
 
     // Simple keep-alive for workers until Shutdown
     // Real implementation would have a receive loop here

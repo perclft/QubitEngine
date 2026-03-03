@@ -6,8 +6,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -337,37 +338,46 @@ func main() {
 	grpcPort := flag.Int("port", 50052, "gRPC port")
 	flag.Parse()
 
+	// Initialize structured logger
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
 	// Connect to PostgreSQL
 	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		*dbHost, *dbPort, *dbUser, *dbPass, *dbName)
 
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		slog.Error("Failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
 	if err := db.Ping(); err != nil {
-		log.Fatalf("Database ping failed: %v", err)
+		slog.Error("Database ping failed", "error", err)
+		os.Exit(1)
 	}
 
 	// Initialize schema
 	if err := InitDB(db); err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		slog.Error("Failed to initialize database", "error", err)
+		os.Exit(1)
 	}
-	log.Println("Database initialized successfully")
+	slog.Info("Database initialized successfully")
 
 	// Start gRPC server
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *grpcPort))
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		slog.Error("Failed to listen", "error", err)
+		os.Exit(1)
 	}
 
 	server := grpc.NewServer()
 	// RegisterCircuitRegistryServer(server, NewRegistryServer(db))
 
-	log.Printf("🗄️ Circuit Registry starting on port %d", *grpcPort)
+	slog.Info("Circuit Registry starting", "port", *grpcPort)
 	if err := server.Serve(lis); err != nil {
-		log.Fatalf("Failed to serve: %v", err)
+		slog.Error("Failed to serve", "error", err)
+		os.Exit(1)
 	}
 }

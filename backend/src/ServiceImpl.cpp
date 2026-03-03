@@ -11,6 +11,7 @@
 #else
 #include <unistd.h> // For gethostname
 #endif
+#include <spdlog/spdlog.h>
 
 using grpc::ServerContext;
 using grpc::Status;
@@ -139,7 +140,7 @@ QubitEngineServiceImpl::RunCircuit(grpc::ServerContext *context,
                                    const qubit_engine::CircuitRequest *request,
                                    qubit_engine::StateResponse *response) {
 
-  std::cout << "DEBUG: RunCircuit method invoked!" << std::endl;
+  spdlog::debug("RunCircuit method invoked!");
 
   int n = request->num_qubits();
 
@@ -158,9 +159,9 @@ QubitEngineServiceImpl::RunCircuit(grpc::ServerContext *context,
 
   // Check Backend Request
   if (request->execution_backend() != qubit_engine::CircuitRequest::SIMULATOR) {
-    std::cout << "Warning: Requested backend " << request->execution_backend()
-              << " but currently defaulting to Local CPU Simulator."
-              << std::endl;
+    spdlog::warn(
+        "Requested backend {} but currently defaulting to Local CPU Simulator.",
+        static_cast<int>(request->execution_backend()));
     // Future: Pass backend type to QuantumRegister constructor
   }
 
@@ -176,7 +177,14 @@ QubitEngineServiceImpl::RunCircuit(grpc::ServerContext *context,
     // Serialize Result
     serializeState(qreg, response);
 
+  } catch (const std::invalid_argument &e) {
+    spdlog::error("Invalid argument during RunCircuit: {}", e.what());
+    return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, e.what());
+  } catch (const std::out_of_range &e) {
+    spdlog::error("Out of range error during RunCircuit: {}", e.what());
+    return grpc::Status(grpc::StatusCode::OUT_OF_RANGE, e.what());
   } catch (const std::exception &e) {
+    spdlog::error("Internal Engine Error during RunCircuit: {}", e.what());
     return grpc::Status(grpc::StatusCode::INTERNAL,
                         std::string("Internal Engine Error: ") + e.what());
   }
@@ -189,8 +197,7 @@ grpc::Status QubitEngineServiceImpl::StreamGates(
     grpc::ServerReaderWriter<qubit_engine::StateResponse,
                              qubit_engine::GateOperation> *stream) {
 
-  std::cout << "DEBUG: StreamGates method invoked!" << std::endl;
-  std::cerr << "DEBUG: StreamGates method invoked (stderr)!" << std::endl;
+  spdlog::debug("StreamGates method invoked!");
 
   // We need to initialize the register. But wait, how do we know 'N'?
   // Protocol Design Flaw detected and patched on the fly:
@@ -227,7 +234,14 @@ grpc::Status QubitEngineServiceImpl::StreamGates(
 
       stream->Write(response);
     }
+  } catch (const std::invalid_argument &e) {
+    spdlog::error("Invalid argument during StreamGates: {}", e.what());
+    return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, e.what());
+  } catch (const std::out_of_range &e) {
+    spdlog::error("Out of range error during StreamGates: {}", e.what());
+    return grpc::Status(grpc::StatusCode::OUT_OF_RANGE, e.what());
   } catch (const std::exception &e) {
+    spdlog::error("Internal error during StreamGates: {}", e.what());
     return grpc::Status(grpc::StatusCode::INTERNAL, e.what());
   }
 
@@ -246,7 +260,7 @@ grpc::Status QubitEngineServiceImpl::RunVQE(
     grpc::ServerContext *context, const qubit_engine::VQERequest *request,
     grpc::ServerWriter<qubit_engine::VQEResponse> *writer) {
 
-  std::cout << "Starting VQE Optimization..." << std::endl;
+  spdlog::info("Starting VQE Optimization...");
 
   // 1. Setup
   auto molType = (request->molecule() == qubit_engine::VQERequest::LiH)
@@ -282,9 +296,9 @@ grpc::Status QubitEngineServiceImpl::RunVQE(
       (request->optimizer_type() == qubit_engine::VQERequest::GRADIENT_DESCENT);
 
   if (use_gradient_descent) {
-    std::cout << "Using Gradient Descent (Parameter Shift Rule)" << std::endl;
+    spdlog::info("Using Gradient Descent (Parameter Shift Rule)");
   } else {
-    std::cout << "Using SPSA Optimizer" << std::endl;
+    spdlog::info("Using SPSA Optimizer");
   }
 
   // SPSA Constants

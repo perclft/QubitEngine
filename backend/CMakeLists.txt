@@ -71,6 +71,7 @@ endif()
 find_package(pybind11 CONFIG REQUIRED)
 find_package(gflags CONFIG REQUIRED)
 find_package(glog CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
 
 # --- GPU Acceleration (CUDA) ---
 option(ENABLE_CUDA "Enable CUDA GPU Acceleration" ON)
@@ -278,6 +279,7 @@ target_link_libraries(qubit_engine
     $<$<BOOL:${UNIX}>:dl>
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
+    spdlog::spdlog
 )
 
 # =================================================================
@@ -332,6 +334,7 @@ target_link_libraries(tests PRIVATE
     $<$<BOOL:${UNIX}>:dl>
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
+    spdlog::spdlog
 )
 
 add_test(NAME CoreTests COMMAND tests)

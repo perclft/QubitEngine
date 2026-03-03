@@ -6,7 +6,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -303,11 +305,11 @@ func (s *SchedulerServer) StreamJobResults(handle *pb.JobHandle, stream pb.Quant
 				return nil
 			}
 			if err := stream.Send(result); err != nil {
-				log.Printf("⚠️  Stream send error for job %s: %v", jobID, err)
+				slog.Warn("Stream send error", "job_id", jobID, "error", err)
 				return err
 			}
 		case <-stream.Context().Done():
-			log.Printf("📡 Client disconnected from job %s stream", jobID)
+			slog.Info("Client disconnected from stream", "job_id", jobID)
 			return stream.Context().Err()
 		}
 	}
@@ -331,13 +333,13 @@ func (s *SchedulerServer) processNextJob() {
 	// Get job details
 	jobBytes, err := s.rdb.Get(ctx, "job:"+jobID).Bytes()
 	if err != nil {
-		log.Printf("❌ Failed to get job %s: %v", jobID, err)
+		slog.Error("Failed to get job", "job_id", jobID, "error", err)
 		return
 	}
 
 	var job Job
 	if err := json.Unmarshal(jobBytes, &job); err != nil {
-		log.Printf("❌ Failed to parse job %s: %v", jobID, err)
+		slog.Error("Failed to parse job", "job_id", jobID, "error", err)
 		return
 	}
 
@@ -346,8 +348,12 @@ func (s *SchedulerServer) processNextJob() {
 	job.StartedAt = time.Now().Unix()
 	s.saveJob(ctx, &job)
 
-	log.Printf("🚀 Processing job: %s (%d qubits, %d ops, %d shots)",
-		jobID, job.NumQubits, job.NumOps, job.Shots)
+	slog.Info("Processing job",
+		"job_id", jobID,
+		"num_qubits", job.NumQubits,
+		"num_ops", job.NumOps,
+		"shots", job.Shots,
+	)
 
 	// Create cancellable context
 	jobCtx, cancel := context.WithCancel(ctx)
@@ -374,7 +380,7 @@ func (s *SchedulerServer) processNextJob() {
 	job.CompletedAt = time.Now().Unix()
 	s.saveJob(ctx, &job)
 
-	log.Printf("✅ Job completed: %s (state=%d)", jobID, job.State)
+	slog.Info("Job completed", "job_id", jobID, "state", job.State)
 
 	// TODO: Call callback URL if specified
 }
@@ -424,7 +430,7 @@ func (s *SchedulerServer) executeOnEngine(ctx context.Context, job *Job) error {
 		select {
 		case ch <- result:
 		default:
-			log.Printf("⚠️  Result channel full for job %s, dropping result", job.ID)
+			slog.Warn("Result channel full, dropping result", "job_id", job.ID)
 		}
 		close(ch)
 	}
@@ -464,6 +470,10 @@ func main() {
 	port := flag.Int("port", 50053, "gRPC port")
 	flag.Parse()
 
+	// Initialize structured logger
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
 	// Connect to Redis
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     *redisAddr,
@@ -473,9 +483,10 @@ func main() {
 
 	ctx := context.Background()
 	if err := rdb.Ping(ctx).Err(); err != nil {
-		log.Fatalf("Failed to connect to Redis: %v", err)
+		slog.Error("Failed to connect to Redis", "error", err)
+		os.Exit(1)
 	}
-	log.Println("Connected to Redis")
+	slog.Info("Connected to Redis")
 
 	// Create server
 	server := NewSchedulerServer(rdb, *engineAddr)
@@ -483,19 +494,21 @@ func main() {
 	// Start gRPC server
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		slog.Error("Failed to listen", "error", err)
+		os.Exit(1)
 	}
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterQuantumSchedulerServer(grpcServer, server)
 
-	log.Printf("📋 Quantum Scheduler starting on port %d", *port)
-	log.Printf("   Redis: %s", *redisAddr)
-	log.Printf("   Engine: %s", *engineAddr)
+	slog.Info("Quantum Scheduler starting",
+		"port", *port,
+		"redis", *redisAddr,
+		"engine", *engineAddr,
+	)
 
 	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("Failed to serve: %v", err)
+		slog.Error("Failed to serve", "error", err)
+		os.Exit(1)
 	}
-
-	_ = server // Silence unused variable warning
 }
