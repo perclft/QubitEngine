@@ -288,7 +288,7 @@ target_link_libraries(qubit_engine
 pybind11_add_module(qubit_engine_module MODULE
     src/python_bindings.cpp
 )
-set_target_properties(qubit_engine_module PROPERTIES OUTPUT_NAME "qubit_engine")
+set_target_properties(qubit_engine_module PROPERTIES OUTPUT_NAME "core")
 
 target_include_directories(qubit_engine_module PRIVATE src)
 target_link_libraries(qubit_engine_module PRIVATE qubit_engine_core)

@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: qubit-engine
+Version: 0.2.0
+Summary: High-performance C++ Quantum Simulator with CUDA support
+Author: QubitEngine Core Team
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.20.0
+Provides-Extra: qiskit
+Requires-Dist: qiskit>=1.0.0; extra == "qiskit"
+Provides-Extra: test
+Requires-Dist: pytest>=7.0.0; extra == "test"
+Requires-Dist: qiskit[visualization]>=1.0.0; extra == "test"
+Dynamic: requires-python

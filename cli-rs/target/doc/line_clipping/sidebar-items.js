@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["cohen_sutherland"],"struct":["LineSegment","Point","Window"]};

@@ -21,7 +21,7 @@ void applyAnsatzWrapper(
   py_func(params, &qreg);
 }
 
-PYBIND11_MODULE(qubit_engine, m) {
+PYBIND11_MODULE(core, m) {
   m.doc() = "QubitEngine Python Bindings";
 
   // --- QuantumRegister Binding ---

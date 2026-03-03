@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=42", "wheel", "cmake>=3.15", "pybind11>=2.10.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qubit-engine"
+version = "0.2.0"
+description = "High-performance C++ Quantum Simulator with CUDA support"
+readme = "README.md"
+authors = [
+    { name = "QubitEngine Core Team" }
+]
+requires-python = ">=3.8"
+dependencies = [
+    "numpy>=1.20.0"
+]
+
+[project.optional-dependencies]
+qiskit = ["qiskit>=1.0.0"]
+test = ["pytest>=7.0.0", "qiskit[visualization]>=1.0.0"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests",
+]

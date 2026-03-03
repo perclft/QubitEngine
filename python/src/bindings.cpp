@@ -9,7 +9,7 @@
 namespace py = pybind11;
 using namespace qubit_engine;
 
-PYBIND11_MODULE(qubit_engine, m) {
+PYBIND11_MODULE(core, m) {
   m.doc() = "QubitEngine High-Performance Quantum Simulator Backend";
 
   py::class_<QuantumRegister>(m, "QuantumRegister")

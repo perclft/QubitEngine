@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"struct":["Chain","Filter","FilterMap","Fuse","Map","MapWhile","Merge","Peekable","Skip","SkipWhile","Take","TakeWhile","Then"]};

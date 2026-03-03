@@ -1,1 +1,0 @@
-{"rustc":12983045474342760211,"features":"","declared_features":"","target":0,"profile":0,"path":0,"deps":[[2227712018661205605,"build_script_build",false,8056853141042736757]],"local":[{"RerunIfChanged":{"output":"debug/build/cli-rs-a92752cf73e7414b/output","paths":["../api/proto/quantum.proto","../api/proto"]}}],"rustflags":[],"config":0,"compile_kind":0}
