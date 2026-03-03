@@ -229,6 +229,7 @@ add_library(qubit_engine_core STATIC
 )
 
 target_include_directories(qubit_engine_core PUBLIC src)
+set_target_properties(qubit_engine_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # Platform-specific link libraries for core
 if(APPLE)
