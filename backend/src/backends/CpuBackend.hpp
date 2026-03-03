@@ -1,8 +1,10 @@
 #pragma once
 
+#include "../Allocator.hpp"
 #include "../Types.hpp"
 #include "IQuantumBackend.hpp"
 #include <vector>
+
 
 namespace qubit_engine {
 
@@ -45,7 +47,7 @@ public:
 
 private:
   size_t num_qubits;
-  std::vector<Complex> state;
+  std::vector<Complex, HugePageAllocator<Complex>> state;
   int local_rank = 0;
   int world_size = 1;
 };

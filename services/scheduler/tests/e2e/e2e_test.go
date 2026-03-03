@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -66,7 +67,11 @@ func TestSchedulerIntegration(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	binPath := filepath.Join(tmpDir, "scheduler")
+	binName := "scheduler"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	binPath := filepath.Join(tmpDir, binName)
 	// Using absolute path to main.go. Assuming test runs from services/scheduler
 	rootDir, _ := filepath.Abs("../../")
 	cmdBuild := exec.Command("go", "build", "-o", binPath, ".")

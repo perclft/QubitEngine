@@ -137,8 +137,8 @@ Matrix2x2 QuantumJIT::matmul2x2(const Matrix2x2 &a, const Matrix2x2 &b) {
 }
 
 bool QuantumJIT::is_identity(const Matrix2x2 &m, double tol) {
-  return std::abs(m[0] - 1.0) < tol && std::abs(m[1]) < tol &&
-         std::abs(m[2]) < tol && std::abs(m[3] - 1.0) < tol;
+  return std::abs(Complex(m[0]) - 1.0) < tol && std::abs(Complex(m[1])) < tol &&
+         std::abs(Complex(m[2])) < tol && std::abs(Complex(m[3]) - 1.0) < tol;
 }
 
 // --- O1: Cancel Adjacent Inverse Gates ---

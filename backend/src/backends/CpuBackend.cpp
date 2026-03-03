@@ -643,6 +643,8 @@ double CpuBackend::expectationValue(const std::string &pauli_string) {
   return expected_value.real();
 }
 
-std::vector<Complex> CpuBackend::getStateVector() const { return state; }
+std::vector<Complex> CpuBackend::getStateVector() const {
+  return std::vector<Complex>(state.begin(), state.end());
+}
 
 } // namespace qubit_engine

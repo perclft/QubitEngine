@@ -17,8 +17,7 @@ using P = qubit_engine::Precision;
 // --- Parameter Shift Rule ---
 std::vector<double> QuantumDifferentiator::calculateGradients(
     int num_qubits, const std::vector<double> &current_params,
-    AnsatzFunction applyAnsatz,
-    const std::vector<PauliTerm> &hamiltonian) {
+    AnsatzFunction applyAnsatz, const std::vector<PauliTerm> &hamiltonian) {
   std::vector<double> gradients(current_params.size(), 0.0);
 
   const double SHIFT = M_PI / 2.0;
@@ -37,11 +36,75 @@ std::vector<double> QuantumDifferentiator::calculateGradients(
 #endif
 
   size_t num_params = current_params.size();
-  size_t chunk_size = (num_params + size - 1) / size;
-  size_t start_idx = rank * chunk_size;
-  size_t end_idx = std::min(start_idx + chunk_size, num_params);
 
-  for (size_t i = start_idx; i < end_idx; ++i) {
+#ifdef MPI_ENABLED
+  if (size > 1) {
+    if (rank == 0) {
+      // MASTER NODE
+      std::vector<double> gradients_buf(num_params, 0.0);
+      size_t next_param = 0;
+
+      // Seed workers
+      for (int p = 1; p < size; ++p) {
+        int p_idx = -1;
+        if (next_param < num_params) {
+          p_idx = static_cast<int>(next_param++);
+        }
+        MPI_Send(&p_idx, 1, MPI_INT, p, 0, MPI_COMM_WORLD);
+      }
+
+      // Collect and dispatch
+      int active_workers =
+          (next_param > 0) ? std::min(static_cast<int>(num_params), size - 1)
+                           : 0;
+      while (active_workers > 0) {
+        double result;
+        MPI_Status status;
+        MPI_Recv(&result, 1, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG,
+                 MPI_COMM_WORLD, &status);
+
+        int worker = status.MPI_SOURCE;
+        int param_idx = status.MPI_TAG;
+        gradients_buf[param_idx] = result;
+
+        int p_idx = -1;
+        if (next_param < num_params) {
+          p_idx = static_cast<int>(next_param++);
+        } else {
+          active_workers--;
+        }
+        MPI_Send(&p_idx, 1, MPI_INT, worker, 0, MPI_COMM_WORLD);
+      }
+      gradients = gradients_buf;
+    } else {
+      // WORKER NODE
+      while (true) {
+        int param_idx;
+        MPI_Status status;
+        MPI_Recv(&param_idx, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
+        if (param_idx == -1)
+          break;
+
+        std::vector<double> params_plus = current_params;
+        params_plus[param_idx] += SHIFT;
+        double energy_plus =
+            evaluateEnergy(num_qubits, params_plus, applyAnsatz, hamiltonian);
+
+        std::vector<double> params_minus = current_params;
+        params_minus[param_idx] -= SHIFT;
+        double energy_minus =
+            evaluateEnergy(num_qubits, params_minus, applyAnsatz, hamiltonian);
+
+        double result = 0.5 * (energy_plus - energy_minus);
+        MPI_Send(&result, 1, MPI_DOUBLE, 0, param_idx, MPI_COMM_WORLD);
+      }
+    }
+    return gradients;
+  }
+#endif
+
+  // SCALAR FALLBACK / SINGLE NODE EXECUTION
+  for (size_t i = 0; i < num_params; ++i) {
     std::vector<double> params_plus = current_params;
     params_plus[i] += SHIFT;
     double energy_plus =
@@ -55,23 +118,13 @@ std::vector<double> QuantumDifferentiator::calculateGradients(
     gradients[i] = 0.5 * (energy_plus - energy_minus);
   }
 
-#ifdef MPI_ENABLED
-  if (size > 1) {
-    std::vector<double> global_gradients(num_params);
-    MPI_Allreduce(gradients.data(), global_gradients.data(), num_params,
-                  MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-    gradients = global_gradients;
-  }
-#endif
-
   return gradients;
 }
 
 // --- Energy Evaluation ---
 double QuantumDifferentiator::evaluateEnergy(
     int num_qubits, const std::vector<double> &params,
-    AnsatzFunction applyAnsatz,
-    const std::vector<PauliTerm> &hamiltonian) {
+    AnsatzFunction applyAnsatz, const std::vector<PauliTerm> &hamiltonian) {
   QuantumRegister qreg(num_qubits, true);
   applyAnsatz(params, qreg);
   double energy = 0.0;
@@ -83,8 +136,7 @@ double QuantumDifferentiator::evaluateEnergy(
 
 // --- Gate Inverse Application ---
 void QuantumDifferentiator::applyGateInverseToState(
-    std::vector<Complex> &state,
-    const QuantumRegister::RecordedGate &gate,
+    std::vector<Complex> &state, const QuantumRegister::RecordedGate &gate,
     int num_qubits) {
   size_t dim = state.size();
 
@@ -253,8 +305,7 @@ void QuantumDifferentiator::applyGateDerivativeToState(
   case QuantumRegister::RecordedGate::RZ: {
     size_t target = gate.qubits[0];
     P angle = static_cast<P>(gate.params[0]);
-    Complex d0 =
-        P(0.5) * Complex(0, -1) * std::exp(Complex(0, -angle / P(2)));
+    Complex d0 = P(0.5) * Complex(0, -1) * std::exp(Complex(0, -angle / P(2)));
     Complex d1 = P(0.5) * Complex(0, 1) * std::exp(Complex(0, angle / P(2)));
     for (size_t idx = 0; idx < dim / 2; ++idx) {
       size_t i0 =

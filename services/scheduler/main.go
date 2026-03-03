@@ -73,8 +73,10 @@ type SchedulerServer struct {
 	rdb          *redis.Client
 	engineAddr   string
 	mu           sync.RWMutex
-	jobResults   map[string]chan *pb.JobResult
 	workerCancel map[string]context.CancelFunc
+	engineConn   *grpc.ClientConn
+	engineClient pb.QuantumComputeClient
+	workerCount  int
 }
 
 type ComplexNumber struct {
@@ -86,8 +88,24 @@ func NewSchedulerServer(rdb *redis.Client, engineAddr string) *SchedulerServer {
 	return &SchedulerServer{
 		rdb:          rdb,
 		engineAddr:   engineAddr,
-		jobResults:   make(map[string]chan *pb.JobResult),
 		workerCancel: make(map[string]context.CancelFunc),
+		workerCount:  10, // Bounded execution
+	}
+}
+
+func (s *SchedulerServer) ConnectEngine(ctx context.Context) error {
+	conn, err := grpc.Dial(s.engineAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return fmt.Errorf("failed to connect to engine: %w", err)
+	}
+	s.engineConn = conn
+	s.engineClient = pb.NewQuantumComputeClient(conn)
+	return nil
+}
+
+func (s *SchedulerServer) StartWorkers(ctx context.Context) {
+	for i := 0; i < s.workerCount; i++ {
+		go s.workerLoop(ctx)
 	}
 }
 
@@ -140,8 +158,7 @@ func (s *SchedulerServer) SubmitJob(ctx context.Context, req *pb.JobRequest) (*p
 	log.Printf("📥 Job submitted: %s (qubits=%d, ops=%d, priority=%d)",
 		jobID, job.NumQubits, job.NumOps, job.Priority)
 
-	// Start a background worker to process jobs
-	go s.processNextJob()
+	// Signal handled by background workers instead of spawning eagerly
 
 	return &pb.JobHandle{
 		JobId:                jobID,
@@ -282,35 +299,42 @@ func (s *SchedulerServer) StreamJobResults(handle *pb.JobHandle, stream pb.Quant
 		return status.Errorf(codes.NotFound, "job not found: %s", jobID)
 	}
 
-	// Create a buffered channel for this stream client
-	resultCh := make(chan *pb.JobResult, 64)
-
-	s.mu.Lock()
-	s.jobResults[jobID] = resultCh
-	s.mu.Unlock()
-
-	defer func() {
-		s.mu.Lock()
-		delete(s.jobResults, jobID)
-		s.mu.Unlock()
-	}()
-
 	log.Printf("📡 Client streaming results for job: %s", jobID)
+	redisKey := "stream:results:" + jobID
 
 	for {
 		select {
-		case result, ok := <-resultCh:
-			if !ok {
-				// Channel closed — job finished
-				return nil
-			}
-			if err := stream.Send(result); err != nil {
-				slog.Warn("Stream send error", "job_id", jobID, "error", err)
-				return err
-			}
 		case <-stream.Context().Done():
 			slog.Info("Client disconnected from stream", "job_id", jobID)
 			return stream.Context().Err()
+		default:
+		}
+
+		// LPop instead of BLPop for miniredis compatibility
+		result, err := s.rdb.LPop(stream.Context(), redisKey).Result()
+		if err == redis.Nil {
+			time.Sleep(100 * time.Millisecond)
+			continue // try again
+		}
+		if err != nil {
+			return status.Errorf(codes.Internal, "redis stream error: %v", err)
+		}
+
+		data := result
+		if data == "EOF" {
+			// Job finished
+			return nil
+		}
+
+		var resp pb.JobResult
+		if err := json.Unmarshal([]byte(data), &resp); err != nil {
+			slog.Warn("Failed to parse result from redis", "error", err)
+			continue
+		}
+
+		if err := stream.Send(&resp); err != nil {
+			slog.Warn("Stream send error", "job_id", jobID, "error", err)
+			return err
 		}
 	}
 }
@@ -319,17 +343,26 @@ func (s *SchedulerServer) StreamJobResults(handle *pb.JobHandle, stream pb.Quant
 // Background Job Processor
 // ------------------------------------------------------------------
 
-func (s *SchedulerServer) processNextJob() {
-	ctx := context.Background()
+func (s *SchedulerServer) workerLoop(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 
-	// Pop highest priority job from queue
-	result, err := s.rdb.ZPopMax(ctx, "queue:jobs", 1).Result()
-	if err != nil || len(result) == 0 {
-		return
+		result, err := s.rdb.ZPopMax(ctx, "queue:jobs", 1).Result()
+		if err != nil || len(result) == 0 {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		jobID := result[0].Member.(string)
+		s.processJobByID(ctx, jobID)
 	}
+}
 
-	jobID := result[0].Member.(string)
-
+func (s *SchedulerServer) processJobByID(ctx context.Context, jobID string) {
 	// Get job details
 	jobBytes, err := s.rdb.Get(ctx, "job:"+jobID).Bytes()
 	if err != nil {
@@ -367,8 +400,7 @@ func (s *SchedulerServer) processNextJob() {
 		s.mu.Unlock()
 	}()
 
-	// Execute on engine (simplified - just marking complete)
-	// In production, this would call the engine gRPC service
+	// Execute on engine (calls persistent gRPC client)
 	err = s.executeOnEngine(jobCtx, &job)
 	if err != nil {
 		job.State = StateFailed
@@ -380,40 +412,30 @@ func (s *SchedulerServer) processNextJob() {
 	job.CompletedAt = time.Now().Unix()
 	s.saveJob(ctx, &job)
 
-	slog.Info("Job completed", "job_id", jobID, "state", job.State)
+	// Mark stream as finished
+	s.rdb.RPush(ctx, "stream:results:"+jobID, "EOF")
+	s.rdb.Expire(ctx, "stream:results:"+jobID, 1*time.Hour)
 
-	// TODO: Call callback URL if specified
+	slog.Info("Job completed", "job_id", jobID, "state", job.State)
 }
 
 func (s *SchedulerServer) executeOnEngine(ctx context.Context, job *Job) error {
-	// Connect to engine
-	conn, err := grpc.Dial(s.engineAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return fmt.Errorf("failed to connect to engine: %w", err)
-	}
-	defer conn.Close()
-
-	client := pb.NewQuantumComputeClient(conn)
-
-	// Convert Job to CircuitRequest
 	var req pb.CircuitRequest
 	if err := json.Unmarshal([]byte(job.CircuitJSON), &req); err != nil {
 		return fmt.Errorf("failed to parse circuit JSON: %v", err)
 	}
 
-	// Call Engine
-	resp, err := client.RunCircuit(ctx, &req)
+	// Call Engine with persistent client
+	resp, err := s.engineClient.RunCircuit(ctx, &req)
 	if err != nil {
 		return fmt.Errorf("engine error: %w", err)
 	}
 
-	// Map measurements
 	measurements := make(map[int32]bool)
 	for k, v := range resp.ClassicalResults {
 		measurements[int32(k)] = v
 	}
 
-	// Build result
 	result := &pb.JobResult{
 		JobId:        job.ID,
 		ShotNumber:   1,
@@ -421,19 +443,10 @@ func (s *SchedulerServer) executeOnEngine(ctx context.Context, job *Job) error {
 		Measurements: measurements,
 	}
 
-	// Broadcast to any listening stream clients
-	s.mu.RLock()
-	ch, hasListener := s.jobResults[job.ID]
-	s.mu.RUnlock()
-
-	if hasListener {
-		select {
-		case ch <- result:
-		default:
-			slog.Warn("Result channel full, dropping result", "job_id", job.ID)
-		}
-		close(ch)
-	}
+	// Spill stream backpressure to Redis
+	resultBytes, _ := json.Marshal(result)
+	s.rdb.RPush(ctx, "stream:results:"+job.ID, string(resultBytes))
+	s.rdb.Expire(ctx, "stream:results:"+job.ID, 1*time.Hour)
 
 	return nil
 }
@@ -490,6 +503,11 @@ func main() {
 
 	// Create server
 	server := NewSchedulerServer(rdb, *engineAddr)
+	if err := server.ConnectEngine(ctx); err != nil {
+		slog.Error("Failed to connect to engine", "error", err)
+		os.Exit(1)
+	}
+	server.StartWorkers(ctx)
 
 	// Start gRPC server
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))

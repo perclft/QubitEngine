@@ -24,8 +24,9 @@ namespace jit {
 
 // Gate Matrix (2x2 for single-qubit, 4x4 for two-qubit)
 using Complex = qubit_engine::Complex;
-using Matrix2x2 = std::array<Complex, 4>;
-using Matrix4x4 = std::array<Complex, 16>;
+using AlignedComplex = qubit_engine::AlignedComplex;
+using Matrix2x2 = std::array<AlignedComplex, 4>;
+using Matrix4x4 = std::array<AlignedComplex, 16>;
 
 // Single-qubit gate matrices
 extern const Matrix2x2 IDENTITY;
