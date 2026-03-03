@@ -2,7 +2,6 @@
 #include "CircuitOptimizer.hpp"
 #include "backends/CpuBackend.hpp"
 #include "backends/CudaBackend.hpp"
-#include "backends/MetalBackend.hpp"
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -27,42 +26,8 @@ QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
   }
 #endif
 
-#ifdef __APPLE__
-  // Check if Metal shaders are available before using Metal backend
-  bool metalAvailable = false;
-  if (!force_local) {
-    // Check for metallib file in current directory or common locations
-    std::vector<std::string> paths = {
-        "default.metallib", "bin/default.metallib", "../bin/default.metallib",
-        "backend/build/default.metallib"};
-    for (const auto &path : paths) {
-      std::ifstream metallib(path);
-      if (metallib.good()) {
-        metalAvailable = true;
-        break;
-      }
-    }
-  }
-
-  if (metalAvailable) {
-    try {
-      backend = std::make_unique<MetalBackend>(n);
-      std::cout << "QuantumRegister: Using MetalBackend (GPU)" << std::endl;
-    } catch (const std::exception &e) {
-      std::cerr << "QuantumRegister: MetalBackend failed to initialize ("
-                << e.what() << "). Falling back to CpuBackend." << std::endl;
-      backend = std::make_unique<CpuBackend>(n, force_local);
-    }
-  } else {
-    backend = std::make_unique<CpuBackend>(n, force_local);
-    std::cout
-        << "QuantumRegister: Using CpuBackend (Metal shaders not available)"
-        << std::endl;
-  }
-#else
-  // Default to CPU on Linux/Windows for now
+  // Default to CPU on macOS/Linux/Windows if CUDA not used
   backend = std::make_unique<CpuBackend>(n, force_local);
-#endif
 }
 
 QuantumRegister::~QuantumRegister() {}
