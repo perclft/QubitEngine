@@ -73,10 +73,12 @@ public:
   };
 
   void enableRecording(bool enable);
+  void enableExecution(bool enable);
   void clearTape();
   const std::vector<RecordedGate> &getTape() const;
 
-  void optimize(); // Optimizes the current tape
+  void optimize();        // Optimizes the current tape
+  void mapTo1DTopology(); // Routes tape for MPS
 
   // Helper to Replay Tape (Optional, for adjoint)
   void applyRegisteredGate(const RecordedGate &gate);
@@ -86,6 +88,7 @@ private:
   size_t num_qubits;
   std::unique_ptr<IQuantumBackend> backend;
   bool recording_enabled = false;
+  bool execution_enabled = true;
   std::vector<RecordedGate> tape;
 };
 

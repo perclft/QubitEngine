@@ -214,42 +214,60 @@ QubitEngineServiceImpl::RunCircuit(grpc::ServerContext *context,
     // concurrent overlap
     int num_ops = request->operations_size();
     if (num_ops > 0) {
-      const int CHUNK_SIZE = 1000;
-      std::vector<qubit_engine::GateOperation> ops;
-      ops.reserve(num_ops);
-      for (int i = 0; i < num_ops; ++i) {
-        ops.push_back(request->operations(i));
-      }
+      if (n >= 25) {
+        // Phase 5: MPS Backend SVD topological routing
+        qreg.enableRecording(true);
+        qreg.enableExecution(false);
+        for (int i = 0; i < num_ops; ++i) {
+          applyGate(qreg, request->operations(i), response);
+        }
+        qreg.mapTo1DTopology();
+        qreg.enableExecution(true);
+        qreg.enableRecording(false);
 
-      auto compile_chunk =
-          [](const std::vector<qubit_engine::GateOperation> &ch) {
-            // Pre-compilation / routing logic goes here (mock delay for
-            // structure)
-            return ch;
-          };
-
-      int first_end = std::min(CHUNK_SIZE, num_ops);
-      std::vector<qubit_engine::GateOperation> next_chunk(
-          ops.begin(), ops.begin() + first_end);
-
-      auto future = std::async(std::launch::async, compile_chunk, next_chunk);
-
-      for (int i = 0; i < num_ops; i += CHUNK_SIZE) {
-        auto current_chunk = future.get(); // Await JIT thread
-
-        // Dispatch next branch of JIT asynchronously
-        if (i + CHUNK_SIZE < num_ops) {
-          int next_start = i + CHUNK_SIZE;
-          int next_end = std::min(next_start + CHUNK_SIZE, num_ops);
-          next_chunk = std::vector<qubit_engine::GateOperation>(
-              ops.begin() + next_start, ops.begin() + next_end);
-          future = std::async(std::launch::async, compile_chunk, next_chunk);
+        for (const auto &gate : qreg.getTape()) {
+          qreg.applyRegisteredGate(gate);
+        }
+        qreg.clearTape();
+      } else {
+        const int CHUNK_SIZE = 1000;
+        std::vector<qubit_engine::GateOperation> ops;
+        ops.reserve(num_ops);
+        for (int i = 0; i < num_ops; ++i) {
+          ops.push_back(request->operations(i));
         }
 
-        // Because cudaDeviceSynchronize was stripped from gate_kernels,
-        // applying these gates dispatches instantly to the async command queue.
-        for (const auto &op : current_chunk) {
-          applyGate(qreg, op, response);
+        auto compile_chunk =
+            [](const std::vector<qubit_engine::GateOperation> &ch) {
+              // Pre-compilation / routing logic goes here (mock delay for
+              // structure)
+              return ch;
+            };
+
+        int first_end = std::min(CHUNK_SIZE, num_ops);
+        std::vector<qubit_engine::GateOperation> next_chunk(
+            ops.begin(), ops.begin() + first_end);
+
+        auto future = std::async(std::launch::async, compile_chunk, next_chunk);
+
+        for (int i = 0; i < num_ops; i += CHUNK_SIZE) {
+          auto current_chunk = future.get(); // Await JIT thread
+
+          // Dispatch next branch of JIT asynchronously
+          if (i + CHUNK_SIZE < num_ops) {
+            int next_start = i + CHUNK_SIZE;
+            int next_end = std::min(next_start + CHUNK_SIZE, num_ops);
+            next_chunk = std::vector<qubit_engine::GateOperation>(
+                ops.begin() + next_start, ops.begin() + next_end);
+            future = std::async(std::launch::async, compile_chunk, next_chunk);
+          }
+
+          // Because cudaDeviceSynchronize was stripped from gate_kernels,
+          // applying these gates dispatches instantly to the async command
+          // queue.
+          for (const auto &op : current_chunk) {
+            applyGate(qreg, op, response);
+          }
         }
       }
     }
@@ -257,7 +275,6 @@ QubitEngineServiceImpl::RunCircuit(grpc::ServerContext *context,
     // Serialize Result
     serializeState(qreg, response, request->measurement_strategy(),
                    request->use_shm());
-
   } catch (const std::invalid_argument &e) {
     spdlog::error("Invalid argument during RunCircuit: {}", e.what());
     return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, e.what());
@@ -282,18 +299,18 @@ grpc::Status QubitEngineServiceImpl::StreamGates(
 
   // We need to initialize the register. But wait, how do we know 'N'?
   // Protocol Design Flaw detected and patched on the fly:
-  // We expect the FIRST message to contain a special "setup" op or just assume
-  // default/grow. BETTER: Client sends a "special" No-Op gate meant to init?
-  // OR: We infer N from the first target qubit? No, unsafe.
-  // PATCH: We'll assume the client sends a "SETUP" message or we lazy init.
+  // We expect the FIRST message to contain a special "setup" op or just
+  // assume default/grow. BETTER: Client sends a "special" No-Op gate meant to
+  // init? OR: We infer N from the first target qubit? No, unsafe. PATCH:
+  // We'll assume the client sends a "SETUP" message or we lazy init.
   // ACTUALLY: Let's assume the first message MIGHT contain a hint.
   // BUT strictly, we'll start with a default or wait for a "Alloc" operation
   // (not defined). WORKAROUND: We'll assume N=30 (Max) effectively or N=1 and
-  // grow? No vector doesn't grow. DECISION: We will initialize with 3 qubits by
-  // default for this demo, OR check metadata? Let's rely on metadata
+  // grow? No vector doesn't grow. DECISION: We will initialize with 3 qubits
+  // by default for this demo, OR check metadata? Let's rely on metadata
   // "num_qubits" passed in context? No, too complex. SIMPLEST: Initialize 3
-  // qubits (demo size) or check valid max index seen? HARDCODED DEMO FIX: We'll
-  // init 3 qubits. (Production would require a Setup message).
+  // qubits (demo size) or check valid max index seen? HARDCODED DEMO FIX:
+  // We'll init 3 qubits. (Production would require a Setup message).
 
   int num_qubits = 3;
   QuantumRegister qreg(num_qubits);
@@ -415,10 +432,10 @@ grpc::Status QubitEngineServiceImpl::RunVQE(
         params[i] -= learning_rate * grads[i];
       }
 
-      // 3. Evaluate Energy (for reporting) - could optimize by reusing a shift
-      // eval but let's be explicit Note: QuantumDifferentiator evaluates energy
-      // internally but doesn't return the "center" value. We do one extra call
-      // here for logging.
+      // 3. Evaluate Energy (for reporting) - could optimize by reusing a
+      // shift eval but let's be explicit Note: QuantumDifferentiator
+      // evaluates energy internally but doesn't return the "center" value. We
+      // do one extra call here for logging.
       {
         QuantumRegister qreg(num_qubits);
         applyAnsatz(params, qreg);

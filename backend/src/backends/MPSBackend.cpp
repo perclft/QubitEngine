@@ -1,4 +1,6 @@
 #include "MPSBackend.hpp"
+#include <Eigen/Dense>
+#include <Eigen/SVD>
 #include <cmath>
 #include <stdexcept>
 
@@ -47,28 +49,117 @@ void MPSBackend::applySingleQubitGate(size_t target,
 
 void MPSBackend::applyTwoQubitGate(size_t q1, size_t q2,
                                    const std::vector<Complex> &matrix) {
-  // Only support adjacent qubits for this prototype architecture
   if (std::abs((int)q1 - (int)q2) != 1) {
     throw std::runtime_error("MPS two-qubit gates currently require adjacent "
                              "qubits. SWAP network needed.");
   }
 
   size_t left = std::min(q1, q2);
-  // 1. Contract nodes[left] and nodes[left+1] into a (left_dim, 4, right_dim)
-  // tensor
-  // 2. Apply 4x4 gate matrix
-  // 3. Perform SVD to split back into two nodes
-  // 4. Truncate singular values if rank exceeds max_bond_dimension
+  bool swap_indices = (q1 > q2);
 
-  // Stubbed out for prototype
-  contractAndTruncate(left);
+  auto &nodeL = nodes[left];
+  auto &nodeR = nodes[left + 1];
+
+  int L1 = nodeL.left_dim;
+  int D = nodeL.right_dim; // Same as nodeR.left_dim
+  int R2 = nodeR.right_dim;
+
+  // 1. Contract nodes[left] and nodes[left+1]
+  // C(l, p1, p2, r)
+  std::vector<Complex> C(L1 * 2 * 2 * R2, Complex(0, 0));
+  for (int l = 0; l < L1; ++l) {
+    for (int p1 = 0; p1 < 2; ++p1) {
+      for (int p2 = 0; p2 < 2; ++p2) {
+        for (int r = 0; r < R2; ++r) {
+          Complex sum(0, 0);
+          for (int d = 0; d < D; ++d) {
+            sum += nodeL.data[l * (2 * D) + p1 * D + d] *
+                   nodeR.data[d * (2 * R2) + p2 * R2 + r];
+          }
+          C[l * (4 * R2) + p1 * (2 * R2) + p2 * R2 + r] = sum;
+        }
+      }
+    }
+  }
+
+  // 2. Apply 4x4 gate matrix
+  std::vector<Complex> C_new(L1 * 2 * 2 * R2, Complex(0, 0));
+  for (int l = 0; l < L1; ++l) {
+    for (int r = 0; r < R2; ++r) {
+      for (int out1 = 0; out1 < 2; ++out1) {
+        for (int out2 = 0; out2 < 2; ++out2) {
+          Complex sum(0, 0);
+          for (int in1 = 0; in1 < 2; ++in1) {
+            for (int in2 = 0; in2 < 2; ++in2) {
+              int row = swap_indices ? (out2 * 2 + out1) : (out1 * 2 + out2);
+              int col = swap_indices ? (in2 * 2 + in1) : (in1 * 2 + in2);
+              sum += matrix[row * 4 + col] *
+                     C[l * (4 * R2) + in1 * (2 * R2) + in2 * R2 + r];
+            }
+          }
+          C_new[l * (4 * R2) + out1 * (2 * R2) + out2 * R2 + r] = sum;
+        }
+      }
+    }
+  }
+
+  // 3. Reshape into matrix (L1*2) x (2*R2) for SVD
+  int rows = L1 * 2;
+  int cols = 2 * R2;
+  Eigen::MatrixXcd M(rows, cols);
+  for (int i = 0; i < rows; ++i) {
+    for (int j = 0; j < cols; ++j) {
+      M(i, j) = C_new[i * cols + j];
+    }
+  }
+
+  // 4. Perform SVD
+  Eigen::JacobiSVD<Eigen::MatrixXcd> svd(M, Eigen::ComputeThinU |
+                                                Eigen::ComputeThinV);
+  Eigen::VectorXd S = svd.singularValues();
+  Eigen::MatrixXcd U = svd.matrixU();
+  Eigen::MatrixXcd V =
+      svd.matrixV(); // this is V, not V^dagger. SVD is M = U * S * V.adjoint()
+
+  // 5. Truncate singular values
+  int D_new = 0;
+  double threshold = 1e-6;
+  for (int i = 0; i < S.size(); ++i) {
+    if (S(i) > threshold) {
+      D_new++;
+    }
+  }
+  D_new = std::min(D_new, max_bond_dimension);
+  if (D_new == 0)
+    D_new = 1;
+
+  // 6. Absorb S into V^\dagger (or V.adjoint())
+  Eigen::MatrixXcd U_trunc = U.leftCols(D_new);
+  Eigen::MatrixXcd S_trunc = S.head(D_new).asDiagonal();
+  Eigen::MatrixXcd V_adj_trunc = V.leftCols(D_new).adjoint(); // (D_new x cols)
+  Eigen::MatrixXcd VS_trunc = S_trunc * V_adj_trunc;
+
+  // 7. Update tensors
+  nodeL.right_dim = D_new;
+  nodeL.data.resize(L1 * 2 * D_new);
+  for (int i = 0; i < rows; ++i) {
+    for (int j = 0; j < D_new; ++j) {
+      nodeL.data[i * D_new + j] = U_trunc(i, j);
+    }
+  }
+
+  nodeR.left_dim = D_new;
+  nodeR.data.resize(D_new * 2 * R2);
+  for (int i = 0; i < D_new; ++i) {
+    for (int j = 0; j < cols; ++j) {
+      nodeR.data[i * cols + j] = VS_trunc(i, j);
+    }
+  }
 }
 
 void MPSBackend::contractAndTruncate(size_t left_qubit) {
-  // Concept:
-  // SVD stub to demonstrate structure. In production, link LAPACK/Eigen/MKL.
-  // By aggressively truncating singular values below 1e-6, we maintain sparse
-  // representation.
+  // Deprecated, logic embedded directly in applyTwoQubitGate to process tensor
+  // natively.
 }
 
 void MPSBackend::applyHadamard(size_t target) {

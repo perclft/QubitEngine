@@ -74,6 +74,7 @@ find_package(pybind11 CONFIG REQUIRED)
 find_package(gflags CONFIG REQUIRED)
 find_package(glog CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
+find_package(Eigen3 CONFIG REQUIRED)
 
 # --- GPU Acceleration (CUDA) ---
 option(ENABLE_CUDA "Enable CUDA GPU Acceleration" ON)
@@ -252,6 +253,7 @@ if(OpenMP_CXX_FOUND)
 endif()
 
 target_link_libraries(qubit_engine_core PUBLIC Threads::Threads)
+target_link_libraries(qubit_engine_core PUBLIC Eigen3::Eigen)
 
 # =================================================================
 # Main Executable

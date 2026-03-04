@@ -10,7 +10,8 @@
     "gflags",
     "glog",
     "pybind11",
-    "spdlog"
+    "spdlog",
+    "eigen3"
   ],
   "builtin-baseline": "ab2977be50c702126336e5088f4836060733c899"
 }
