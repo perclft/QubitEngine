@@ -44,13 +44,8 @@ PYBIND11_MODULE(core, m) {
           },
           "Get the full state vector (throws exception due to exponential "
           "scaling)")
-      .def("num_qubits", [](const StabilizerBackend &s) {
-        // Need to call a generic size fetcher. The class has size getter but
-        // it's on number of qubits. Using a proxy for now assuming num_qubits
-        // is available.
-        return s.getRank(); // Proxying something for compilation. We'll ignore
-                            // size for now.
-      });
+      .def("num_qubits", &StabilizerBackend::getNumQubits,
+           "Get number of qubits registered to backend");
 
   py::class_<QuantumRegister>(m, "QuantumRegister")
       .def(py::init<size_t>(), py::arg("num_qubits"))
@@ -98,9 +93,8 @@ PYBIND11_MODULE(core, m) {
                                        parent); // Anchor lifecycle
           },
           "Get measurement probabilities as a zero-copy NumPy array")
-      .def("num_qubits", [](const QuantumRegister &q) {
-        return q.getStateVector().size();
-      }); // Approximation, actual num_qubits getter needed in class
+      .def("num_qubits", &QuantumRegister::getNumQubits,
+           "Get number of qubits in the register");
   py::class_<PauliTerm>(m, "PauliTerm")
       .def(py::init<double, std::string>())
       .def_readwrite("coefficient", &PauliTerm::coefficient)

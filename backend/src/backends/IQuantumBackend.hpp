@@ -45,6 +45,9 @@ public:
   // --- Distributed Helpers (Optional / Backend Specific) ---
   virtual int getRank() const { return 0; }
   virtual int getSize() const { return 1; }
+
+  // --- Hardware Properties ---
+  virtual size_t getNumQubits() const { return 0; }
 };
 
 } // namespace qubit_engine

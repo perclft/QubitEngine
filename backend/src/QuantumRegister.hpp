@@ -45,6 +45,7 @@ public:
   // --- Distributed Helpers ---
   int getRank() const;
   int getSize() const;
+  size_t getNumQubits() const { return num_qubits; }
 
   // --- Debugging ---
   std::vector<Complex> getStateVector() const;
