@@ -297,7 +297,7 @@ static void launchKernel1Q(void (*kernel)(cuDoubleComplex *, int, int),
   int numBlocks = (half_dim + blockSize - 1) / blockSize;
   kernel<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
                                    target);
-  cudaDeviceSynchronize();
+  // cudaDeviceSynchronize(); // Phase 4: Async kernels
 }
 
 void launchHadamard(void *deviceState, int num_qubits, int target) {
@@ -331,7 +331,7 @@ void launchRotationY(void *deviceState, int num_qubits, int target,
   int numBlocks = (half_dim + blockSize - 1) / blockSize;
   kRotationY<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState,
                                        num_qubits, target, angle);
-  cudaDeviceSynchronize();
+  // cudaDeviceSynchronize(); // Phase 4: Async kernels
 }
 
 void launchRotationZ(void *deviceState, int num_qubits, int target,
@@ -341,7 +341,7 @@ void launchRotationZ(void *deviceState, int num_qubits, int target,
   int numBlocks = (half_dim + blockSize - 1) / blockSize;
   kRotationZ<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState,
                                        num_qubits, target, angle);
-  cudaDeviceSynchronize();
+  // cudaDeviceSynchronize(); // Phase 4: Async kernels
 }
 
 void launchCNOT(void *deviceState, int num_qubits, int control, int target) {
@@ -350,7 +350,7 @@ void launchCNOT(void *deviceState, int num_qubits, int control, int target) {
   int numBlocks = (half_dim + blockSize - 1) / blockSize;
   kCNOT<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
                                   control, target);
-  cudaDeviceSynchronize();
+  // cudaDeviceSynchronize(); // Phase 4: Async kernels
 }
 
 void launchToffoli(void *deviceState, int num_qubits, int control1,
@@ -360,7 +360,7 @@ void launchToffoli(void *deviceState, int num_qubits, int control1,
   int numBlocks = (half_dim + blockSize - 1) / blockSize;
   kToffoli<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
                                      control1, control2, target);
-  cudaDeviceSynchronize();
+  // cudaDeviceSynchronize(); // Phase 4: Async kernels
 }
 
 void launchRotationX(void *deviceState, int num_qubits, int target,
@@ -370,7 +370,7 @@ void launchRotationX(void *deviceState, int num_qubits, int target,
   int numBlocks = (half_dim + blockSize - 1) / blockSize;
   kRotationX<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState,
                                        num_qubits, target, angle);
-  cudaDeviceSynchronize();
+  // cudaDeviceSynchronize(); // Phase 4: Async kernels
 }
 
 void launchSWAP(void *deviceState, int num_qubits, int qubit1, int qubit2) {
@@ -379,7 +379,7 @@ void launchSWAP(void *deviceState, int num_qubits, int qubit1, int qubit2) {
   int numBlocks = (dim + blockSize - 1) / blockSize;
   kSWAP<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
                                   qubit1, qubit2);
-  cudaDeviceSynchronize();
+  // cudaDeviceSynchronize(); // Phase 4: Async kernels
 }
 
 void launchCZ(void *deviceState, int num_qubits, int control, int target) {
@@ -388,7 +388,7 @@ void launchCZ(void *deviceState, int num_qubits, int control, int target) {
   int numBlocks = (dim + blockSize - 1) / blockSize;
   kCZ<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
                                 control, target);
-  cudaDeviceSynchronize();
+  // cudaDeviceSynchronize(); // Phase 4: Async kernels
 }
 
 void launchComputeProbabilities(const void *deviceState, double *deviceProbs,
@@ -397,7 +397,7 @@ void launchComputeProbabilities(const void *deviceState, double *deviceProbs,
   int numBlocks = (dim + blockSize - 1) / blockSize;
   kComputeProbabilities<<<numBlocks, blockSize>>>(
       (const cuDoubleComplex *)deviceState, deviceProbs, dim);
-  cudaDeviceSynchronize();
+  // cudaDeviceSynchronize(); // Phase 4: Async kernels
 }
 
 } // namespace cuda

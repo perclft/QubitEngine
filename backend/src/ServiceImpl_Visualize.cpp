@@ -26,7 +26,7 @@ grpc::Status QubitEngineServiceImpl::VisualizeCircuit(
     }
 
     // B. Populate State Vector
-    serializeState(qreg, &response, request->measurement_strategy());
+    serializeState(qreg, &response, request->measurement_strategy(), false);
 
     // C. Stream Update
     if (!writer->Write(response)) {

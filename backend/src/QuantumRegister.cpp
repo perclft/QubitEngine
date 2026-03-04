@@ -2,6 +2,7 @@
 #include "CircuitOptimizer.hpp"
 #include "backends/CpuBackend.hpp"
 #include "backends/CudaBackend.hpp"
+#include "backends/MPSBackend.hpp"
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -11,6 +12,14 @@ namespace qubit_engine {
 
 // --- Lifecycle ---
 QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
+  // Phase 4: Tensor Network Acceleration
+  if (n >= 25 && !force_local) {
+    // Emulate using MPS for circuits >= 25 qubits to showcase memory
+    // compression
+    backend = std::make_unique<MPSBackend>(n);
+    return;
+  }
+
   // Factory Logic
 #ifdef ENABLE_CUDA
   if (!force_local) {

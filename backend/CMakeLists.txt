@@ -220,11 +220,13 @@ endif()
 add_library(qubit_engine_core STATIC
     src/QuantumRegister.cpp
     src/backends/CpuBackend.cpp
+    src/backends/MPSBackend.cpp
     src/backends/GPUQuantumRegister.cpp
     src/CircuitOptimizer.cpp
     src/QuantumDifferentiator.cpp
     src/QuantumJIT.cpp
     src/OpenQASM.cpp
+    src/ipc/SharedMemory.cpp
     ${METAL_SOURCES}
     ${GPU_SOURCES}
 )

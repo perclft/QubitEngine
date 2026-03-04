@@ -2,11 +2,9 @@
 #include <iostream>
 #include <stdexcept>
 
-
 #ifdef __APPLE__
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
-
 
 class MetalContext::Impl {
 public:
@@ -134,7 +132,7 @@ void MetalContext::dispatchCompute(const std::string &kernelName,
     [computeEncoder endEncoding];
 
     [commandBuffer commit];
-    [commandBuffer waitUntilCompleted];
+    // [commandBuffer waitUntilCompleted]; // Phase 4: Async
   }
 }
 

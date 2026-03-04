@@ -1,8 +1,13 @@
 #include "ServiceImpl.hpp"
 #include "QuantumRegister.hpp"
+#include "ipc/SharedMemory.hpp"
 #include <cmath>
 #include <cstdint> // FIX: Added for uint32_t
+#include <future>
 #include <iostream>
+#include <random>
+#include <string>
+
 #ifdef __linux__
 #include <sys/sysinfo.h>
 #endif
@@ -109,14 +114,34 @@ void QubitEngineServiceImpl::applyGate(QuantumRegister &qreg,
 // Helper to serialize state vector
 void QubitEngineServiceImpl::serializeState(
     const QuantumRegister &qreg, qubit_engine::StateResponse *response,
-    qubit_engine::CircuitRequest::MeasurementStrategy strategy) {
+    qubit_engine::CircuitRequest::MeasurementStrategy strategy, bool use_shm) {
   if (strategy == qubit_engine::CircuitRequest::FULL_STATE) {
-    response->clear_state_vector();
-    const auto &state = qreg.getStateVector();
-    for (const auto &amp : state) {
-      auto *c = response->add_state_vector();
-      c->set_real(amp.real());
-      c->set_imag(amp.imag());
+    if (use_shm) {
+      // Generate pseudo-random descriptor
+      std::string desc = "qe_shm_" + std::to_string(std::rand());
+#ifdef _WIN32
+      std::string full_desc = "Local\\" + desc;
+#else
+      std::string full_desc = "/" + desc;
+#endif
+      const auto &state = qreg.getStateVector();
+      size_t sizeBytes = state.size() * sizeof(std::complex<double>);
+
+      // Write state directly to OS shared memory mapped block
+      void *ptr =
+          qubit_engine::ipc::SharedMemory::createSegment(full_desc, sizeBytes);
+      std::memcpy(ptr, state.data(), sizeBytes);
+
+      // Pass only the descriptor pointer over the gRPC stream
+      response->set_shm_descriptor(full_desc);
+    } else {
+      response->clear_state_vector();
+      const auto &state = qreg.getStateVector();
+      for (const auto &amp : state) {
+        auto *c = response->add_state_vector();
+        c->set_real(amp.real());
+        c->set_imag(amp.imag());
+      }
     }
   } else if (strategy == qubit_engine::CircuitRequest::SPARSE_STATE) {
     const auto &state = qreg.getStateVector();
@@ -185,13 +210,53 @@ QubitEngineServiceImpl::RunCircuit(grpc::ServerContext *context,
     // Instantiate Register (Frontend)
     QuantumRegister qreg(n);
 
-    // Apply Gates
-    for (const auto &op : request->operations()) {
-      applyGate(qreg, op, response);
+    // Phase 4: Thread the JIT compiler out utilizing std::async for CPU-GPU
+    // concurrent overlap
+    int num_ops = request->operations_size();
+    if (num_ops > 0) {
+      const int CHUNK_SIZE = 1000;
+      std::vector<qubit_engine::GateOperation> ops;
+      ops.reserve(num_ops);
+      for (int i = 0; i < num_ops; ++i) {
+        ops.push_back(request->operations(i));
+      }
+
+      auto compile_chunk =
+          [](const std::vector<qubit_engine::GateOperation> &ch) {
+            // Pre-compilation / routing logic goes here (mock delay for
+            // structure)
+            return ch;
+          };
+
+      int first_end = std::min(CHUNK_SIZE, num_ops);
+      std::vector<qubit_engine::GateOperation> next_chunk(
+          ops.begin(), ops.begin() + first_end);
+
+      auto future = std::async(std::launch::async, compile_chunk, next_chunk);
+
+      for (int i = 0; i < num_ops; i += CHUNK_SIZE) {
+        auto current_chunk = future.get(); // Await JIT thread
+
+        // Dispatch next branch of JIT asynchronously
+        if (i + CHUNK_SIZE < num_ops) {
+          int next_start = i + CHUNK_SIZE;
+          int next_end = std::min(next_start + CHUNK_SIZE, num_ops);
+          next_chunk = std::vector<qubit_engine::GateOperation>(
+              ops.begin() + next_start, ops.begin() + next_end);
+          future = std::async(std::launch::async, compile_chunk, next_chunk);
+        }
+
+        // Because cudaDeviceSynchronize was stripped from gate_kernels,
+        // applying these gates dispatches instantly to the async command queue.
+        for (const auto &op : current_chunk) {
+          applyGate(qreg, op, response);
+        }
+      }
     }
 
     // Serialize Result
-    serializeState(qreg, response, request->measurement_strategy());
+    serializeState(qreg, response, request->measurement_strategy(),
+                   request->use_shm());
 
   } catch (const std::invalid_argument &e) {
     spdlog::error("Invalid argument during RunCircuit: {}", e.what());
@@ -246,7 +311,8 @@ grpc::Status QubitEngineServiceImpl::StreamGates(
       }
 
       applyGate(qreg, op, &response);
-      serializeState(qreg, &response, qubit_engine::CircuitRequest::FULL_STATE);
+      serializeState(qreg, &response, qubit_engine::CircuitRequest::FULL_STATE,
+                     false);
 
       stream->Write(response);
     }

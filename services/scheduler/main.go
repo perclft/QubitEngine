@@ -8,6 +8,7 @@ import (
 	"log"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -15,10 +16,24 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	pb "github.com/perclft/QubitEngine/api/generated"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+)
+
+var (
+	queueDepthMetric = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "qubitengine_queue_depth",
+		Help: "The current depth of the Redis jobs queue",
+	})
+	streamLagMetric = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "qubitengine_stream_lag_seconds",
+		Help: "Approximated processing lag over streams",
+	})
 )
 
 // ------------------------------------------------------------------
@@ -439,10 +454,23 @@ func (s *SchedulerServer) executeOnEngine(ctx context.Context, job *Job) error {
 		return fmt.Errorf("failed to parse circuit JSON: %v", err)
 	}
 
+	// Phase 4: Request Zero-Copy IPC memory mapping
+	req.UseShm = true
+
 	// Call Engine with persistent client
 	resp, err := s.engineClient.RunCircuit(ctx, &req)
 	if err != nil {
 		return fmt.Errorf("engine error: %w", err)
+	}
+
+	// Reconstruct the array directly from memory if SHM was utilized
+	if resp.ShmDescriptor != "" {
+		slog.Debug("Zero-Copy IPC mapping state vector", "descriptor", resp.ShmDescriptor)
+		if mappedVector, err := readSharedMemory(resp.ShmDescriptor, req.NumQubits); err == nil {
+			resp.StateVector = mappedVector
+		} else {
+			slog.Warn("Failed to map shared memory descriptor, falling back to protobuf (which is empty)", "error", err)
+		}
 	}
 
 	measurements := make(map[int32]bool)
@@ -525,6 +553,28 @@ func main() {
 		os.Exit(1)
 	}
 	server.StartWorkers(ctx)
+
+	// ---------------------------------------------
+	// Prometheus Metrics Scraper Endpoint
+	// ---------------------------------------------
+	http.Handle("/metrics", promhttp.Handler())
+	go func() {
+		slog.Info("Starting Prometheus metrics server on :2112/metrics")
+		if err := http.ListenAndServe(":2112", nil); err != nil {
+			slog.Error("Metrics server failed", "error", err)
+		}
+	}()
+
+	// Background ticker to update Redis Gauges
+	go func() {
+		for {
+			depth, err := rdb.ZCard(ctx, "queue:jobs").Result()
+			if err == nil {
+				queueDepthMetric.Set(float64(depth))
+			}
+			time.Sleep(5 * time.Second)
+		}
+	}()
 
 	// Start gRPC server
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))

@@ -54,6 +54,7 @@ message CircuitRequest {
     EXPECTATION_VALUES = 2;
   }
   MeasurementStrategy measurement_strategy = 5;
+  bool use_shm = 6;
 }
 
 message GateOperation {
@@ -111,6 +112,9 @@ message StateResponse {
   // Sparse representations if Strategy != FULL_STATE
   repeated Measurement sparse_states = 4;
   repeated double expectation_values = 5;
+
+  // Shared memory descriptor if Zero-Copy IPC is utilized
+  string shm_descriptor = 6;
 }
 
 message Measurement {

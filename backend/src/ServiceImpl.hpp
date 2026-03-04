@@ -33,5 +33,6 @@ private:
   void serializeState(const qubit_engine::QuantumRegister &qreg,
                       qubit_engine::StateResponse *response,
                       qubit_engine::CircuitRequest::MeasurementStrategy
-                          strategy = qubit_engine::CircuitRequest::FULL_STATE);
+                          strategy = qubit_engine::CircuitRequest::FULL_STATE,
+                      bool use_shm = false);
 };
