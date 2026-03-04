@@ -26,12 +26,16 @@
 
 Key capabilities:
 
-- **Multi-backend simulation** — CUDA, Metal, AVX2/NEON, and MPI distributed execution
+- **Multi-backend simulation** — CUDA (multi-GPU with NCCL), Metal, AVX2/NEON, and MPI distributed execution
+- **Distributed Tensor Networks** — Matrix Product State (MPS) backend scaling beyond 32 qubits with SVD truncation
+- **Clifford Stabilizer QEC** — Gottesman-Knill simulation for thousands of qubits in polynomial time
+- **Zero-Copy IPC** — Direct POSIX shared memory mapped state vector transfers mitigating gRPC overhead
 - **Native differentiability** — Parameter Shift Rule and Adjoint differentiation for variational algorithms (VQE)
-- **JIT circuit optimization** — Multi-level gate fusion compiler (O0–O3)
+- **JIT circuit optimization** — LRU caching & multi-level gate fusion compiler (O0–O3) utilizing background multi-threading
+- **Predictive Autoscaling Mesh** — Integrated Prometheus metrics querying Redis queue lengths mapping into Kubernetes HPA
 - **OpenQASM 2.0/3.0** — Import and export circuits for interoperability with Qiskit and other frameworks
 - **Interactive TUI** — Rust-based terminal dashboard with live probability streaming via gRPC
-- **Python bindings** — pybind11 module with PyTorch integration
+- **Python bindings** — pybind11 module equipped with zero-copy NumPy buffers and PyTorch integration
 
 ## 🏗️ Architecture
 
@@ -53,11 +57,13 @@ Key capabilities:
 │              C++ Physics Kernel (C++20)                  │
 │  QuantumRegister → IQuantumBackend (polymorphic)        │
 │    ├─ CpuBackend   (AVX2/NEON + OpenMP)                 │
-│    ├─ CudaBackend  (NVIDIA GPU)                         │
-│    ├─ MetalBackend (Apple GPU)                           │
+│    ├─ CudaBackend  (NVIDIA multi-GPU + NCCL)            │
+│    ├─ MetalBackend (Apple GPU + Async Cmd Queues)       │
+│    ├─ MPSBackend   (Tensor Networks + SVD Truncation)   │
+│    ├─ StabilizerBackend (Clifford QEC)                  │
 │    └─ CloudBackend (remote execution)                    │
-│  QuantumJIT · Differentiator · OpenQASM · Optimizer     │
-│  Python Bindings (pybind11)                              │
+│  QuantumJIT (LRU Caching) · Differentiator · Optimizer  │
+│  Python Bindings (pybind11 zero-copy NumPy arrays)       │
 └─────────────────────────────────────────────────────────┘
 ```
 

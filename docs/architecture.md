@@ -42,23 +42,27 @@ QubitEngine is a multi-language quantum simulation platform with five major laye
 
 `QuantumRegister` acts as a proxy that creates the appropriate backend at construction time. The selection logic in `QuantumRegister.cpp` follows this priority chain:
 
-1. **CUDA** — If compiled with `ENABLE_CUDA` and a CUDA device is detected
-2. **Metal** — If compiled with `ENABLE_METAL` (Apple platforms)
-3. **MPI** — If compiled with `MPI_ENABLED` and `force_local` is `false`
-4. **CPU** — Default fallback with AVX2/NEON + OpenMP
+1. **CUDA** — Multi-GPU Tensor Sharding & Async Streams via NCCL
+2. **Metal** — Asynchronous GPU Command Queues ensuring CPU execution overlap
+3. **MPI** — Cluster-scale deployment across instances
+4. **MPS (Tensor Network)** — Simulates > 50 qubits for weakly entangled logic using SVD Truncation
+5. **Stabilizer** — Simulates thousands of qubits in polynomial time under pure Clifford operations
+6. **CPU** — Default fallback with AVX2/NEON + OpenMP
 
 The `force_local` constructor parameter bypasses distributed (MPI) execution, useful for gradient calculations where each parameter evaluation needs an independent register.
 
 ## JIT Compiler Optimization Tiers
 
-The `QuantumJIT` compiler operates on `CircuitIR` (intermediate representation) with four optimization levels:
+The `QuantumJIT` compiler operates on `CircuitIR` (intermediate representation) and implements an LRU hashing layer to cache topological identical circuit passes entirely. It also operates on an independent thread, fusing arrays concurrently alongside active GPU hardware executions.
+
+It features four optimization levels:
 
 | Level | Name | Strategy |
 |-------|------|----------|
 | **O0** | None | Pass-through; builds `CompiledGate` structs only |
 | **O1** | Cancel | Adjacent inverse gate cancellation (X·X = I, H·H = I) |
 | **O2** | Fuse | Consecutive single-qubit gates on the same qubit are fused via 2×2 matrix multiplication |
-| **O3** | Aggressive | Reorders independent gates + applies O2 fusion again |
+| **O3** | Aggressive | Reorders independent gates + applies O2 fusion again + swaps linear mappings for 1D topology (MPS) |
 
 Gate matrices are stored as `std::array<Complex, 4>` (2×2) or `std::array<Complex, 16>` (4×4).
 
@@ -73,6 +77,8 @@ Defined in `api/proto/quantum.proto`:
 | `VisualizeCircuit` | Server Stream | Execute circuit, stream state after each step |
 | `RunVQE` | Server Stream | Run VQE optimization, stream energy per iteration |
 
+> **Note**: `StateResponse` objects support `shm_descriptor` string mappings, allowing Go sidecars and Python processes to map the raw zero-copy `2^N` Floats natively from OS paging memory rather than serializing arrays over protobuf sockets.
+
 Defined in `api/proto/scheduler.proto`:
 
 | RPC | Type | Description |
@@ -82,6 +88,11 @@ Defined in `api/proto/scheduler.proto`:
 | `CancelJob` | Unary | Cancel queued or running job |
 | `StreamJobResults` | Server Stream | Stream results as engine produces them |
 | `ListJobs` | Unary | List jobs by user with pagination |
+
+## Hardware & Distributed Scaling
+
+- **Predictive Autoscaling Mesh**: The Go `Scheduler` mounts a `:2112/metrics` endpoint exposing `queue:jobs` depth mappings directly into Prometheus. The K8s auto-scaler uses this to dynamically scale backend deployments globally ahead of congestion.
+- **Python Zero-Copy Buffers**: The `core.get_state_vector()` and `get_probabilities()` C++ endpoints bind utilizing `pybind11::buffer_info`, anchoring C++ RAM allocation lifecycles actively inside NumPy preventing memory duplications.
 
 ## Differentiator Methods
 
