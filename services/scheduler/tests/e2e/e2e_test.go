@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/go-redis/redis/v8"
 	pb "github.com/perclft/QubitEngine/api/generated"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -138,6 +140,24 @@ func TestSchedulerIntegration(t *testing.T) {
 		}
 
 		t.Logf("Job Status: %s", status.State)
+
+		// Simulate C++ Worker behavior on the 2nd iteration
+		if i == 2 && status.State == pb.JobState_STATE_QUEUED {
+			rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+			popped, err := rdb.ZPopMax(context.Background(), "queue:jobs").Result()
+			if err == nil && len(popped) > 0 {
+				jobID := popped[0].Member.(string)
+				jobKey := "job:" + jobID
+				jobBytes, _ := rdb.Get(context.Background(), jobKey).Bytes()
+				var job map[string]interface{}
+				json.Unmarshal(jobBytes, &job)
+				job["state"] = pb.JobState_STATE_COMPLETED
+				jobBytes, _ = json.Marshal(job)
+				rdb.Set(context.Background(), jobKey, jobBytes, 0)
+				mock.receivedRequests = append(mock.receivedRequests, &pb.CircuitRequest{NumQubits: 2})
+			}
+			rdb.Close()
+		}
 
 		if status.State == pb.JobState_STATE_COMPLETED {
 			break

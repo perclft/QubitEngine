@@ -59,10 +59,8 @@ PYBIND11_MODULE(core, m) {
           },
           "Get the full state vector (throws exception due to exponential "
           "scaling)")
-      .def("num_qubits", [](const qubit_engine::StabilizerBackend &s) {
-        return s
-            .getRank(); // Proxying something for compilation mapping in python
-      });
+      .def("num_qubits", &qubit_engine::StabilizerBackend::getNumQubits,
+           "Get number of qubits registered to backend");
 
   // --- QuantumRegister Binding ---
   py::class_<QuantumRegister>(m, "QuantumRegister")

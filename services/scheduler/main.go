@@ -119,7 +119,9 @@ func (s *SchedulerServer) ConnectEngine(ctx context.Context) error {
 }
 
 func (s *SchedulerServer) StartWorkers(ctx context.Context) {
-	go s.dispatcherLoop(ctx)
+	// Engine decoupling: C++ workers will pull directly from Redis "queue:jobs"
+	// The Go scheduler only handles incoming streams and job requests.
+	log.Println("Go Scheduler workers disabled to prevent bounded starvation. Awaiting C++ nodes to pull jobs.")
 }
 
 // ------------------------------------------------------------------
@@ -244,6 +246,28 @@ func (s *SchedulerServer) CancelJob(ctx context.Context, handle *pb.JobHandle) (
 	return &pb.CancelResponse{Success: false, Message: "Job not found or already completed"}, nil
 }
 
+func (s *SchedulerServer) updateJobState(ctx context.Context, jobID string, state JobState, errMsg string) {
+	jobBytes, err := s.rdb.Get(ctx, "job:"+jobID).Bytes()
+	if err != nil {
+		return
+	}
+	var job Job
+	if err := json.Unmarshal(jobBytes, &job); err != nil {
+		return
+	}
+	job.State = state
+	job.ErrorMessage = errMsg
+	if state == StateCompleted || state == StateFailed || state == StateCancelled {
+		job.CompletedAt = time.Now().Unix()
+	}
+	s.saveJob(ctx, &job)
+}
+
+func (s *SchedulerServer) saveJob(ctx context.Context, job *Job) {
+	jobBytes, _ := json.Marshal(job)
+	s.rdb.Set(ctx, "job:"+job.ID, jobBytes, 24*time.Hour)
+}
+
 // ------------------------------------------------------------------
 // ListJobs - List jobs for a user
 // ------------------------------------------------------------------
@@ -361,169 +385,6 @@ func (s *SchedulerServer) StreamJobResults(handle *pb.JobHandle, stream pb.Quant
 			return err
 		}
 	}
-}
-
-// ------------------------------------------------------------------
-// Background Job Processor
-// ------------------------------------------------------------------
-
-func (s *SchedulerServer) dispatcherLoop(ctx context.Context) {
-	sem := make(chan struct{}, s.workerCount)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		result, err := s.rdb.ZPopMax(ctx, "queue:jobs", 1).Result()
-		if err != nil || len(result) == 0 {
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-
-		jobID := result[0].Member.(string)
-
-		// Acquire semaphore token
-		sem <- struct{}{}
-
-		// Spawn a dynamic worker
-		go func(id string) {
-			defer func() { <-sem }()
-			s.processJobByID(ctx, id)
-		}(jobID)
-	}
-}
-
-func (s *SchedulerServer) processJobByID(ctx context.Context, jobID string) {
-	// Get job details
-	jobBytes, err := s.rdb.Get(ctx, "job:"+jobID).Bytes()
-	if err != nil {
-		slog.Error("Failed to get job", "job_id", jobID, "error", err)
-		return
-	}
-
-	var job Job
-	if err := json.Unmarshal(jobBytes, &job); err != nil {
-		slog.Error("Failed to parse job", "job_id", jobID, "error", err)
-		return
-	}
-
-	// Update state to running
-	job.State = StateRunning
-	job.StartedAt = time.Now().Unix()
-	s.saveJob(ctx, &job)
-
-	slog.Info("Processing job",
-		"job_id", jobID,
-		"num_qubits", job.NumQubits,
-		"num_ops", job.NumOps,
-		"shots", job.Shots,
-	)
-
-	// Create cancellable context
-	jobCtx, cancel := context.WithCancel(ctx)
-	s.mu.Lock()
-	s.workerCancel[jobID] = cancel
-	s.mu.Unlock()
-
-	defer func() {
-		s.mu.Lock()
-		delete(s.workerCancel, jobID)
-		s.mu.Unlock()
-	}()
-
-	// Execute on engine (calls persistent gRPC client)
-	err = s.executeOnEngine(jobCtx, &job)
-	if err != nil {
-		job.State = StateFailed
-		job.ErrorMessage = err.Error()
-	} else {
-		job.State = StateCompleted
-	}
-
-	job.CompletedAt = time.Now().Unix()
-	s.saveJob(ctx, &job)
-
-	// Mark stream as finished
-	s.rdb.XAdd(ctx, &redis.XAddArgs{
-		Stream: "stream:results:" + jobID,
-		Values: map[string]interface{}{"data": "EOF"},
-	})
-	s.rdb.Expire(ctx, "stream:results:"+jobID, 1*time.Hour)
-
-	slog.Info("Job completed", "job_id", jobID, "state", job.State)
-}
-
-func (s *SchedulerServer) executeOnEngine(ctx context.Context, job *Job) error {
-	var req pb.CircuitRequest
-	if err := json.Unmarshal([]byte(job.CircuitJSON), &req); err != nil {
-		return fmt.Errorf("failed to parse circuit JSON: %v", err)
-	}
-
-	// Phase 4: Request Zero-Copy IPC memory mapping
-	req.UseShm = true
-
-	// Call Engine with persistent client
-	resp, err := s.engineClient.RunCircuit(ctx, &req)
-	if err != nil {
-		return fmt.Errorf("engine error: %w", err)
-	}
-
-	// Reconstruct the array directly from memory if SHM was utilized
-	if resp.ShmDescriptor != "" {
-		slog.Debug("Zero-Copy IPC mapping state vector", "descriptor", resp.ShmDescriptor)
-		if mappedVector, err := readSharedMemory(resp.ShmDescriptor, req.NumQubits); err == nil {
-			resp.StateVector = mappedVector
-		} else {
-			slog.Warn("Failed to map shared memory descriptor, falling back to protobuf (which is empty)", "error", err)
-		}
-	}
-
-	measurements := make(map[int32]bool)
-	for k, v := range resp.ClassicalResults {
-		measurements[int32(k)] = v
-	}
-
-	result := &pb.JobResult{
-		JobId:        job.ID,
-		ShotNumber:   1,
-		State:        resp,
-		Measurements: measurements,
-	}
-
-	// Spill stream backpressure to Redis Streams
-	resultBytes, _ := json.Marshal(result)
-	s.rdb.XAdd(ctx, &redis.XAddArgs{
-		Stream: "stream:results:" + job.ID,
-		Values: map[string]interface{}{"data": string(resultBytes)},
-	})
-	s.rdb.Expire(ctx, "stream:results:"+job.ID, 1*time.Hour)
-
-	return nil
-}
-
-func (s *SchedulerServer) updateJobState(ctx context.Context, jobID string, state JobState, errMsg string) {
-	jobBytes, err := s.rdb.Get(ctx, "job:"+jobID).Bytes()
-	if err != nil {
-		return
-	}
-	var job Job
-	if err := json.Unmarshal(jobBytes, &job); err != nil {
-		return
-	}
-	job.State = state
-	job.ErrorMessage = errMsg
-	if state == StateCompleted || state == StateFailed || state == StateCancelled {
-		job.CompletedAt = time.Now().Unix()
-	}
-	s.saveJob(ctx, &job)
-}
-
-func (s *SchedulerServer) saveJob(ctx context.Context, job *Job) {
-	jobBytes, _ := json.Marshal(job)
-	s.rdb.Set(ctx, "job:"+job.ID, jobBytes, 24*time.Hour)
 }
 
 // ------------------------------------------------------------------

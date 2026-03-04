@@ -3,7 +3,10 @@
 #include <stdexcept>
 
 #ifdef _WIN32
+#include <mutex>
+#include <unordered_map>
 #include <windows.h>
+
 #else
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -14,6 +17,11 @@
 
 namespace qubit_engine {
 namespace ipc {
+
+#ifdef _WIN32
+static std::unordered_map<std::string, HANDLE> active_handles;
+static std::mutex handle_mutex;
+#endif
 
 void *SharedMemory::createSegment(const std::string &descriptor,
                                   size_t sizeBytes) {
@@ -38,16 +46,11 @@ void *SharedMemory::createSegment(const std::string &descriptor,
                              std::to_string(GetLastError()));
   }
 
-  // Note: To keep the handle alive on Windows, we'd normally store it.
-  // However, if we just want the memory to stay around while Go connects,
-  // we should ideally keep the handle open. For simplicity in this IPC model
-  // where Go scheduler might open it momentarily, we will leak the handle or
-  // expect closeSegment to find it? Actually, on Windows, if we close the
-  // handle but keep the view mapped, the system keeps the mapping object alive
-  // until the view is unmapped. BUT another process can't open it by name if
-  // there are no open handles to the name! So we must hold the handle. For a
-  // robust cross-process implementation, we would return a struct. Let's just
-  // store it in a static map or similar, or just leak it for the demo.
+  // Store the handle to keep it alive and prevent leaks
+  {
+    std::lock_guard<std::mutex> lock(handle_mutex);
+    active_handles[descriptor] = hMapFile;
+  }
   return pBuf;
 #else
   int fd = shm_open(descriptor.c_str(), O_CREAT | O_RDWR, 0666);
@@ -91,6 +94,11 @@ void *SharedMemory::openSegment(const std::string &descriptor,
                              std::to_string(GetLastError()));
   }
 
+  {
+    std::lock_guard<std::mutex> lock(handle_mutex);
+    active_handles[descriptor] = hMapFile;
+  }
+
   return pBuf;
 #else
   int fd = shm_open(descriptor.c_str(), O_RDWR, 0666);
@@ -113,7 +121,14 @@ void SharedMemory::closeSegment(const std::string &descriptor, void *ptr,
                                 size_t sizeBytes) {
 #ifdef _WIN32
   UnmapViewOfFile(ptr);
-  // Normally we'd also close the original handle here.
+  {
+    std::lock_guard<std::mutex> lock(handle_mutex);
+    auto it = active_handles.find(descriptor);
+    if (it != active_handles.end()) {
+      CloseHandle(it->second);
+      active_handles.erase(it);
+    }
+  }
 #else
   munmap(ptr, sizeBytes);
 #endif

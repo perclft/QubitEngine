@@ -129,6 +129,17 @@ private:
   std::vector<CompiledGate>
   reorder_and_fuse(const std::vector<CompiledGate> &gates, int num_qubits);
 
+  // New Generalized Tensor Network capabilities
+  std::vector<Complex> kronecker_product(const std::vector<Complex> &A,
+                                         const std::vector<Complex> &B,
+                                         int dimA, int dimB);
+
+  std::vector<Complex> matrix_multiply(const std::vector<Complex> &A,
+                                       const std::vector<Complex> &B, int dim);
+
+  std::vector<CompiledGate>
+  fuse_tensor_network(const std::vector<CompiledGate> &gates);
+
   int count_fused_blocks(const std::vector<CompiledGate> &gates);
 };
 

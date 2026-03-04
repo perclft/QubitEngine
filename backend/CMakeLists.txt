@@ -75,6 +75,7 @@ find_package(gflags CONFIG REQUIRED)
 find_package(glog CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(Eigen3 CONFIG REQUIRED)
+find_package(redis++ CONFIG REQUIRED)
 
 # --- GPU Acceleration (CUDA) ---
 option(ENABLE_CUDA "Enable CUDA GPU Acceleration" ON)
@@ -295,6 +296,7 @@ target_link_libraries(qubit_engine
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
     spdlog::spdlog
+    redis++::redis++
 )
 
 # =================================================================

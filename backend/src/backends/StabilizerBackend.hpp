@@ -50,8 +50,8 @@ public:
 
   // ID and Device Info
   std::string getBackendType() const { return "Stabilizer"; }
-  int getRank() const { return 0; }
   int getSize() const { return 1; }
+  size_t getNumQubits() const { return num_qubits_; }
 
 private:
   size_t num_qubits_;

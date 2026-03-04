@@ -11,7 +11,8 @@
     "glog",
     "pybind11",
     "spdlog",
-    "eigen3"
+    "eigen3",
+    "redis-plus-plus"
   ],
   "builtin-baseline": "ab2977be50c702126336e5088f4836060733c899"
 }
