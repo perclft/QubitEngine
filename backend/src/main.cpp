@@ -11,7 +11,6 @@
 #include <sw/redis++/redis++.h>
 #include <thread>
 
-
 std::atomic<bool> shutdown_requested(false);
 
 void signalHandler(int signal) {
@@ -98,8 +97,8 @@ int main(int argc, char **argv) {
         auto job = redis.bzpopmax("queue:jobs", 1);
         if (job) {
           spdlog::info("Worker Node {} pulled job ID: {}", world_rank,
-                       job->second);
-          // executeJob(job->second); // Hook into engine cleanly
+                       std::get<1>(*job));
+          // executeJob(std::get<1>(*job)); // Hook into engine cleanly
         }
       }
     } catch (const sw::redis::Error &err) {
