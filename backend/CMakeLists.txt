@@ -222,6 +222,7 @@ add_library(qubit_engine_core STATIC
     src/QuantumRegister.cpp
     src/backends/CpuBackend.cpp
     src/backends/MPSBackend.cpp
+    src/backends/StabilizerBackend.cpp
     src/backends/GPUQuantumRegister.cpp
     src/CircuitOptimizer.cpp
     src/QuantumDifferentiator.cpp
@@ -241,7 +242,13 @@ if(APPLE)
 endif()
 
 if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
-    target_link_libraries(qubit_engine_core PUBLIC CUDA::cudart)
+    if(NOT WIN32)
+        find_package(nccl REQUIRED)
+        target_link_libraries(qubit_engine_core PUBLIC CUDA::cudart nccl::nccl)
+        target_compile_definitions(qubit_engine_core PUBLIC ENABLE_NCCL)
+    else()
+        target_link_libraries(qubit_engine_core PUBLIC CUDA::cudart)
+    endif()
 endif()
 
 if(MPI_FOUND)

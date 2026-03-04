@@ -18,6 +18,13 @@ QuantumJIT::CircuitIR QuantumJIT::compile(
     int num_qubits,
     const std::vector<std::pair<std::string, std::vector<int>>> &gates,
     const std::vector<double> &params) {
+
+  // 1. Fast Path: Check Cache
+  std::string hash_key = compute_hash(num_qubits, gates, params);
+  if (ir_cache_.find(hash_key) != ir_cache_.end()) {
+    return ir_cache_[hash_key];
+  }
+
   CircuitIR ir;
   ir.num_qubits = num_qubits;
   ir.stats.original_gates = gates.size();
@@ -53,7 +60,33 @@ QuantumJIT::CircuitIR QuantumJIT::compile(
   ir.stats.expected_speedup =
       static_cast<double>(ir.stats.original_gates) / ir.stats.optimized_gates;
 
+  // Cache Results
+  ir_cache_[hash_key] = ir;
+
   return ir;
+}
+
+// --- Caching ---
+void QuantumJIT::clear_cache() { ir_cache_.clear(); }
+
+std::string QuantumJIT::compute_hash(
+    int num_qubits,
+    const std::vector<std::pair<std::string, std::vector<int>>> &gates,
+    const std::vector<double> &params) {
+
+  std::string hash = std::to_string(num_qubits) + "|";
+  for (size_t i = 0; i < gates.size(); ++i) {
+    hash += gates[i].first;
+    for (int q : gates[i].second) {
+      hash += std::to_string(q);
+    }
+    if (i < params.size()) {
+      // Round parameters slightly to catch FP inaccuracies near Pi
+      hash += std::to_string(std::round(params[i] * 1e6) / 1e6);
+    }
+    hash += "_";
+  }
+  return hash;
 }
 
 // --- Build Gate ---
@@ -190,8 +223,8 @@ QuantumJIT::fuse_single_qubit_gates(const std::vector<CompiledGate> &gates) {
     }
   }
 
-  for (auto &[q, gate] : pending) {
-    result.push_back(gate);
+  for (const auto &pair : pending) {
+    result.push_back(pair.second);
   }
 
   return result;

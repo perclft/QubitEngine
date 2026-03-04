@@ -10,3 +10,4 @@ qubit_engine.egg-info/top_level.txt
 qubit_engine/adapters/__init__.py
 qubit_engine/adapters/qiskit_adapter.py
 tests/test_qiskit_adapter.py
+tests/test_surf_code.py

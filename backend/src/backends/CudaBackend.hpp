@@ -6,6 +6,15 @@
 #include <string>
 #include <vector>
 
+// Distributed & Accelerated Comm Libraries
+#ifdef MPI_ENABLED
+#include <mpi.h>
+#endif
+
+#ifdef ENABLE_NCCL
+#include <nccl.h>
+#endif
+
 namespace qubit_engine {
 
 class CudaBackend : public IQuantumBackend {
@@ -42,12 +51,19 @@ public:
   std::vector<Complex> getStateVector() const override;
 
   // --- Distributed Helpers ---
-  int getRank() const override { return 0; }
-  int getSize() const override { return 1; }
+  int getRank() const override { return mpi_rank_; }
+  int getSize() const override { return mpi_size_; }
 
 private:
   size_t num_qubits_;
   void *device_state_; // Pointer to GPU memory
+
+  // Distributed Sharding
+#ifdef ENABLE_NCCL
+  ncclComm_t nccl_comm_ = nullptr;
+#endif
+  int mpi_rank_ = 0;
+  int mpi_size_ = 1;
 
   // Internal helpers
   void initializeCuda();

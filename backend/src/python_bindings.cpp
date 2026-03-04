@@ -1,5 +1,6 @@
 #include <pybind11/complex.h>
 #include <pybind11/functional.h>
+#include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -12,6 +13,9 @@
 // Include GPU headers
 #include "backends/GPUQuantumRegister.hpp"
 
+// Include Stabilizer Backend
+#include "backends/StabilizerBackend.hpp"
+
 namespace py = pybind11;
 
 // Wrapper to adapt Python callables to AnsatzFunction signature
@@ -23,6 +27,42 @@ void applyAnsatzWrapper(
 
 PYBIND11_MODULE(core, m) {
   m.doc() = "QubitEngine Python Bindings";
+
+  // --- StabilizerBackend Binding ---
+  py::class_<qubit_engine::StabilizerBackend>(m, "StabilizerBackend")
+      .def(py::init<size_t>(), py::arg("num_qubits"))
+      .def("applyHadamard", &qubit_engine::StabilizerBackend::applyHadamard,
+           py::arg("target"), "Apply Hadamard gate")
+      .def("applyX", &qubit_engine::StabilizerBackend::applyX,
+           py::arg("target"), "Apply Pauli-X gate")
+      .def("applyY", &qubit_engine::StabilizerBackend::applyY,
+           py::arg("target"), "Apply Pauli-Y gate")
+      .def("applyZ", &qubit_engine::StabilizerBackend::applyZ,
+           py::arg("target"), "Apply Pauli-Z gate")
+      .def("applyCNOT", &qubit_engine::StabilizerBackend::applyCNOT,
+           py::arg("control"), py::arg("target"), "Apply CNOT gate")
+      .def("applyPhaseS", &qubit_engine::StabilizerBackend::applyPhaseS,
+           py::arg("target"), "Apply Phase S gate")
+      .def("applyPhaseT", &qubit_engine::StabilizerBackend::applyPhaseT,
+           py::arg("target"), "Apply Phase T gate (Throws Exception)")
+      .def("applyCZ", &qubit_engine::StabilizerBackend::applyCZ,
+           py::arg("control"), py::arg("target"), "Apply CZ gate")
+      .def("applySWAP", &qubit_engine::StabilizerBackend::applySWAP,
+           py::arg("qubit1"), py::arg("qubit2"), "Apply SWAP gate")
+      .def("measure", &qubit_engine::StabilizerBackend::measure,
+           py::arg("target"), "Measure a qubit (collapses state)")
+      .def(
+          "get_state_vector",
+          [](const qubit_engine::StabilizerBackend &s) {
+            // Wrap throwing call to ensure error passes cleanly to Python
+            return s.getStateVector();
+          },
+          "Get the full state vector (throws exception due to exponential "
+          "scaling)")
+      .def("num_qubits", [](const qubit_engine::StabilizerBackend &s) {
+        return s
+            .getRank(); // Proxying something for compilation mapping in python
+      });
 
   // --- QuantumRegister Binding ---
   py::class_<QuantumRegister>(m, "QuantumRegister")

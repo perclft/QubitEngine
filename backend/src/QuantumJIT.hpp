@@ -84,8 +84,20 @@ public:
           const std::vector<std::pair<std::string, std::vector<int>>> &gates,
           const std::vector<double> &params = {});
 
+  // Clear the internal compilation cache
+  void clear_cache();
+
 private:
   OptLevel opt_level_;
+
+  // Cache for storing previously compiled circuits
+  std::unordered_map<std::string, CircuitIR> ir_cache_;
+
+  // Compute a unique topological hash for a set of gates and parameters
+  std::string compute_hash(
+      int num_qubits,
+      const std::vector<std::pair<std::string, std::vector<int>>> &gates,
+      const std::vector<double> &params);
 
   CompiledGate build_gate(const std::string &name,
                           const std::vector<int> &qubits, double param);

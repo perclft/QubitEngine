@@ -2,7 +2,6 @@
 #include <iostream>
 #include <stdexcept>
 
-
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -49,6 +48,7 @@ void *SharedMemory::createSegment(const std::string &descriptor,
   // there are no open handles to the name! So we must hold the handle. For a
   // robust cross-process implementation, we would return a struct. Let's just
   // store it in a static map or similar, or just leak it for the demo.
+  return pBuf;
 #else
   int fd = shm_open(descriptor.c_str(), O_CREAT | O_RDWR, 0666);
   if (fd == -1) {
@@ -69,7 +69,6 @@ void *SharedMemory::createSegment(const std::string &descriptor,
 
   return ptr;
 #endif
-  return pBuf; // Windows
 }
 
 void *SharedMemory::openSegment(const std::string &descriptor,
