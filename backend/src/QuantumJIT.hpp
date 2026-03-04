@@ -12,6 +12,7 @@
 #define M_PI 3.14159265358979323846
 #endif
 #include <complex>
+#include <list>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -78,6 +79,9 @@ public:
 
   QuantumJIT(OptLevel level = O2) : opt_level_(level) {}
 
+  // Set the maximum number of circuits to cache
+  void set_max_cache_size(size_t size) { max_cache_size_ = size; }
+
   // Compile a circuit from gate list
   CircuitIR
   compile(int num_qubits,
@@ -89,9 +93,12 @@ public:
 
 private:
   OptLevel opt_level_;
+  size_t max_cache_size_{1000}; // Default bounding to prevent memory leak
 
-  // Cache for storing previously compiled circuits
-  std::unordered_map<std::string, CircuitIR> ir_cache_;
+  // Cache for storing previously compiled circuits (LRU eviction)
+  std::list<std::pair<std::string, CircuitIR>> ir_cache_list_;
+  std::unordered_map<std::string, decltype(ir_cache_list_)::iterator>
+      ir_cache_map_;
 
   // Compute a unique topological hash for a set of gates and parameters
   std::string compute_hash(

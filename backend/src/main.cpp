@@ -10,7 +10,6 @@
 #include <string>
 #include <thread>
 
-
 std::atomic<bool> shutdown_requested(false);
 
 void signalHandler(int signal) {
@@ -83,7 +82,13 @@ int main(int argc, char **argv) {
     // Simple keep-alive for workers until Shutdown
     // Real implementation would have a receive loop here
     while (!shutdown_requested) {
-      std::this_thread::sleep_for(std::chrono::seconds(1));
+      int flag = 0;
+      MPI_Status status;
+      MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
+      if (flag) {
+        // A message is ready! Further implementation would receive it here.
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
   }
 

@@ -104,7 +104,7 @@ func NewSchedulerServer(rdb *redis.Client, engineAddr string) *SchedulerServer {
 		rdb:          rdb,
 		engineAddr:   engineAddr,
 		workerCancel: make(map[string]context.CancelFunc),
-		workerCount:  10, // Bounded execution
+		workerCount:  1000, // Bounded execution
 	}
 }
 
@@ -119,9 +119,7 @@ func (s *SchedulerServer) ConnectEngine(ctx context.Context) error {
 }
 
 func (s *SchedulerServer) StartWorkers(ctx context.Context) {
-	for i := 0; i < s.workerCount; i++ {
-		go s.workerLoop(ctx)
-	}
+	go s.dispatcherLoop(ctx)
 }
 
 // ------------------------------------------------------------------
@@ -369,7 +367,9 @@ func (s *SchedulerServer) StreamJobResults(handle *pb.JobHandle, stream pb.Quant
 // Background Job Processor
 // ------------------------------------------------------------------
 
-func (s *SchedulerServer) workerLoop(ctx context.Context) {
+func (s *SchedulerServer) dispatcherLoop(ctx context.Context) {
+	sem := make(chan struct{}, s.workerCount)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -384,7 +384,15 @@ func (s *SchedulerServer) workerLoop(ctx context.Context) {
 		}
 
 		jobID := result[0].Member.(string)
-		s.processJobByID(ctx, jobID)
+
+		// Acquire semaphore token
+		sem <- struct{}{}
+
+		// Spawn a dynamic worker
+		go func(id string) {
+			defer func() { <-sem }()
+			s.processJobByID(ctx, id)
+		}(jobID)
 	}
 }
 
