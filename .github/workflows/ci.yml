@@ -94,7 +94,7 @@ jobs:
             vcpkg-${{ runner.os }}-arm64-
 
       - name: Install build tools
-        run: brew install ninja autoconf autoconf-archive automake libtool pkg-config || true
+        run: brew install ninja autoconf autoconf-archive automake libtool pkg-config libomp || true
 
       - name: Setup VCPKG
         run: |
