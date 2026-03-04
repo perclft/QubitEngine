@@ -301,6 +301,7 @@ func (s *SchedulerServer) StreamJobResults(handle *pb.JobHandle, stream pb.Quant
 
 	log.Printf("📡 Client streaming results for job: %s", jobID)
 	redisKey := "stream:results:" + jobID
+	lastID := "0" // Track stream offset
 
 	for {
 		select {
@@ -310,17 +311,27 @@ func (s *SchedulerServer) StreamJobResults(handle *pb.JobHandle, stream pb.Quant
 		default:
 		}
 
-		// LPop instead of BLPop for miniredis compatibility
-		result, err := s.rdb.LPop(stream.Context(), redisKey).Result()
-		if err == redis.Nil {
-			time.Sleep(100 * time.Millisecond)
+		// XRead Block offers true zero-latency backpressure without sleep-loops
+		streams, err := s.rdb.XRead(stream.Context(), &redis.XReadArgs{
+			Streams: []string{redisKey, lastID},
+			Block:   2 * time.Second,
+			Count:   1,
+		}).Result()
+		if err == redis.Nil || len(streams) == 0 {
 			continue // try again
 		}
 		if err != nil {
 			return status.Errorf(codes.Internal, "redis stream error: %v", err)
 		}
 
-		data := result
+		msg := streams[0].Messages[0]
+		lastID = msg.ID
+
+		data, ok := msg.Values["data"].(string)
+		if !ok {
+			continue
+		}
+
 		if data == "EOF" {
 			// Job finished
 			return nil
@@ -413,7 +424,10 @@ func (s *SchedulerServer) processJobByID(ctx context.Context, jobID string) {
 	s.saveJob(ctx, &job)
 
 	// Mark stream as finished
-	s.rdb.RPush(ctx, "stream:results:"+jobID, "EOF")
+	s.rdb.XAdd(ctx, &redis.XAddArgs{
+		Stream: "stream:results:" + jobID,
+		Values: map[string]interface{}{"data": "EOF"},
+	})
 	s.rdb.Expire(ctx, "stream:results:"+jobID, 1*time.Hour)
 
 	slog.Info("Job completed", "job_id", jobID, "state", job.State)
@@ -443,9 +457,12 @@ func (s *SchedulerServer) executeOnEngine(ctx context.Context, job *Job) error {
 		Measurements: measurements,
 	}
 
-	// Spill stream backpressure to Redis
+	// Spill stream backpressure to Redis Streams
 	resultBytes, _ := json.Marshal(result)
-	s.rdb.RPush(ctx, "stream:results:"+job.ID, string(resultBytes))
+	s.rdb.XAdd(ctx, &redis.XAddArgs{
+		Stream: "stream:results:" + job.ID,
+		Values: map[string]interface{}{"data": string(resultBytes)},
+	})
 	s.rdb.Expire(ctx, "stream:results:"+job.ID, 1*time.Hour)
 
 	return nil

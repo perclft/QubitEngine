@@ -47,6 +47,13 @@ message CircuitRequest {
     REAL_IBM_Q = 2; // Future use
   }
   ExecutionBackend execution_backend = 4;
+
+  enum MeasurementStrategy {
+    FULL_STATE = 0;
+    SPARSE_STATE = 1;
+    EXPECTATION_VALUES = 2;
+  }
+  MeasurementStrategy measurement_strategy = 5;
 }
 
 message GateOperation {
@@ -100,6 +107,10 @@ message StateResponse {
 
   // Identity of the server (Hostname/Pod ID) that processed this step
   string server_id = 3;
+
+  // Sparse representations if Strategy != FULL_STATE
+  repeated Measurement sparse_states = 4;
+  repeated double expectation_values = 5;
 }
 
 message Measurement {
@@ -112,12 +123,17 @@ message Measurement {
 // VQE / Chemistry Messages
 // ------------------------------------------------------------------
 
+message PauliTerm {
+    string pauli_string = 1;
+    double coefficient = 2;
+}
+
 message VQERequest {
     enum Molecule {
         H2 = 0;   // Hydrogen molecule
         LiH = 1;  // Lithium Hydride
     }
-    Molecule molecule = 1;
+    Molecule molecule = 1 [deprecated = true];
     int32 max_iterations = 2;
     double learning_rate = 3; // For Gradient Descent
 
@@ -126,6 +142,8 @@ message VQERequest {
         GRADIENT_DESCENT = 1; // Native Differentiable Simulation (Parameter Shift)
     }
     OptimizerType optimizer_type = 4;
+
+    repeated PauliTerm observables = 5;
 }
 
 message VQEResponse {

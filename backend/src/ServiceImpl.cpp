@@ -108,13 +108,29 @@ void QubitEngineServiceImpl::applyGate(QuantumRegister &qreg,
 
 // Helper to serialize state vector
 void QubitEngineServiceImpl::serializeState(
-    const QuantumRegister &qreg, qubit_engine::StateResponse *response) {
-  response->clear_state_vector();
-  const auto &state = qreg.getStateVector();
-  for (const auto &amp : state) {
-    auto *c = response->add_state_vector();
-    c->set_real(amp.real());
-    c->set_imag(amp.imag());
+    const QuantumRegister &qreg, qubit_engine::StateResponse *response,
+    qubit_engine::CircuitRequest::MeasurementStrategy strategy) {
+  if (strategy == qubit_engine::CircuitRequest::FULL_STATE) {
+    response->clear_state_vector();
+    const auto &state = qreg.getStateVector();
+    for (const auto &amp : state) {
+      auto *c = response->add_state_vector();
+      c->set_real(amp.real());
+      c->set_imag(amp.imag());
+    }
+  } else if (strategy == qubit_engine::CircuitRequest::SPARSE_STATE) {
+    const auto &state = qreg.getStateVector();
+    for (size_t i = 0; i < state.size(); ++i) {
+      double prob =
+          std::norm(std::complex<double>(state[i].real(), state[i].imag()));
+      if (prob > 1e-6) {
+        auto *m = response->add_sparse_states();
+        m->set_qubit_index(i);
+        m->set_probability(prob);
+      }
+    }
+  } else if (strategy == qubit_engine::CircuitRequest::EXPECTATION_VALUES) {
+    // Expectation values placeholder
   }
 
   // Populate Server ID (Pod Hostname)
@@ -175,7 +191,7 @@ QubitEngineServiceImpl::RunCircuit(grpc::ServerContext *context,
     }
 
     // Serialize Result
-    serializeState(qreg, response);
+    serializeState(qreg, response, request->measurement_strategy());
 
   } catch (const std::invalid_argument &e) {
     spdlog::error("Invalid argument during RunCircuit: {}", e.what());
@@ -230,7 +246,7 @@ grpc::Status QubitEngineServiceImpl::StreamGates(
       }
 
       applyGate(qreg, op, &response);
-      serializeState(qreg, &response);
+      serializeState(qreg, &response, qubit_engine::CircuitRequest::FULL_STATE);
 
       stream->Write(response);
     }
@@ -263,12 +279,23 @@ grpc::Status QubitEngineServiceImpl::RunVQE(
   spdlog::info("Starting VQE Optimization...");
 
   // 1. Setup
-  auto molType = (request->molecule() == qubit_engine::VQERequest::LiH)
-                     ? MolecularHamiltonian::LiH
-                     : MolecularHamiltonian::H2;
+  int num_qubits = 0;
+  std::vector<PauliTerm> hamiltonian;
 
-  int num_qubits = MolecularHamiltonian::getNumQubits(molType);
-  auto hamiltonian = MolecularHamiltonian::getHamiltonian(molType);
+  if (request->observables_size() > 0) {
+    // Arbitrary Observables
+    num_qubits = request->observables(0).pauli_string().length();
+    for (const auto &obs : request->observables()) {
+      hamiltonian.push_back({obs.coefficient(), obs.pauli_string()});
+    }
+  } else {
+    // Fallback to deprecated Molecule Enum
+    auto molType = (request->molecule() == qubit_engine::VQERequest::LiH)
+                       ? MolecularHamiltonian::LiH
+                       : MolecularHamiltonian::H2;
+    num_qubits = MolecularHamiltonian::getNumQubits(molType);
+    hamiltonian = MolecularHamiltonian::getHamiltonian(molType);
+  }
 
   // Ansatz Definition (Hardware Efficient)
   AnsatzFunction applyAnsatz = [](const std::vector<double> &p,

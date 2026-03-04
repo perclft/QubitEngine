@@ -26,12 +26,7 @@ grpc::Status QubitEngineServiceImpl::VisualizeCircuit(
     }
 
     // B. Populate State Vector
-    const std::vector<Complex> &state = qreg.getStateVector();
-    for (const auto &amp : state) {
-      auto *c = response.add_state_vector();
-      c->set_real(amp.real());
-      c->set_imag(amp.imag());
-    }
+    serializeState(qreg, &response, request->measurement_strategy());
 
     // C. Stream Update
     if (!writer->Write(response)) {

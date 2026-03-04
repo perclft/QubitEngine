@@ -201,9 +201,45 @@ QuantumJIT::fuse_single_qubit_gates(const std::vector<CompiledGate> &gates) {
 std::vector<CompiledGate>
 QuantumJIT::reorder_and_fuse(const std::vector<CompiledGate> &gates,
                              int num_qubits) {
-  // Simplified: just do another pass of fusion
-  // Real implementation would use dependency graph
-  return fuse_single_qubit_gates(gates);
+  std::vector<CompiledGate> result;
+  std::vector<std::vector<CompiledGate>> per_qubit(num_qubits);
+
+  auto flush_all = [&]() {
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
+    for (int q = 0; q < num_qubits; ++q) {
+      if (per_qubit[q].size() > 1) {
+        CompiledGate fused = per_qubit[q][0];
+        for (size_t i = 1; i < per_qubit[q].size(); ++i) {
+          fused.single_matrix =
+              matmul2x2(per_qubit[q][i].single_matrix, fused.single_matrix);
+        }
+        per_qubit[q].clear();
+        per_qubit[q].push_back(fused);
+      }
+    }
+
+    for (int q = 0; q < num_qubits; ++q) {
+      if (!per_qubit[q].empty()) {
+        result.push_back(per_qubit[q][0]);
+        per_qubit[q].clear();
+      }
+    }
+  };
+
+  for (const auto &g : gates) {
+    if (g.type == CompiledGate::SINGLE_QUBIT) {
+      int q = g.target_qubits[0];
+      per_qubit[q].push_back(g);
+    } else {
+      flush_all();
+      result.push_back(g);
+    }
+  }
+  flush_all();
+
+  return result;
 }
 
 // --- Count Fused Blocks ---
