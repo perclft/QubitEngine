@@ -32,6 +32,7 @@ pub enum GrpcEvent {
     VqeUpdate(i32, f64, bool),            // iteration, energy, converged
     Completed(String),
     Error(String),
+    Topology(Vec<(f64, f64)>, Vec<(usize, usize)>), // nodes(x,y), edges(n1, n2)
 }
 
 pub async fn run_circuit(
@@ -216,4 +217,45 @@ pub async fn run_vqe(server_addr: String, tx: mpsc::UnboundedSender<AppEvent>) {
     let _ = tx.send(AppEvent::Grpc(GrpcEvent::Completed(String::from(
         "VQE Optimization Completed!",
     ))));
+}
+
+pub async fn get_topology(server_addr: String, tx: mpsc::UnboundedSender<AppEvent>) {
+    let client_res =
+        crate::api::quantum_compute_client::QuantumComputeClient::connect(server_addr.clone())
+            .await;
+    let mut client = match client_res {
+        Ok(c) => c,
+        Err(e) => {
+            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(format!(
+                "Topology connect error: {}",
+                e
+            ))));
+            return;
+        }
+    };
+
+    let req = tonic::Request::new(crate::api::HardwareTopologyRequest {});
+
+    match client.get_hardware_topology(req).await {
+        Ok(res) => {
+            let topo = res.into_inner();
+            let mut nodes = Vec::new();
+            let mut edges = Vec::new();
+
+            for n in topo.nodes {
+                nodes.push((n.x, n.y));
+            }
+            for e in topo.edges {
+                edges.push((e.node1 as usize, e.node2 as usize));
+            }
+
+            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Topology(nodes, edges)));
+        }
+        Err(e) => {
+            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(format!(
+                "Topology fetch error: {}",
+                e
+            ))));
+        }
+    }
 }

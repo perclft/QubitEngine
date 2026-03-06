@@ -8,7 +8,7 @@ use ratatui::{
     Terminal,
     backend::{Backend, CrosstermBackend},
 };
-use std::{error::Error, fs, io};
+use std::{collections::VecDeque, error::Error, fs, io};
 
 mod framework;
 mod grpc;
@@ -43,10 +43,13 @@ pub struct RootComponent {
     pub circuit_list_state: ratatui::widgets::ListState,
     pub is_executing: bool,
     pub is_vqe: bool,
-    pub execution_log: Vec<String>,
+    pub execution_log: VecDeque<String>,
     pub probabilities: Vec<(String, u64)>,
     pub vqe_history: Vec<(i32, f64)>,
     pub rx: Option<tokio::sync::mpsc::UnboundedReceiver<grpc::GrpcEvent>>,
+    pub current_task: Option<tokio::task::JoinHandle<()>>,
+    pub topology_nodes: Vec<(f64, f64)>,
+    pub topology_edges: Vec<(usize, usize)>,
 }
 
 impl RootComponent {
@@ -88,10 +91,13 @@ impl RootComponent {
             circuit_list_state: state,
             is_executing: false,
             is_vqe: false,
-            execution_log: vec![],
+            execution_log: VecDeque::new(),
             probabilities: vec![],
             vqe_history: vec![],
             rx: None,
+            current_task: None,
+            topology_nodes: vec![],
+            topology_edges: vec![],
         }
     }
 
@@ -155,11 +161,15 @@ impl Component for RootComponent {
                                     let circuit_path =
                                         format!("{}/{}", self.circuits_dir, circuit_file);
 
+                                    if let Some(task) = self.current_task.take() {
+                                        task.abort();
+                                    }
+
                                     let tx = self.engine_tx.clone();
                                     let endpoint = self.endpoint.clone();
-                                    tokio::spawn(async move {
+                                    self.current_task = Some(tokio::spawn(async move {
                                         grpc::run_circuit(endpoint, circuit_path, tx).await;
-                                    });
+                                    }));
                                 }
                             }
                             KeyCode::Char('v') => {
@@ -169,11 +179,29 @@ impl Component for RootComponent {
                                     self.execution_log.clear();
                                     self.vqe_history.clear();
 
+                                    if let Some(task) = self.current_task.take() {
+                                        task.abort();
+                                    }
+
                                     let tx = self.engine_tx.clone();
                                     let endpoint = self.endpoint.clone();
-                                    tokio::spawn(async move {
+                                    self.current_task = Some(tokio::spawn(async move {
                                         grpc::run_vqe(endpoint, tx).await;
-                                    });
+                                    }));
+                                }
+                            }
+                            KeyCode::Char('c') => {
+                                if self.is_executing {
+                                    if let Some(task) = self.current_task.take() {
+                                        task.abort();
+                                    }
+                                    let timestamp =
+                                        chrono::Local::now().format("%H:%M:%S").to_string();
+                                    self.execution_log.push_back(format!(
+                                        "[{}] Canceled active simulation",
+                                        timestamp
+                                    ));
+                                    self.is_executing = false;
                                 }
                             }
                             _ => {}
@@ -185,7 +213,11 @@ impl Component for RootComponent {
                 let timestamp = chrono::Local::now().format("%H:%M:%S").to_string();
                 match grpc_event {
                     grpc::GrpcEvent::Log(msg) => {
-                        self.execution_log.push(format!("[{}] {}", timestamp, msg))
+                        self.execution_log
+                            .push_back(format!("[{}] {}", timestamp, msg));
+                        if self.execution_log.len() > 1000 {
+                            self.execution_log.drain(0..100);
+                        }
                     }
                     grpc::GrpcEvent::Wavefunction(state) => {
                         let mut sorted: Vec<_> = state.clone();
@@ -202,24 +234,47 @@ impl Component for RootComponent {
                             probs.push((format!("|{}>", idx), p as u64));
                         }
                         self.probabilities = probs;
-                        self.execution_log.push(format!(
+                        self.execution_log.push_back(format!(
                             "[{}] Wavefunction updated (top amplitudes extracted)",
                             timestamp
                         ));
+                        if self.execution_log.len() > 1000 {
+                            self.execution_log.drain(0..100);
+                        }
                     }
                     grpc::GrpcEvent::VqeUpdate(iteration, energy, converged) => {
                         self.vqe_history.push((*iteration, *energy));
-                        self.execution_log.push(format!(
+                        self.execution_log.push_back(format!(
                             "[{}] VQE Iteration {}: Energy = {:.6} Hartrees{}",
                             timestamp,
                             iteration,
                             energy,
                             if *converged { " (CONVERGED)" } else { "" }
                         ));
+                        if self.execution_log.len() > 1000 {
+                            self.execution_log.drain(0..100);
+                        }
                     }
                     grpc::GrpcEvent::Completed(msg) | grpc::GrpcEvent::Error(msg) => {
-                        self.execution_log.push(format!("[{}] {}", timestamp, msg));
+                        self.execution_log
+                            .push_back(format!("[{}] {}", timestamp, msg));
+                        if self.execution_log.len() > 1000 {
+                            self.execution_log.drain(0..100);
+                        }
                         self.is_executing = false;
+                        self.current_task = None;
+                    }
+                    grpc::GrpcEvent::Topology(nodes, edges) => {
+                        self.topology_nodes = nodes.clone();
+                        self.topology_edges = edges.clone();
+                        self.execution_log.push_back(format!(
+                            "[{}] Loaded hardware topology diagram ({} nodes)",
+                            timestamp,
+                            nodes.len()
+                        ));
+                        if self.execution_log.len() > 1000 {
+                            self.execution_log.drain(0..100);
+                        }
                     }
                 }
             }
@@ -246,8 +301,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     let mut engine = TuiEngine::new();
-    let root_component =
-        RootComponent::new(args.endpoint, args.circuits_dir, engine.get_grpc_sender());
+    let root_component = RootComponent::new(
+        args.endpoint.clone(),
+        args.circuits_dir,
+        engine.get_grpc_sender(),
+    );
+
+    let tx = engine.get_grpc_sender();
+    let endpoint = args.endpoint.clone();
+    tokio::spawn(async move {
+        grpc::get_topology(endpoint, tx).await;
+    });
 
     engine.start();
     let res = run_app(&mut terminal, &mut engine, root_component).await;
@@ -290,6 +354,9 @@ where
                 if key.code == crossterm::event::KeyCode::Char('q')
                     || key.code == crossterm::event::KeyCode::Esc
                 {
+                    if let Some(task) = root_component.current_task.take() {
+                        task.abort();
+                    }
                     break;
                 }
             }

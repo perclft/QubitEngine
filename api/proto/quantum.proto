@@ -29,6 +29,9 @@ service QuantumCompute {
 
   // VQE Simulation for Quantum Chemistry
   rpc RunVQE (VQERequest) returns (stream VQEResponse) {}
+
+  // Fetch Hardware Topology for Visualization
+  rpc GetHardwareTopology (HardwareTopologyRequest) returns (HardwareTopologyResponse) {}
 }
 
 // ------------------------------------------------------------------
@@ -155,4 +158,28 @@ message VQEResponse {
     double energy = 2;        // Expected energy in Hartrees
     repeated double parameters = 3; // Current ansatz parameters (angles)
     bool converged = 4;
+}
+
+// ------------------------------------------------------------------
+// Hardware Topology Messages
+// ------------------------------------------------------------------
+
+message HardwareTopologyRequest {
+    // Empty for now, could specify backend types later
+}
+
+message QubitNode {
+    int32 id = 1;
+    double x = 2;
+    double y = 3;
+}
+
+message CouplerEdge {
+    int32 node1 = 1;
+    int32 node2 = 2;
+}
+
+message HardwareTopologyResponse {
+    repeated QubitNode nodes = 1;
+    repeated CouplerEdge edges = 2;
 }

@@ -517,3 +517,48 @@ grpc::Status QubitEngineServiceImpl::RunVQE(
 
   return grpc::Status::OK;
 }
+
+// -----------------------------------------------------------------
+// Phase 2: Dynamic Hardware Topology
+// -----------------------------------------------------------------
+
+grpc::Status QubitEngineServiceImpl::GetHardwareTopology(
+    grpc::ServerContext *context,
+    const qubit_engine::HardwareTopologyRequest *request,
+    qubit_engine::HardwareTopologyResponse *response) {
+
+  spdlog::info("Serving GetHardwareTopology request...");
+
+  // Qubit coordinates grid mapping (3x3 mock Heavy-Hex Lattice)
+  double spacing = 20.0;
+  for (int row = 0; row < 3; ++row) {
+    for (int col = 0; col < 3; ++col) {
+      auto *node = response->add_nodes();
+      node->set_id(row * 3 + col);
+      node->set_x(10.0 + col * spacing);
+      node->set_y(10.0 + row * spacing);
+    }
+  }
+
+  // Draw couplers (Horizontal lines)
+  auto addEdge = [&](int n1, int n2) {
+    auto *edge = response->add_edges();
+    edge->set_node1(n1);
+    edge->set_node2(n2);
+  };
+
+  addEdge(0, 1);
+  addEdge(1, 2);
+  addEdge(3, 4);
+  addEdge(4, 5);
+  addEdge(6, 7);
+  addEdge(7, 8);
+
+  // Vertical connections (Couplers)
+  addEdge(0, 3);
+  addEdge(2, 5);
+  addEdge(3, 6);
+  addEdge(5, 8);
+
+  return grpc::Status::OK;
+}

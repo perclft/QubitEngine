@@ -129,7 +129,8 @@ fn draw_execution_view(f: &mut Frame, app: &mut RootComponent, area: Rect) {
 
     if app.is_vqe {
         if app.vqe_history.is_empty() {
-            let content = app.execution_log.join("\n");
+            let log_vec: Vec<String> = app.execution_log.iter().cloned().collect();
+            let content = log_vec.join("\n");
             let p =
                 Paragraph::new(content).block(Block::default().title(title).borders(Borders::ALL));
             f.render_widget(p, area);
@@ -243,10 +244,11 @@ fn draw_execution_view(f: &mut Frame, app: &mut RootComponent, area: Rect) {
                 if app.is_executing {
                     "Connecting...".to_string()
                 } else {
-                    "Select a circuit and press Enter to execute.\nPress 'v' to run VQE optimization on H2.\nPress 'q' to quit.".to_string()
+                    "Select a circuit and press Enter to execute.\nPress 'v' to run VQE optimization on H2.\nPress 'c' to cancel.\nPress 'q' to quit.".to_string()
                 }
             } else {
-                app.execution_log.join("\n")
+                let log_vec: Vec<String> = app.execution_log.iter().cloned().collect();
+                log_vec.join("\n")
             };
             let p =
                 Paragraph::new(content).block(Block::default().title(title).borders(Borders::ALL));
@@ -277,7 +279,7 @@ fn draw_execution_view(f: &mut Frame, app: &mut RootComponent, area: Rect) {
     }
 }
 
-fn draw_topology_view(f: &mut Frame, _app: &mut RootComponent, area: Rect) {
+fn draw_topology_view(f: &mut Frame, app: &mut RootComponent, area: Rect) {
     let canvas = Canvas::default()
         .block(
             Block::default()
@@ -286,97 +288,23 @@ fn draw_topology_view(f: &mut Frame, _app: &mut RootComponent, area: Rect) {
         )
         .marker(symbols::Marker::Braille)
         .paint(|ctx| {
-            // Draw a mock 3x3 heavy-hex lattice layout
-            let mut qubits = vec![];
-
-            // Qubit coordinates grid mapping
-            let spacing = 20.0;
-            for row in 0..3 {
-                for col in 0..3 {
-                    let x = 10.0 + (col as f64) * spacing;
-                    let y = 10.0 + (row as f64) * spacing;
-                    qubits.push((x, y));
+            // Draw dynamic hardware topology from gRPC
+            for &(n1, n2) in &app.topology_edges {
+                if let (Some(&(x1, y1)), Some(&(x2, y2))) =
+                    (app.topology_nodes.get(n1), app.topology_nodes.get(n2))
+                {
+                    ctx.draw(&CanvasLine {
+                        x1,
+                        y1,
+                        x2,
+                        y2,
+                        color: Color::Gray,
+                    });
                 }
             }
 
-            // Draw couplers (lines)
-            ctx.draw(&CanvasLine {
-                x1: qubits[0].0,
-                y1: qubits[0].1,
-                x2: qubits[1].0,
-                y2: qubits[1].1,
-                color: Color::Gray,
-            });
-            ctx.draw(&CanvasLine {
-                x1: qubits[1].0,
-                y1: qubits[1].1,
-                x2: qubits[2].0,
-                y2: qubits[2].1,
-                color: Color::Gray,
-            });
-
-            ctx.draw(&CanvasLine {
-                x1: qubits[3].0,
-                y1: qubits[3].1,
-                x2: qubits[4].0,
-                y2: qubits[4].1,
-                color: Color::Gray,
-            });
-            ctx.draw(&CanvasLine {
-                x1: qubits[4].0,
-                y1: qubits[4].1,
-                x2: qubits[5].0,
-                y2: qubits[5].1,
-                color: Color::Gray,
-            });
-
-            ctx.draw(&CanvasLine {
-                x1: qubits[6].0,
-                y1: qubits[6].1,
-                x2: qubits[7].0,
-                y2: qubits[7].1,
-                color: Color::Gray,
-            });
-            ctx.draw(&CanvasLine {
-                x1: qubits[7].0,
-                y1: qubits[7].1,
-                x2: qubits[8].0,
-                y2: qubits[8].1,
-                color: Color::Gray,
-            });
-
-            // Vertical connections (Couplers)
-            ctx.draw(&CanvasLine {
-                x1: qubits[0].0,
-                y1: qubits[0].1,
-                x2: qubits[3].0,
-                y2: qubits[3].1,
-                color: Color::DarkGray,
-            });
-            ctx.draw(&CanvasLine {
-                x1: qubits[2].0,
-                y1: qubits[2].1,
-                x2: qubits[5].0,
-                y2: qubits[5].1,
-                color: Color::DarkGray,
-            });
-            ctx.draw(&CanvasLine {
-                x1: qubits[3].0,
-                y1: qubits[3].1,
-                x2: qubits[6].0,
-                y2: qubits[6].1,
-                color: Color::DarkGray,
-            });
-            ctx.draw(&CanvasLine {
-                x1: qubits[5].0,
-                y1: qubits[5].1,
-                x2: qubits[8].0,
-                y2: qubits[8].1,
-                color: Color::DarkGray,
-            });
-
             // Draw physical qubits as circles
-            for (i, &(x, y)) in qubits.iter().enumerate() {
+            for (i, &(x, y)) in app.topology_nodes.iter().enumerate() {
                 ctx.draw(&Circle {
                     x,
                     y,
@@ -384,7 +312,6 @@ fn draw_topology_view(f: &mut Frame, _app: &mut RootComponent, area: Rect) {
                     color: Color::Cyan, // Hardware Active
                 });
 
-                // Active highlighting concept could dynamically use app state later.
                 ctx.print(x + 3.0, y - 1.0, format!("Q{}", i));
             }
         })

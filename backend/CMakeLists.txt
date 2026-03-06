@@ -3,8 +3,8 @@ project(QubitEngine)
 
 set(CMAKE_CXX_STANDARD 20)
 
-find_package(gRPC REQUIRED)
-find_package(Protobuf REQUIRED)
+find_package(gRPC CONFIG REQUIRED)
+find_package(Protobuf CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 
@@ -13,7 +13,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
 
 # Hotfix for Abseil headers missing from Protobuf/gRPC include paths on macOS Homebrew
-include_directories(/opt/homebrew/include)
+# include_directories(/opt/homebrew/include)
 
 option(MPI_ENABLED "Enable MPI Distributed Computing" OFF)
 if(MPI_ENABLED)

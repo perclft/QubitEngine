@@ -26,6 +26,11 @@ public:
   RunVQE(grpc::ServerContext *context, const qubit_engine::VQERequest *request,
          grpc::ServerWriter<qubit_engine::VQEResponse> *writer) override;
 
+  grpc::Status GetHardwareTopology(
+      grpc::ServerContext *context,
+      const qubit_engine::HardwareTopologyRequest *request,
+      qubit_engine::HardwareTopologyResponse *response) override;
+
 private:
   void applyGate(qubit_engine::QuantumRegister &qreg,
                  const qubit_engine::GateOperation &op,
