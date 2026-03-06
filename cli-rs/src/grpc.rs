@@ -162,33 +162,34 @@ pub async fn run_circuit(server_addr: String, circuit_path: String, tx: mpsc::Se
 
         // Extract top-10 probabilities using a min-heap (O(N log K) instead of O(N log N))
         let k = 10;
-        // Heap of (probability_u64, label) — min-heap via Reverse so we evict the smallest
+        // Heap of (prob_bits, label) — to_bits() preserves f64 ordering for positive values
+        // and satisfies Ord since it's a u64. We reconstruct the f64 on extraction.
         let mut heap: BinaryHeap<Reverse<(u64, String)>> = BinaryHeap::with_capacity(k + 1);
 
         for (i, c) in state_res.state_vector.iter().enumerate() {
-            let prob = (c.real * c.real + c.imag * c.imag) * 100.0;
-            let prob_u64 = prob as u64;
-            if prob_u64 == 0 {
+            let prob = c.real * c.real + c.imag * c.imag;
+            if prob < 1e-8 {
+                // Configurable noise floor — skip truly negligible amplitudes
                 continue;
             }
-            heap.push(Reverse((prob_u64, format!("|{}>", i))));
+            // to_bits() gives zero-cost Ord-compliant integer without precision loss
+            heap.push(Reverse((prob.to_bits(), format!("|{}>", i))));
             if heap.len() > k {
                 heap.pop(); // evict the smallest
             }
         }
 
-        // Drain into a sorted vec (highest first)
+        // Drain, reconstruct f64 from bits, convert to percentage, sort highest first
         let mut probs: Vec<(String, u64)> = heap
             .into_sorted_vec()
             .into_iter()
             .rev()
-            .map(|Reverse((p, label))| (label, p))
+            .map(|Reverse((bits, label))| (label, (f64::from_bits(bits) * 100.0) as u64))
             .collect();
         probs.sort_by(|a, b| b.1.cmp(&a.1));
 
-        let _ = tx
-            .send(AppEvent::Grpc(GrpcEvent::Wavefunction(probs)))
-            .await;
+        // try_send: don't block the gRPC receiver if the UI channel is full
+        let _ = tx.try_send(AppEvent::Grpc(GrpcEvent::Wavefunction(probs)));
         step += 1;
     }
 
