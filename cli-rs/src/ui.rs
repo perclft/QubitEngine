@@ -141,12 +141,10 @@ fn draw_execution_view(f: &mut Frame, app: &mut RootComponent, area: Rect) {
                 .map(|(i, e)| (*i as f64, *e))
                 .collect();
 
-            let min_energy = data.iter().map(|(_, e)| *e).fold(f64::INFINITY, f64::min);
-            let max_energy = data
-                .iter()
-                .map(|(_, e)| *e)
-                .fold(f64::NEG_INFINITY, f64::max);
-            let max_iter = data.last().map(|(i, _)| *i).unwrap_or(100.0);
+            // Use cached bounds — O(1) reads instead of O(N) folds per frame
+            let min_energy = app.vqe_min_energy;
+            let max_energy = app.vqe_max_energy;
+            let max_iter = app.vqe_max_iter.max(1.0);
 
             let vqe_chunks = Layout::default()
                 .direction(Direction::Vertical)

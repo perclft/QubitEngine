@@ -2,6 +2,8 @@ use crate::api::GateOperation;
 use crate::api::quantum_compute_client::QuantumComputeClient;
 use crate::framework::AppEvent;
 use serde::Deserialize;
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
 use std::fs;
 use tokio::sync::mpsc;
 
@@ -28,43 +30,47 @@ struct OperationDefinition {
 
 pub enum GrpcEvent {
     Log(String),
-    Wavefunction(Vec<(usize, f64, f64)>), // index, real, imag
-    VqeUpdate(i32, f64, bool),            // iteration, energy, converged
+    Wavefunction(Vec<(String, u64)>), // pre-sorted top-K probabilities
+    VqeUpdate(i32, f64, bool),        // iteration, energy, converged
     Completed(String),
     Error(String),
     Topology(Vec<(f64, f64)>, Vec<(usize, usize)>), // nodes(x,y), edges(n1, n2)
 }
 
-pub async fn run_circuit(
-    server_addr: String,
-    circuit_path: String,
-    tx: mpsc::UnboundedSender<AppEvent>,
-) {
-    let _ = tx.send(AppEvent::Grpc(GrpcEvent::Log(format!(
-        "Connecting to {}",
-        server_addr
-    ))));
+pub async fn run_circuit(server_addr: String, circuit_path: String, tx: mpsc::Sender<AppEvent>) {
+    let _ = tx
+        .send(AppEvent::Grpc(GrpcEvent::Log(format!(
+            "Connecting to {}",
+            server_addr
+        ))))
+        .await;
 
     // Connect
     let client_res = QuantumComputeClient::connect(server_addr).await;
     let mut client = match client_res {
         Ok(c) => c,
         Err(e) => {
-            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(format!(
-                "Connection failed: {}",
-                e
-            ))));
+            let _ = tx
+                .send(AppEvent::Grpc(GrpcEvent::Error(format!(
+                    "Connection failed: {}",
+                    e
+                ))))
+                .await;
             return;
         }
     };
 
-    let _ = tx.send(AppEvent::Grpc(GrpcEvent::Log(
-        "Parsing circuit JSON...".to_string(),
-    )));
+    let _ = tx
+        .send(AppEvent::Grpc(GrpcEvent::Log(
+            "Parsing circuit JSON...".to_string(),
+        )))
+        .await;
     let data = match fs::read_to_string(&circuit_path) {
         Ok(data) => data,
         Err(e) => {
-            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(format!("IO Error: {}", e))));
+            let _ = tx
+                .send(AppEvent::Grpc(GrpcEvent::Error(format!("IO Error: {}", e))))
+                .await;
             return;
         }
     };
@@ -72,18 +78,22 @@ pub async fn run_circuit(
     let circuit: CircuitFile = match serde_json::from_str(&data) {
         Ok(cir) => cir,
         Err(e) => {
-            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(format!(
-                "Invalid JSON: {}",
-                e
-            ))));
+            let _ = tx
+                .send(AppEvent::Grpc(GrpcEvent::Error(format!(
+                    "Invalid JSON: {}",
+                    e
+                ))))
+                .await;
             return;
         }
     };
 
-    let _ = tx.send(AppEvent::Grpc(GrpcEvent::Log(format!(
-        "Parsed '{}' ({} qubits)",
-        circuit.name, circuit.qubits
-    ))));
+    let _ = tx
+        .send(AppEvent::Grpc(GrpcEvent::Log(format!(
+            "Parsed '{}' ({} qubits)",
+            circuit.name, circuit.qubits
+        ))))
+        .await;
 
     let mut ops = Vec::new();
     for op in circuit.ops {
@@ -121,52 +131,82 @@ pub async fn run_circuit(
         use_shm: false,
     });
 
-    let _ = tx.send(AppEvent::Grpc(GrpcEvent::Log(String::from(
-        "Requesting Visualization Stream...",
-    ))));
+    let _ = tx
+        .send(AppEvent::Grpc(GrpcEvent::Log(String::from(
+            "Requesting Visualization Stream...",
+        ))))
+        .await;
 
     let res = client.visualize_circuit(req).await;
     let mut stream = match res {
         Ok(s) => s.into_inner(),
         Err(e) => {
-            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(format!(
-                "Stream request failed: {}",
-                e
-            ))));
+            let _ = tx
+                .send(AppEvent::Grpc(GrpcEvent::Error(format!(
+                    "Stream request failed: {}",
+                    e
+                ))))
+                .await;
             return;
         }
     };
 
     let mut step = 1;
     while let Ok(Some(state_res)) = stream.message().await {
-        let _ = tx.send(AppEvent::Grpc(GrpcEvent::Log(format!(
-            "Received step {} wavefunction.",
-            step
-        ))));
+        let _ = tx
+            .send(AppEvent::Grpc(GrpcEvent::Log(format!(
+                "Received step {} wavefunction.",
+                step
+            ))))
+            .await;
 
-        let mut non_zero_amps = Vec::new();
+        // Extract top-10 probabilities using a min-heap (O(N log K) instead of O(N log N))
+        let k = 10;
+        // Heap of (probability_u64, label) — min-heap via Reverse so we evict the smallest
+        let mut heap: BinaryHeap<Reverse<(u64, String)>> = BinaryHeap::with_capacity(k + 1);
+
         for (i, c) in state_res.state_vector.iter().enumerate() {
-            let mag = c.real * c.real + c.imag * c.imag;
-            if mag > 0.0001 {
-                non_zero_amps.push((i, c.real, c.imag));
+            let prob = (c.real * c.real + c.imag * c.imag) * 100.0;
+            let prob_u64 = prob as u64;
+            if prob_u64 == 0 {
+                continue;
+            }
+            heap.push(Reverse((prob_u64, format!("|{}>", i))));
+            if heap.len() > k {
+                heap.pop(); // evict the smallest
             }
         }
 
-        let _ = tx.send(AppEvent::Grpc(GrpcEvent::Wavefunction(non_zero_amps)));
+        // Drain into a sorted vec (highest first)
+        let mut probs: Vec<(String, u64)> = heap
+            .into_sorted_vec()
+            .into_iter()
+            .rev()
+            .map(|Reverse((p, label))| (label, p))
+            .collect();
+        probs.sort_by(|a, b| b.1.cmp(&a.1));
+
+        let _ = tx
+            .send(AppEvent::Grpc(GrpcEvent::Wavefunction(probs)))
+            .await;
         step += 1;
     }
 
-    let _ = tx.send(AppEvent::Grpc(GrpcEvent::Completed(format!(
-        "Simulation Completed ({} steps)",
-        step - 1
-    ))));
+    let _ = tx
+        .send(AppEvent::Grpc(GrpcEvent::Completed(format!(
+            "Simulation Completed ({} steps)",
+            step - 1
+        ))))
+        .await;
 }
 
-pub async fn run_vqe(server_addr: String, tx: mpsc::UnboundedSender<AppEvent>) {
-    let _ = tx.send(AppEvent::Grpc(GrpcEvent::Log(format!(
-        "Connecting to {} for VQE...",
-        server_addr
-    ))));
+pub async fn run_vqe(server_addr: String, tx: mpsc::Sender<AppEvent>) {
+    let _ = tx
+        .send(AppEvent::Grpc(GrpcEvent::Log(format!(
+            "Connecting to {} for VQE...",
+            server_addr
+        ))))
+        .await;
 
     // Connect
     let client_res =
@@ -174,17 +214,21 @@ pub async fn run_vqe(server_addr: String, tx: mpsc::UnboundedSender<AppEvent>) {
     let mut client = match client_res {
         Ok(c) => c,
         Err(e) => {
-            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(format!(
-                "Connection failed: {}",
-                e
-            ))));
+            let _ = tx
+                .send(AppEvent::Grpc(GrpcEvent::Error(format!(
+                    "Connection failed: {}",
+                    e
+                ))))
+                .await;
             return;
         }
     };
 
-    let _ = tx.send(AppEvent::Grpc(GrpcEvent::Log(
-        "Configuring Hydrogen (H2) VQE via Parameter Shift...".to_string(),
-    )));
+    let _ = tx
+        .send(AppEvent::Grpc(GrpcEvent::Log(
+            "Configuring Hydrogen (H2) VQE via Parameter Shift...".to_string(),
+        )))
+        .await;
 
     let req = tonic::Request::new(crate::api::VqeRequest {
         molecule: 0, // H2
@@ -198,38 +242,46 @@ pub async fn run_vqe(server_addr: String, tx: mpsc::UnboundedSender<AppEvent>) {
     let mut stream = match res {
         Ok(s) => s.into_inner(),
         Err(e) => {
-            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(format!(
-                "VQE stream request failed: {}",
-                e
-            ))));
+            let _ = tx
+                .send(AppEvent::Grpc(GrpcEvent::Error(format!(
+                    "VQE stream request failed: {}",
+                    e
+                ))))
+                .await;
             return;
         }
     };
 
     while let Ok(Some(update)) = stream.message().await {
-        let _ = tx.send(AppEvent::Grpc(GrpcEvent::VqeUpdate(
-            update.iteration,
-            update.energy,
-            update.converged,
-        )));
+        let _ = tx
+            .send(AppEvent::Grpc(GrpcEvent::VqeUpdate(
+                update.iteration,
+                update.energy,
+                update.converged,
+            )))
+            .await;
     }
 
-    let _ = tx.send(AppEvent::Grpc(GrpcEvent::Completed(String::from(
-        "VQE Optimization Completed!",
-    ))));
+    let _ = tx
+        .send(AppEvent::Grpc(GrpcEvent::Completed(String::from(
+            "VQE Optimization Completed!",
+        ))))
+        .await;
 }
 
-pub async fn get_topology(server_addr: String, tx: mpsc::UnboundedSender<AppEvent>) {
+pub async fn get_topology(server_addr: String, tx: mpsc::Sender<AppEvent>) {
     let client_res =
         crate::api::quantum_compute_client::QuantumComputeClient::connect(server_addr.clone())
             .await;
     let mut client = match client_res {
         Ok(c) => c,
         Err(e) => {
-            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(format!(
-                "Topology connect error: {}",
-                e
-            ))));
+            let _ = tx
+                .send(AppEvent::Grpc(GrpcEvent::Error(format!(
+                    "Topology connect error: {}",
+                    e
+                ))))
+                .await;
             return;
         }
     };
@@ -249,13 +301,17 @@ pub async fn get_topology(server_addr: String, tx: mpsc::UnboundedSender<AppEven
                 edges.push((e.node1 as usize, e.node2 as usize));
             }
 
-            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Topology(nodes, edges)));
+            let _ = tx
+                .send(AppEvent::Grpc(GrpcEvent::Topology(nodes, edges)))
+                .await;
         }
         Err(e) => {
-            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(format!(
-                "Topology fetch error: {}",
-                e
-            ))));
+            let _ = tx
+                .send(AppEvent::Grpc(GrpcEvent::Error(format!(
+                    "Topology fetch error: {}",
+                    e
+                ))))
+                .await;
         }
     }
 }

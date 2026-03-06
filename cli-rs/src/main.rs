@@ -37,7 +37,7 @@ struct Args {
 pub struct RootComponent {
     pub endpoint: String,
     pub circuits_dir: String,
-    pub engine_tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+    pub engine_tx: tokio::sync::mpsc::Sender<AppEvent>,
     pub active_tab: ActiveTab,
     pub circuits: Vec<String>,
     pub circuit_list_state: ratatui::widgets::ListState,
@@ -46,17 +46,27 @@ pub struct RootComponent {
     pub execution_log: VecDeque<String>,
     pub probabilities: Vec<(String, u64)>,
     pub vqe_history: Vec<(i32, f64)>,
+    pub vqe_min_energy: f64,
+    pub vqe_max_energy: f64,
+    pub vqe_max_iter: f64,
     pub rx: Option<tokio::sync::mpsc::UnboundedReceiver<grpc::GrpcEvent>>,
     pub current_task: Option<tokio::task::JoinHandle<()>>,
     pub topology_nodes: Vec<(f64, f64)>,
     pub topology_edges: Vec<(usize, usize)>,
 }
 
+/// O(1) amortized log cap using VecDeque ring buffer semantics.
+fn cap_log(log: &mut VecDeque<String>) {
+    while log.len() > 1000 {
+        log.pop_front();
+    }
+}
+
 impl RootComponent {
     fn new(
         endpoint: String,
         circuits_dir: String,
-        engine_tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+        engine_tx: tokio::sync::mpsc::Sender<AppEvent>,
     ) -> RootComponent {
         let mut state = ratatui::widgets::ListState::default();
         state.select(Some(0));
@@ -94,6 +104,9 @@ impl RootComponent {
             execution_log: VecDeque::new(),
             probabilities: vec![],
             vqe_history: vec![],
+            vqe_min_energy: f64::INFINITY,
+            vqe_max_energy: f64::NEG_INFINITY,
+            vqe_max_iter: 0.0,
             rx: None,
             current_task: None,
             topology_nodes: vec![],
@@ -178,6 +191,9 @@ impl Component for RootComponent {
                                     self.is_vqe = true;
                                     self.execution_log.clear();
                                     self.vqe_history.clear();
+                                    self.vqe_min_energy = f64::INFINITY;
+                                    self.vqe_max_energy = f64::NEG_INFINITY;
+                                    self.vqe_max_iter = 0.0;
 
                                     if let Some(task) = self.current_task.take() {
                                         task.abort();
@@ -215,34 +231,22 @@ impl Component for RootComponent {
                     grpc::GrpcEvent::Log(msg) => {
                         self.execution_log
                             .push_back(format!("[{}] {}", timestamp, msg));
-                        if self.execution_log.len() > 1000 {
-                            self.execution_log.drain(0..100);
-                        }
+                        cap_log(&mut self.execution_log);
                     }
-                    grpc::GrpcEvent::Wavefunction(state) => {
-                        let mut sorted: Vec<_> = state.clone();
-                        sorted.sort_by(|a, b| {
-                            let pa = a.1 * a.1 + a.2 * a.2;
-                            let pb = b.1 * b.1 + b.2 * b.2;
-                            pb.partial_cmp(&pa).unwrap_or(std::cmp::Ordering::Equal)
-                        });
-
-                        let mut probs = vec![];
-                        // Take top 10 probabilities for charting
-                        for (idx, r, i_c) in sorted.into_iter().take(10) {
-                            let p = (r * r + i_c * i_c) * 100.0;
-                            probs.push((format!("|{}>", idx), p as u64));
-                        }
-                        self.probabilities = probs;
+                    grpc::GrpcEvent::Wavefunction(probs) => {
+                        // Already pre-sorted by BinaryHeap in gRPC task — zero-copy assign
+                        self.probabilities = probs.clone();
                         self.execution_log.push_back(format!(
                             "[{}] Wavefunction updated (top amplitudes extracted)",
                             timestamp
                         ));
-                        if self.execution_log.len() > 1000 {
-                            self.execution_log.drain(0..100);
-                        }
+                        cap_log(&mut self.execution_log);
                     }
                     grpc::GrpcEvent::VqeUpdate(iteration, energy, converged) => {
+                        // Incrementally cache bounds — O(1) instead of O(N) per frame
+                        self.vqe_min_energy = self.vqe_min_energy.min(*energy);
+                        self.vqe_max_energy = self.vqe_max_energy.max(*energy);
+                        self.vqe_max_iter = (*iteration as f64).max(self.vqe_max_iter);
                         self.vqe_history.push((*iteration, *energy));
                         self.execution_log.push_back(format!(
                             "[{}] VQE Iteration {}: Energy = {:.6} Hartrees{}",
@@ -251,16 +255,12 @@ impl Component for RootComponent {
                             energy,
                             if *converged { " (CONVERGED)" } else { "" }
                         ));
-                        if self.execution_log.len() > 1000 {
-                            self.execution_log.drain(0..100);
-                        }
+                        cap_log(&mut self.execution_log);
                     }
                     grpc::GrpcEvent::Completed(msg) | grpc::GrpcEvent::Error(msg) => {
                         self.execution_log
                             .push_back(format!("[{}] {}", timestamp, msg));
-                        if self.execution_log.len() > 1000 {
-                            self.execution_log.drain(0..100);
-                        }
+                        cap_log(&mut self.execution_log);
                         self.is_executing = false;
                         self.current_task = None;
                     }
@@ -272,9 +272,7 @@ impl Component for RootComponent {
                             timestamp,
                             nodes.len()
                         ));
-                        if self.execution_log.len() > 1000 {
-                            self.execution_log.drain(0..100);
-                        }
+                        cap_log(&mut self.execution_log);
                     }
                 }
             }

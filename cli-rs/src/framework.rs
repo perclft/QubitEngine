@@ -18,13 +18,13 @@ pub trait Component {
 }
 
 pub struct TuiEngine {
-    tx: mpsc::UnboundedSender<AppEvent>,
-    rx: mpsc::UnboundedReceiver<AppEvent>,
+    tx: mpsc::Sender<AppEvent>,
+    rx: mpsc::Receiver<AppEvent>,
 }
 
 impl TuiEngine {
     pub fn new() -> Self {
-        let (tx, rx) = mpsc::unbounded_channel();
+        let (tx, rx) = mpsc::channel(1024);
         Self { tx, rx }
     }
 
@@ -34,7 +34,7 @@ impl TuiEngine {
             let mut tick_interval = interval(Duration::from_millis(16)); // ~60 FPS
             loop {
                 tick_interval.tick().await;
-                if tick_tx.send(AppEvent::Tick).is_err() {
+                if tick_tx.send(AppEvent::Tick).await.is_err() {
                     break;
                 }
             }
@@ -44,7 +44,7 @@ impl TuiEngine {
         tokio::spawn(async move {
             let mut reader = EventStream::new();
             while let Some(Ok(event)) = reader.next().await {
-                if input_tx.send(AppEvent::Input(event)).is_err() {
+                if input_tx.send(AppEvent::Input(event)).await.is_err() {
                     break;
                 }
             }
@@ -55,7 +55,7 @@ impl TuiEngine {
         self.rx.recv().await
     }
 
-    pub fn get_grpc_sender(&self) -> mpsc::UnboundedSender<AppEvent> {
+    pub fn get_grpc_sender(&self) -> mpsc::Sender<AppEvent> {
         self.tx.clone()
     }
 }
