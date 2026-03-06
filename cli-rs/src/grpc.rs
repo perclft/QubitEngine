@@ -151,44 +151,43 @@ pub async fn run_circuit(server_addr: String, circuit_path: String, tx: mpsc::Se
         }
     };
 
+    // Hoist heap allocation outside the stream loop to reuse capacity
+    let k = 10;
+    let mut heap: BinaryHeap<Reverse<(u64, usize)>> = BinaryHeap::with_capacity(k + 1);
     let mut step = 1;
+
     while let Ok(Some(state_res)) = stream.message().await {
-        let _ = tx
-            .send(AppEvent::Grpc(GrpcEvent::Log(format!(
-                "Received step {} wavefunction.",
-                step
-            ))))
-            .await;
+        let _ = tx.try_send(AppEvent::Grpc(GrpcEvent::Log(format!(
+            "Received step {} wavefunction.",
+            step
+        ))));
 
-        // Extract top-10 probabilities using a min-heap (O(N log K) instead of O(N log N))
-        let k = 10;
-        // Heap of (prob_bits, label) — to_bits() preserves f64 ordering for positive values
-        // and satisfies Ord since it's a u64. We reconstruct the f64 on extraction.
-        let mut heap: BinaryHeap<Reverse<(u64, String)>> = BinaryHeap::with_capacity(k + 1);
+        heap.clear(); // O(1) clear, retains allocated capacity
 
+        // Hot loop: strictly stack variables, zero heap allocations
         for (i, c) in state_res.state_vector.iter().enumerate() {
             let prob = c.real * c.real + c.imag * c.imag;
             if prob < 1e-8 {
-                // Configurable noise floor — skip truly negligible amplitudes
                 continue;
             }
-            // to_bits() gives zero-cost Ord-compliant integer without precision loss
-            heap.push(Reverse((prob.to_bits(), format!("|{}>", i))));
+            heap.push(Reverse((prob.to_bits(), i)));
             if heap.len() > k {
-                heap.pop(); // evict the smallest
+                heap.pop();
             }
         }
 
-        // Drain, reconstruct f64 from bits, convert to percentage, sort highest first
+        // Drain and perform exactly K string allocations (deferred formatting)
         let mut probs: Vec<(String, u64)> = heap
-            .into_sorted_vec()
-            .into_iter()
-            .rev()
-            .map(|Reverse((bits, label))| (label, (f64::from_bits(bits) * 100.0) as u64))
+            .drain()
+            .map(|Reverse((bits, index))| {
+                (
+                    format!("|{}>", index),
+                    (f64::from_bits(bits) * 100.0) as u64,
+                )
+            })
             .collect();
-        probs.sort_by(|a, b| b.1.cmp(&a.1));
+        probs.sort_unstable_by(|a, b| b.1.cmp(&a.1));
 
-        // try_send: don't block the gRPC receiver if the UI channel is full
         let _ = tx.try_send(AppEvent::Grpc(GrpcEvent::Wavefunction(probs)));
         step += 1;
     }
