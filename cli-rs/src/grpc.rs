@@ -1,9 +1,9 @@
+use crate::api::GateOperation;
 use crate::api::quantum_compute_client::QuantumComputeClient;
-use crate::api::{CircuitRequest, GateOperation};
+use crate::framework::AppEvent;
 use serde::Deserialize;
 use std::fs;
 use tokio::sync::mpsc;
-use tonic::transport::Channel;
 
 #[derive(Deserialize, Debug)]
 struct CircuitFile {
@@ -34,30 +34,36 @@ pub enum GrpcEvent {
     Error(String),
 }
 
-pub async fn run_circuit(server_addr: String, circuit_path: String, tx: mpsc::Sender<GrpcEvent>) {
-    let _ = tx
-        .send(GrpcEvent::Log(format!("Connecting to {}", server_addr)))
-        .await;
+pub async fn run_circuit(
+    server_addr: String,
+    circuit_path: String,
+    tx: mpsc::UnboundedSender<AppEvent>,
+) {
+    let _ = tx.send(AppEvent::Grpc(GrpcEvent::Log(format!(
+        "Connecting to {}",
+        server_addr
+    ))));
 
     // Connect
     let client_res = QuantumComputeClient::connect(server_addr).await;
     let mut client = match client_res {
         Ok(c) => c,
         Err(e) => {
-            let _ = tx
-                .send(GrpcEvent::Error(format!("Connection failed: {}", e)))
-                .await;
+            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(format!(
+                "Connection failed: {}",
+                e
+            ))));
             return;
         }
     };
 
-    let _ = tx
-        .send(GrpcEvent::Log("Parsing circuit JSON...".to_string()))
-        .await;
+    let _ = tx.send(AppEvent::Grpc(GrpcEvent::Log(
+        "Parsing circuit JSON...".to_string(),
+    )));
     let data = match fs::read_to_string(&circuit_path) {
         Ok(data) => data,
         Err(e) => {
-            let _ = tx.send(GrpcEvent::Error(format!("IO Error: {}", e))).await;
+            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(format!("IO Error: {}", e))));
             return;
         }
     };
@@ -65,19 +71,18 @@ pub async fn run_circuit(server_addr: String, circuit_path: String, tx: mpsc::Se
     let circuit: CircuitFile = match serde_json::from_str(&data) {
         Ok(cir) => cir,
         Err(e) => {
-            let _ = tx
-                .send(GrpcEvent::Error(format!("Invalid JSON: {}", e)))
-                .await;
+            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(format!(
+                "Invalid JSON: {}",
+                e
+            ))));
             return;
         }
     };
 
-    let _ = tx
-        .send(GrpcEvent::Log(format!(
-            "Parsed '{}' ({} qubits)",
-            circuit.name, circuit.qubits
-        )))
-        .await;
+    let _ = tx.send(AppEvent::Grpc(GrpcEvent::Log(format!(
+        "Parsed '{}' ({} qubits)",
+        circuit.name, circuit.qubits
+    ))));
 
     let mut ops = Vec::new();
     for op in circuit.ops {
@@ -106,38 +111,37 @@ pub async fn run_circuit(server_addr: String, circuit_path: String, tx: mpsc::Se
         });
     }
 
-    let req = tonic::Request::new(CircuitRequest {
+    let req = tonic::Request::new(crate::api::CircuitRequest {
         num_qubits: circuit.qubits,
         operations: ops,
         noise_probability: 0.0,
         execution_backend: 0,
+        measurement_strategy: 0,
+        use_shm: false,
     });
 
-    let _ = tx
-        .send(GrpcEvent::Log(String::from(
-            "Requesting Visualization Stream...",
-        )))
-        .await;
+    let _ = tx.send(AppEvent::Grpc(GrpcEvent::Log(String::from(
+        "Requesting Visualization Stream...",
+    ))));
 
     let res = client.visualize_circuit(req).await;
     let mut stream = match res {
         Ok(s) => s.into_inner(),
         Err(e) => {
-            let _ = tx
-                .send(GrpcEvent::Error(format!("Stream request failed: {}", e)))
-                .await;
+            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(format!(
+                "Stream request failed: {}",
+                e
+            ))));
             return;
         }
     };
 
     let mut step = 1;
     while let Ok(Some(state_res)) = stream.message().await {
-        let _ = tx
-            .send(GrpcEvent::Log(format!(
-                "Received step {} wavefunction.",
-                step
-            )))
-            .await;
+        let _ = tx.send(AppEvent::Grpc(GrpcEvent::Log(format!(
+            "Received step {} wavefunction.",
+            step
+        ))));
 
         let mut non_zero_amps = Vec::new();
         for (i, c) in state_res.state_vector.iter().enumerate() {
@@ -147,78 +151,69 @@ pub async fn run_circuit(server_addr: String, circuit_path: String, tx: mpsc::Se
             }
         }
 
-        let _ = tx.send(GrpcEvent::Wavefunction(non_zero_amps)).await;
+        let _ = tx.send(AppEvent::Grpc(GrpcEvent::Wavefunction(non_zero_amps)));
         step += 1;
     }
 
-    let _ = tx
-        .send(GrpcEvent::Completed(format!(
-            "Simulation Completed ({} steps)",
-            step - 1
-        )))
-        .await;
+    let _ = tx.send(AppEvent::Grpc(GrpcEvent::Completed(format!(
+        "Simulation Completed ({} steps)",
+        step - 1
+    ))));
 }
 
-pub async fn run_vqe(server_addr: String, tx: mpsc::Sender<GrpcEvent>) {
-    let _ = tx
-        .send(GrpcEvent::Log(format!(
-            "Connecting to {} for VQE...",
-            server_addr
-        )))
-        .await;
+pub async fn run_vqe(server_addr: String, tx: mpsc::UnboundedSender<AppEvent>) {
+    let _ = tx.send(AppEvent::Grpc(GrpcEvent::Log(format!(
+        "Connecting to {} for VQE...",
+        server_addr
+    ))));
 
     // Connect
-    let client_res = QuantumComputeClient::connect(server_addr).await;
+    let client_res =
+        crate::api::quantum_compute_client::QuantumComputeClient::connect(server_addr).await;
     let mut client = match client_res {
         Ok(c) => c,
         Err(e) => {
-            let _ = tx
-                .send(GrpcEvent::Error(format!("Connection failed: {}", e)))
-                .await;
+            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(format!(
+                "Connection failed: {}",
+                e
+            ))));
             return;
         }
     };
 
-    let _ = tx
-        .send(GrpcEvent::Log(
-            "Configuring Hydrogen (H2) VQE via Parameter Shift...".to_string(),
-        ))
-        .await;
+    let _ = tx.send(AppEvent::Grpc(GrpcEvent::Log(
+        "Configuring Hydrogen (H2) VQE via Parameter Shift...".to_string(),
+    )));
 
     let req = tonic::Request::new(crate::api::VqeRequest {
         molecule: 0, // H2
         max_iterations: 100,
-        learning_rate: 0.2, // Faster convergence
-        optimizer_type: 1,  // GRADIENT_DESCENT
+        learning_rate: 0.2,  // Faster convergence
+        optimizer_type: 1,   // GRADIENT_DESCENT
+        observables: vec![], // Added missing observables
     });
 
     let res = client.run_vqe(req).await;
     let mut stream = match res {
         Ok(s) => s.into_inner(),
         Err(e) => {
-            let _ = tx
-                .send(GrpcEvent::Error(format!(
-                    "VQE stream request failed: {}",
-                    e
-                )))
-                .await;
+            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(format!(
+                "VQE stream request failed: {}",
+                e
+            ))));
             return;
         }
     };
 
     while let Ok(Some(update)) = stream.message().await {
-        let _ = tx
-            .send(GrpcEvent::VqeUpdate(
-                update.iteration,
-                update.energy,
-                update.converged,
-            ))
-            .await;
+        let _ = tx.send(AppEvent::Grpc(GrpcEvent::VqeUpdate(
+            update.iteration,
+            update.energy,
+            update.converged,
+        )));
     }
 
-    let _ = tx
-        .send(GrpcEvent::Completed(String::from(
-            "VQE Optimization Completed!",
-        )))
-        .await;
+    let _ = tx.send(AppEvent::Grpc(GrpcEvent::Completed(String::from(
+        "VQE Optimization Completed!",
+    ))));
 }
