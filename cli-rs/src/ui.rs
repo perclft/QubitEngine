@@ -6,14 +6,14 @@ use ratatui::{
     text::{Line, Span},
     widgets::{
         Axis, BarChart, Block, Borders, Chart, Dataset, Gauge, List, ListItem, Paragraph,
-        Sparkline, Tabs,
+        Sparkline, Tabs, Wrap,
         canvas::{Canvas, Circle, Line as CanvasLine},
     },
 };
 
-use crate::{ActiveTab, RootComponent};
+use crate::{ActiveView, RouterComponent};
 
-pub fn draw(f: &mut Frame, app: &mut RootComponent) {
+pub fn draw(f: &mut Frame, app: &mut RouterComponent) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
@@ -31,8 +31,9 @@ pub fn draw(f: &mut Frame, app: &mut RootComponent) {
     draw_header(f, app, chunks[0]);
     draw_tabs(f, app, chunks[1]);
 
-    match app.active_tab {
-        ActiveTab::Simulation => {
+    // FSM view dispatch
+    match app.active_view {
+        ActiveView::Simulation => {
             let body_chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(20), Constraint::Percentage(80)].as_ref())
@@ -41,15 +42,28 @@ pub fn draw(f: &mut Frame, app: &mut RootComponent) {
             draw_circuit_list(f, app, body_chunks[0]);
             draw_execution_view(f, app, body_chunks[1]);
         }
-        ActiveTab::Topology => {
+        ActiveView::Topology => {
             draw_topology_view(f, app, chunks[2]);
+        }
+        ActiveView::Circuit => {
+            draw_circuit_diagram_view(f, app, chunks[2]);
         }
     }
 
     draw_footer(f, chunks[3]);
 }
 
-fn draw_header(f: &mut Frame, app: &RootComponent, area: Rect) {
+fn draw_header(f: &mut Frame, app: &RouterComponent, area: Rect) {
+    let status = if app.is_executing {
+        if app.is_vqe {
+            " ● VQE Running"
+        } else {
+            " ● Simulating"
+        }
+    } else {
+        " ○ Idle"
+    };
+
     let title = Paragraph::new(Line::from(vec![
         Span::styled(
             " QubitEngine",
@@ -58,6 +72,14 @@ fn draw_header(f: &mut Frame, app: &RootComponent, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         ),
         Span::raw(format!(" | R&D Terminal [{}]", app.endpoint)),
+        Span::styled(
+            status,
+            Style::default().fg(if app.is_executing {
+                Color::Green
+            } else {
+                Color::DarkGray
+            }),
+        ),
     ]))
     .block(
         Block::default()
@@ -67,7 +89,7 @@ fn draw_header(f: &mut Frame, app: &RootComponent, area: Rect) {
     f.render_widget(title, area);
 }
 
-fn draw_tabs(f: &mut Frame, app: &RootComponent, area: Rect) {
+fn draw_tabs(f: &mut Frame, app: &RouterComponent, area: Rect) {
     let titles = vec![
         Line::from(Span::styled(
             " Simulation [1] ",
@@ -77,11 +99,16 @@ fn draw_tabs(f: &mut Frame, app: &RootComponent, area: Rect) {
             " Topology [2] ",
             Style::default().fg(Color::Green),
         )),
+        Line::from(Span::styled(
+            " Circuit [3] ",
+            Style::default().fg(Color::Green),
+        )),
     ];
 
-    let active_index = match app.active_tab {
-        ActiveTab::Simulation => 0,
-        ActiveTab::Topology => 1,
+    let active_index = match app.active_view {
+        ActiveView::Simulation => 0,
+        ActiveView::Topology => 1,
+        ActiveView::Circuit => 2,
     };
 
     let tabs = Tabs::new(titles)
@@ -97,7 +124,7 @@ fn draw_tabs(f: &mut Frame, app: &RootComponent, area: Rect) {
     f.render_widget(tabs, area);
 }
 
-fn draw_circuit_list(f: &mut Frame, app: &mut RootComponent, area: Rect) {
+fn draw_circuit_list(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
     let items: Vec<ListItem> = app
         .circuits
         .iter()
@@ -116,7 +143,7 @@ fn draw_circuit_list(f: &mut Frame, app: &mut RootComponent, area: Rect) {
     f.render_stateful_widget(list, area, &mut app.circuit_list_state);
 }
 
-fn draw_execution_view(f: &mut Frame, app: &mut RootComponent, area: Rect) {
+fn draw_execution_view(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
     let title = if app.is_executing {
         if app.is_vqe {
             " VQE Convergence (H2 Molecule) "
@@ -277,7 +304,7 @@ fn draw_execution_view(f: &mut Frame, app: &mut RootComponent, area: Rect) {
     }
 }
 
-fn draw_topology_view(f: &mut Frame, app: &mut RootComponent, area: Rect) {
+fn draw_topology_view(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
     let canvas = Canvas::default()
         .block(
             Block::default()
@@ -307,21 +334,40 @@ fn draw_topology_view(f: &mut Frame, app: &mut RootComponent, area: Rect) {
                     x,
                     y,
                     radius: 2.0,
-                    color: Color::Cyan, // Hardware Active
+                    color: Color::Cyan,
                 });
 
                 ctx.print(x + 3.0, y - 1.0, format!("Q{}", i));
             }
         })
-        .x_bounds([0.0, 80.0])
-        .y_bounds([0.0, 80.0]);
+        // Use dynamically cached bounds instead of hardcoded 80x80
+        .x_bounds([app.topo_min_x, app.topo_max_x])
+        .y_bounds([app.topo_min_y, app.topo_max_y]);
 
     f.render_widget(canvas, area);
 }
 
+fn draw_circuit_diagram_view(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
+    let title = if app.circuit_name.is_empty() {
+        " Circuit Diagram ".to_string()
+    } else {
+        format!(" Circuit Diagram — {} ", app.circuit_name)
+    };
+
+    let content = app.circuit_diagram.join("\n");
+    let paragraph = Paragraph::new(content)
+        .block(Block::default().title(title).borders(Borders::ALL))
+        .style(Style::default().fg(Color::White))
+        .wrap(Wrap { trim: false })
+        .scroll((app.circuit_scroll, 0));
+
+    f.render_widget(paragraph, area);
+}
+
 fn draw_footer(f: &mut Frame, area: Rect) {
-    let footer =
-        Paragraph::new(" Navigate: ↑/↓ | Switch View: Tab/Shift+Tab | Execute: Enter | Quit: q ")
-            .block(Block::default().borders(Borders::ALL));
+    let footer = Paragraph::new(
+        " Views: 1/2/3 | Navigate: ↑/↓ | Tab/Shift+Tab | Execute: Enter | VQE: v | Cancel: c | Quit: q ",
+    )
+    .block(Block::default().borders(Borders::ALL));
     f.render_widget(footer, area);
 }
