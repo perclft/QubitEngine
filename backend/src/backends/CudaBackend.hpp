@@ -69,6 +69,19 @@ private:
   void initializeCuda();
   void copyStateToDevice(const std::vector<Complex> &host_state);
   void copyStateToHost(std::vector<Complex> &host_state) const;
+
+  // Async telemetry stream (non-blocking D2H on secondary stream)
+  void *telemetry_stream_;     // cudaStream_t (opaque for non-CUDA TUs)
+  void *pinned_telemetry_buf_; // Page-locked host buffer via cudaMallocHost
+  size_t pinned_buf_size_;
+
+public:
+  // Async state vector readback for gRPC telemetry
+  std::vector<Complex> getStateVectorAsync() const;
+
+  // JIT fused-block application
+  void applyFusedBlock(const std::vector<int> &targets,
+                       const std::vector<Complex> &unitary);
 };
 
 } // namespace qubit_engine

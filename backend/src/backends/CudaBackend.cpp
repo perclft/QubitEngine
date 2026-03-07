@@ -1,6 +1,7 @@
 #include "CudaBackend.hpp"
 #include "../Types.hpp"
 #include "../kernels/GateKernels.hpp"
+#include <cuComplex.h>
 
 // Distributed & Accelerated Comm Libraries
 #ifdef MPI_ENABLED
@@ -17,7 +18,9 @@
 namespace qubit_engine {
 
 CudaBackend::CudaBackend(size_t num_qubits)
-    : num_qubits_(num_qubits), device_state_(nullptr) {
+    : num_qubits_(num_qubits), device_state_(nullptr),
+      telemetry_stream_(nullptr), pinned_telemetry_buf_(nullptr),
+      pinned_buf_size_(0) {
 
   // 1. Resolve MPI Rank and Size for Sharding context
   int rank = 0;
@@ -65,11 +68,33 @@ CudaBackend::CudaBackend(size_t num_qubits)
 
   // 4. Init Local Device Shard Memory
   initializeCuda();
+
+  // 5. Create secondary telemetry stream + pinned host buffer
+  cudaStream_t tstream;
+  cudaStreamCreate(&tstream);
+  telemetry_stream_ = (void *)tstream;
+
+  size_t dim = 1ULL << num_qubits_;
+  pinned_buf_size_ = dim * sizeof(Complex);
+  cudaError_t pin_err =
+      cudaMallocHost(&pinned_telemetry_buf_, pinned_buf_size_);
+  if (pin_err != cudaSuccess) {
+    // Fallback: null buffer, getStateVectorAsync degrades to sync path
+    pinned_telemetry_buf_ = nullptr;
+    pinned_buf_size_ = 0;
+  }
 }
 
 CudaBackend::~CudaBackend() {
   if (device_state_) {
     cudaFree(device_state_);
+  }
+  // Destroy telemetry stream and pinned buffer
+  if (telemetry_stream_) {
+    cudaStreamDestroy((cudaStream_t)telemetry_stream_);
+  }
+  if (pinned_telemetry_buf_) {
+    cudaFreeHost(pinned_telemetry_buf_);
   }
 #ifdef ENABLE_NCCL
   if (nccl_comm_) {
@@ -358,42 +383,42 @@ std::vector<double> CudaBackend::getProbabilities() {
   return probs;
 }
 
-// --- Expectation Value ---
+// --- Expectation Value (Device-Side Reduction) ---
 
 double CudaBackend::expectationValue(const std::string &pauli_string) {
-  // Fallback: Copy to host and compute on CPU
-  std::vector<Complex> state = getStateVector();
-
-  Complex expected_value = 0.0;
-  size_t local_dim = state.size();
-
-  for (size_t i = 0; i < local_dim; ++i) {
-    size_t j = i;
-    Complex coeff = 1.0;
-
-    for (size_t q = 0; q < num_qubits_ && q < pauli_string.size(); ++q) {
-      char op = pauli_string[q];
-      if (op == 'I')
-        continue;
-
-      bool bit_set = (i >> q) & 1;
-
-      if (op == 'X') {
-        j ^= (1ULL << q);
-      } else if (op == 'Y') {
-        j ^= (1ULL << q);
-        coeff *= (bit_set ? Complex(0, -1) : Complex(0, 1));
-      } else if (op == 'Z') {
-        if (bit_set)
-          coeff *= -1.0;
-      }
-    }
-
-    if (j < local_dim) {
-      expected_value += std::conj(state[i]) * coeff * state[j];
-    }
+  // Encode Pauli string into int array: 0=I, 1=X, 2=Y, 3=Z
+  std::vector<int> h_pauli_ops(num_qubits_, 0);
+  for (size_t q = 0; q < num_qubits_ && q < pauli_string.size(); ++q) {
+    char op = pauli_string[q];
+    if (op == 'X')
+      h_pauli_ops[q] = 1;
+    else if (op == 'Y')
+      h_pauli_ops[q] = 2;
+    else if (op == 'Z')
+      h_pauli_ops[q] = 3;
   }
-  return expected_value.real();
+
+  // Allocate device-side pauli ops and result
+  int *d_pauli_ops = nullptr;
+  double *d_result = nullptr;
+  cudaMalloc(&d_pauli_ops, num_qubits_ * sizeof(int));
+  cudaMalloc(&d_result, sizeof(double));
+
+  cudaMemcpy(d_pauli_ops, h_pauli_ops.data(), num_qubits_ * sizeof(int),
+             cudaMemcpyHostToDevice);
+
+  // Launch device-side reduction kernel
+  qe::cuda::launchPauliExpectation(device_state_, num_qubits_, d_pauli_ops,
+                                   d_result);
+
+  // Copy only 8 bytes back
+  double result = 0.0;
+  cudaMemcpy(&result, d_result, sizeof(double), cudaMemcpyDeviceToHost);
+
+  cudaFree(d_pauli_ops);
+  cudaFree(d_result);
+
+  return result;
 }
 
 // --- State Access ---
@@ -403,6 +428,58 @@ std::vector<Complex> CudaBackend::getStateVector() const {
   std::vector<Complex> host_state(dim);
   copyStateToHost(host_state);
   return host_state;
+}
+
+// --- Async Telemetry Readback (Pinned Memory + Secondary Stream) ---
+
+std::vector<Complex> CudaBackend::getStateVectorAsync() const {
+  size_t dim = 1ULL << num_qubits_;
+  size_t bytes = dim * sizeof(Complex);
+
+  // If pinned buffer wasn't allocated, fall back to sync path
+  if (!pinned_telemetry_buf_ || pinned_buf_size_ < bytes) {
+    return getStateVector();
+  }
+
+  // Async copy on secondary telemetry stream
+  cudaMemcpyAsync(pinned_telemetry_buf_, device_state_, bytes,
+                  cudaMemcpyDeviceToHost, (cudaStream_t)telemetry_stream_);
+  cudaStreamSynchronize((cudaStream_t)telemetry_stream_);
+
+  // Copy from pinned buffer to vector
+  std::vector<Complex> host_state(dim);
+  std::memcpy(host_state.data(), pinned_telemetry_buf_, bytes);
+  return host_state;
+}
+
+// --- JIT Fused Block Application ---
+
+void CudaBackend::applyFusedBlock(const std::vector<int> &targets,
+                                  const std::vector<Complex> &unitary) {
+  int k = static_cast<int>(targets.size());
+  if (k < 1 || k > 3)
+    return; // Only support fused blocks up to 3 qubits
+
+  int sub_dim = 1 << k;
+  if (static_cast<int>(unitary.size()) != sub_dim * sub_dim)
+    return;
+
+  // Allocate device targets array
+  int *d_targets = nullptr;
+  cudaMalloc(&d_targets, k * sizeof(int));
+  cudaMemcpy(d_targets, targets.data(), k * sizeof(int),
+             cudaMemcpyHostToDevice);
+
+  // Convert Complex → cuDoubleComplex for constant memory upload
+  std::vector<cuDoubleComplex> h_unitary(sub_dim * sub_dim);
+  for (int i = 0; i < sub_dim * sub_dim; ++i) {
+    h_unitary[i] = make_cuDoubleComplex(unitary[i].real(), unitary[i].imag());
+  }
+
+  qe::cuda::launchFusedUnitary(device_state_, num_qubits_, d_targets, k,
+                               h_unitary.data());
+
+  cudaFree(d_targets);
 }
 
 } // namespace qubit_engine

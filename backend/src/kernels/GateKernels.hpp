@@ -33,5 +33,19 @@ void launchCZ(void *deviceState, int num_qubits, int control, int target);
 void launchComputeProbabilities(const void *deviceState, double *deviceProbs,
                                 int dim);
 
+// --- Device-Side Expectation Value Reduction ---
+// pauli_ops: device array, encoding per qubit: 0=I, 1=X, 2=Y, 3=Z
+// d_result: device pointer to a single double (output)
+void launchPauliExpectation(const void *deviceState, int num_qubits,
+                            const int *d_pauli_ops, double *d_result);
+
+// --- JIT Fused Unitary Dispatch ---
+// Applies a 2^k × 2^k unitary to k target qubits (k ≤ 3)
+// d_targets: device array of k target qubit indices
+// h_unitary: HOST pointer to the unitary matrix (copied to constant memory)
+struct cuDoubleComplex;
+void launchFusedUnitary(void *deviceState, int num_qubits, const int *d_targets,
+                        int k, const cuDoubleComplex *h_unitary);
+
 } // namespace cuda
 } // namespace qe

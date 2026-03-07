@@ -228,6 +228,8 @@ grpc_generate_cpp(GRPC_SRC_GENERATED_CPP GRPC_HDR_GENERATED_CPP
 set(GPU_SOURCES "")
 if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
     list(APPEND GPU_SOURCES src/kernels/gate_kernels.cu)
+    list(APPEND GPU_SOURCES src/kernels/expectation_kernels.cu)
+    list(APPEND GPU_SOURCES src/kernels/fused_kernel.cu)
     list(APPEND GPU_SOURCES src/backends/CudaBackend.cpp)
 endif()
 
