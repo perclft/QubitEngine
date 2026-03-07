@@ -1,4 +1,5 @@
 #include "QuantumJIT.hpp"
+#include <algorithm>
 
 namespace qubit_engine {
 namespace jit {
