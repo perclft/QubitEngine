@@ -1,0 +1,63 @@
+{
+    "name": "Quantum Error Correction (3-bit Flip)",
+    "qubits": 5,
+    "ops": [
+        {
+            "gate": "RY",
+            "target": 0,
+            "angle": 0.9273
+        },
+        {
+            "gate": "CNOT",
+            "control": 0,
+            "target": 1
+        },
+        {
+            "gate": "CNOT",
+            "control": 0,
+            "target": 2
+        },
+        {
+            "gate": "X",
+            "target": 1
+        },
+        {
+            "gate": "CNOT",
+            "control": 0,
+            "target": 3
+        },
+        {
+            "gate": "CNOT",
+            "control": 1,
+            "target": 3
+        },
+        {
+            "gate": "CNOT",
+            "control": 0,
+            "target": 4
+        },
+        {
+            "gate": "CNOT",
+            "control": 2,
+            "target": 4
+        },
+        {
+            "gate": "TOFFOLI",
+            "control": 3,
+            "control2": 4,
+            "target": 1
+        },
+        {
+            "gate": "M",
+            "target": 0
+        },
+        {
+            "gate": "M",
+            "target": 1
+        },
+        {
+            "gate": "M",
+            "target": 2
+        }
+    ]
+}

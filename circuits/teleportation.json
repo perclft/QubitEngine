@@ -1,0 +1,47 @@
+{
+    "name": "Quantum Teleportation",
+    "qubits": 3,
+    "ops": [
+        {
+            "gate": "RY",
+            "target": 0,
+            "angle": 1.0472
+        },
+        {
+            "gate": "H",
+            "target": 1
+        },
+        {
+            "gate": "CNOT",
+            "control": 1,
+            "target": 2
+        },
+        {
+            "gate": "CNOT",
+            "control": 0,
+            "target": 1
+        },
+        {
+            "gate": "H",
+            "target": 0
+        },
+        {
+            "gate": "M",
+            "target": 0
+        },
+        {
+            "gate": "M",
+            "target": 1
+        },
+        {
+            "gate": "CNOT",
+            "control": 1,
+            "target": 2
+        },
+        {
+            "gate": "CNOT",
+            "control": 0,
+            "target": 2
+        }
+    ]
+}

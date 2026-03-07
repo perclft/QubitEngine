@@ -1,0 +1,40 @@
+{
+    "name": "Superdense Coding",
+    "qubits": 2,
+    "ops": [
+        {
+            "gate": "H",
+            "target": 0
+        },
+        {
+            "gate": "CNOT",
+            "control": 0,
+            "target": 1
+        },
+        {
+            "gate": "X",
+            "target": 0
+        },
+        {
+            "gate": "S",
+            "target": 0
+        },
+        {
+            "gate": "CNOT",
+            "control": 0,
+            "target": 1
+        },
+        {
+            "gate": "H",
+            "target": 0
+        },
+        {
+            "gate": "M",
+            "target": 0
+        },
+        {
+            "gate": "M",
+            "target": 1
+        }
+    ]
+}

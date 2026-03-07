@@ -6,7 +6,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{
         Axis, BarChart, Block, Borders, Chart, Dataset, Gauge, List, ListItem, Paragraph,
-        Sparkline, Tabs, Wrap,
+        Sparkline, Tabs,
         canvas::{Canvas, Circle, Line as CanvasLine},
     },
 };
@@ -305,6 +305,13 @@ fn draw_execution_view(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
 }
 
 fn draw_topology_view(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
+    // Clone topology data for the 'static paint() closure
+    let edges: Vec<(usize, usize)> = app.topology_edges.clone();
+    let nodes: Vec<(f64, f64)> = app.topology_nodes.clone();
+    let labels: Vec<(f64, f64, String)> = app.topo_label_cache.clone();
+    let x_bounds = [app.topo_min_x, app.topo_max_x];
+    let y_bounds = [app.topo_min_y, app.topo_max_y];
+
     let canvas = Canvas::default()
         .block(
             Block::default()
@@ -312,12 +319,10 @@ fn draw_topology_view(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
                 .borders(Borders::ALL),
         )
         .marker(symbols::Marker::Braille)
-        .paint(|ctx| {
-            // Draw dynamic hardware topology from gRPC
-            for &(n1, n2) in &app.topology_edges {
-                if let (Some(&(x1, y1)), Some(&(x2, y2))) =
-                    (app.topology_nodes.get(n1), app.topology_nodes.get(n2))
-                {
+        .paint(move |ctx| {
+            // Draw edges
+            for &(n1, n2) in &edges {
+                if let (Some(&(x1, y1)), Some(&(x2, y2))) = (nodes.get(n1), nodes.get(n2)) {
                     ctx.draw(&CanvasLine {
                         x1,
                         y1,
@@ -327,22 +332,22 @@ fn draw_topology_view(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
                     });
                 }
             }
-
             // Draw physical qubits as circles
-            for (i, &(x, y)) in app.topology_nodes.iter().enumerate() {
+            for &(x, y) in &nodes {
                 ctx.draw(&Circle {
                     x,
                     y,
                     radius: 2.0,
                     color: Color::Cyan,
                 });
-
-                ctx.print(x + 3.0, y - 1.0, format!("Q{}", i));
+            }
+            // Pre-computed labels — zero format!() allocations per frame
+            for (lx, ly, label) in &labels {
+                ctx.print(*lx, *ly, label.clone());
             }
         })
-        // Use dynamically cached bounds instead of hardcoded 80x80
-        .x_bounds([app.topo_min_x, app.topo_max_x])
-        .y_bounds([app.topo_min_y, app.topo_max_y]);
+        .x_bounds(x_bounds)
+        .y_bounds(y_bounds);
 
     f.render_widget(canvas, area);
 }
@@ -354,12 +359,21 @@ fn draw_circuit_diagram_view(f: &mut Frame, app: &mut RouterComponent, area: Rec
         format!(" Circuit Diagram — {} ", app.circuit_name)
     };
 
-    let content = app.circuit_diagram.join("\n");
+    // Viewport slicing: only pass the visible lines to the layout engine
+    // This bounds rendering to O(visible_height) regardless of total circuit depth
+    let visible_height = area.height.saturating_sub(2) as usize; // minus top/bottom borders
+    let start = app.circuit_scroll as usize;
+    let end = (start + visible_height).min(app.circuit_diagram.len());
+    let visible_lines = if start < app.circuit_diagram.len() {
+        &app.circuit_diagram[start..end]
+    } else {
+        &[]
+    };
+    let content = visible_lines.join("\n");
+
     let paragraph = Paragraph::new(content)
         .block(Block::default().title(title).borders(Borders::ALL))
-        .style(Style::default().fg(Color::White))
-        .wrap(Wrap { trim: false })
-        .scroll((app.circuit_scroll, 0));
+        .style(Style::default().fg(Color::White));
 
     f.render_widget(paragraph, area);
 }

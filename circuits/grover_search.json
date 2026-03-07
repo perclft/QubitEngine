@@ -1,0 +1,73 @@
+{
+    "name": "Grover 2-qubit Search",
+    "qubits": 3,
+    "ops": [
+        {
+            "gate": "H",
+            "target": 0
+        },
+        {
+            "gate": "H",
+            "target": 1
+        },
+        {
+            "gate": "X",
+            "target": 2
+        },
+        {
+            "gate": "H",
+            "target": 2
+        },
+        {
+            "gate": "TOFFOLI",
+            "control": 0,
+            "control2": 1,
+            "target": 2
+        },
+        {
+            "gate": "H",
+            "target": 0
+        },
+        {
+            "gate": "H",
+            "target": 1
+        },
+        {
+            "gate": "X",
+            "target": 0
+        },
+        {
+            "gate": "X",
+            "target": 1
+        },
+        {
+            "gate": "CNOT",
+            "control": 0,
+            "target": 1
+        },
+        {
+            "gate": "X",
+            "target": 0
+        },
+        {
+            "gate": "X",
+            "target": 1
+        },
+        {
+            "gate": "H",
+            "target": 0
+        },
+        {
+            "gate": "H",
+            "target": 1
+        },
+        {
+            "gate": "M",
+            "target": 0
+        },
+        {
+            "gate": "M",
+            "target": 1
+        }
+    ]
+}

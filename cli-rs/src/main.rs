@@ -72,17 +72,21 @@ pub struct RouterComponent {
     pub vqe_max_energy: f64,
     pub vqe_max_iter: f64,
     pub current_task: Option<tokio::task::JoinHandle<()>>,
-    // Topology state with cached bounds
+    // Topology state with cached bounds and pre-computed labels
     pub topology_nodes: Vec<(f64, f64)>,
     pub topology_edges: Vec<(usize, usize)>,
     pub topo_min_x: f64,
     pub topo_max_x: f64,
     pub topo_min_y: f64,
     pub topo_max_y: f64,
+    pub topo_dirty: bool,
+    pub topo_label_cache: Vec<(f64, f64, String)>,
     // Circuit diagram state
     pub circuit_diagram: Vec<String>,
     pub circuit_scroll: u16,
     pub circuit_name: String,
+    // Terminal size tracking for resize-only layout recalculation
+    pub last_terminal_size: (u16, u16),
 }
 
 /// O(1) amortized log cap using VecDeque ring buffer semantics.
@@ -276,11 +280,14 @@ impl RouterComponent {
             topo_max_x: 80.0,
             topo_min_y: 0.0,
             topo_max_y: 80.0,
+            topo_dirty: true,
+            topo_label_cache: vec![],
             circuit_diagram: vec![
                 "Select a circuit and press Enter to generate diagram.".to_string(),
             ],
             circuit_scroll: 0,
             circuit_name: String::new(),
+            last_terminal_size: (0, 0),
         }
     }
 
@@ -332,6 +339,14 @@ impl RouterComponent {
         self.topo_max_x = max_x + pad_x;
         self.topo_min_y = min_y - pad_y;
         self.topo_max_y = max_y + pad_y;
+        // Pre-compute label strings to avoid format!() allocations per frame
+        self.topo_label_cache = self
+            .topology_nodes
+            .iter()
+            .enumerate()
+            .map(|(i, &(x, y))| (x + 3.0, y - 1.0, format!("Q{}", i)))
+            .collect();
+        self.topo_dirty = false;
     }
 }
 
@@ -343,6 +358,11 @@ impl Component for RouterComponent {
     fn handle_event(&mut self, event: &AppEvent) -> anyhow::Result<()> {
         match event {
             AppEvent::Input(crossterm_event) => {
+                // Handle terminal resize — invalidate topology cache
+                if let Event::Resize(w, h) = crossterm_event {
+                    self.last_terminal_size = (*w, *h);
+                    self.topo_dirty = true;
+                }
                 if let Event::Key(key) = crossterm_event {
                     if key.kind == event::KeyEventKind::Press {
                         match key.code {
@@ -498,6 +518,7 @@ impl Component for RouterComponent {
                     grpc::GrpcEvent::Topology(nodes, edges) => {
                         self.topology_nodes = nodes.clone();
                         self.topology_edges = edges.clone();
+                        self.topo_dirty = true;
                         self.update_topology_bounds();
                         self.execution_log.push_back(format!(
                             "[{}] Loaded hardware topology diagram ({} nodes)",

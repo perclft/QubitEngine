@@ -1,0 +1,82 @@
+{
+    "name": "Deutsch-Jozsa (4-qubit)",
+    "qubits": 5,
+    "ops": [
+        {
+            "gate": "X",
+            "target": 4
+        },
+        {
+            "gate": "H",
+            "target": 0
+        },
+        {
+            "gate": "H",
+            "target": 1
+        },
+        {
+            "gate": "H",
+            "target": 2
+        },
+        {
+            "gate": "H",
+            "target": 3
+        },
+        {
+            "gate": "H",
+            "target": 4
+        },
+        {
+            "gate": "CNOT",
+            "control": 0,
+            "target": 4
+        },
+        {
+            "gate": "CNOT",
+            "control": 1,
+            "target": 4
+        },
+        {
+            "gate": "CNOT",
+            "control": 2,
+            "target": 4
+        },
+        {
+            "gate": "CNOT",
+            "control": 3,
+            "target": 4
+        },
+        {
+            "gate": "H",
+            "target": 0
+        },
+        {
+            "gate": "H",
+            "target": 1
+        },
+        {
+            "gate": "H",
+            "target": 2
+        },
+        {
+            "gate": "H",
+            "target": 3
+        },
+        {
+            "gate": "M",
+            "target": 0
+        },
+        {
+            "gate": "M",
+            "target": 1
+        },
+        {
+            "gate": "M",
+            "target": 2
+        },
+        {
+            "gate": "M",
+            "target": 3
+        }
+    ]
+}
