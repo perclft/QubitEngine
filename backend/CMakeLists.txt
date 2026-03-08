@@ -4,7 +4,7 @@ project(QubitEngine)
 set(CMAKE_CXX_STANDARD 20)
 
 find_package(gRPC CONFIG REQUIRED)
-find_package(Protobuf CONFIG REQUIRED)
+find_package(Protobuf REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 
