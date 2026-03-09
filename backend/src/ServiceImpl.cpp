@@ -529,36 +529,65 @@ grpc::Status QubitEngineServiceImpl::GetHardwareTopology(
 
   spdlog::info("Serving GetHardwareTopology request...");
 
-  // Qubit coordinates grid mapping (3x3 mock Heavy-Hex Lattice)
-  double spacing = 20.0;
-  for (int row = 0; row < 3; ++row) {
-    for (int col = 0; col < 3; ++col) {
-      auto *node = response->add_nodes();
-      node->set_id(row * 3 + col);
-      node->set_x(10.0 + col * spacing);
-      node->set_y(10.0 + row * spacing);
-    }
+  // Honeycomb-shaped mathematically correct 16-qubit Heavy-Hex Lattice
+  struct NodeDef {
+    int id;
+    double x;
+    double y;
+  };
+  std::vector<NodeDef> nodes = {
+      {0, 40.0, 20.0},
+      {1, 60.0, 20.0},
+      {2, 80.0, 20.0},  // Top edge
+      {3, 90.0, 30.0},  // Top-right diagonal
+      {4, 100.0, 40.0}, // Rightmost vertex
+      {5, 90.0, 50.0},  // Bottom-right diagonal
+      {6, 80.0, 60.0},
+      {7, 60.0, 60.0},
+      {8, 40.0, 60.0},  // Bottom edge
+      {9, 30.0, 50.0},  // Bottom-left diagonal
+      {10, 20.0, 40.0}, // Leftmost vertex
+      {11, 30.0, 30.0}, // Top-left diagonal
+      // Degree-1 Tails to show lattice expansion
+      {12, 30.0, 10.0},  // Tail from Q0 (Up-Left)
+      {13, 90.0, 10.0},  // Tail from Q2 (Up-Right)
+      {14, 120.0, 40.0}, // Tail from Q4 (Right)
+      {15, 0.0, 40.0}    // Tail from Q10 (Left)
+  };
+
+  for (const auto &n : nodes) {
+    auto *node = response->add_nodes();
+    node->set_id(n.id);
+    node->set_x(n.x);
+    node->set_y(n.y);
   }
 
-  // Draw couplers (Horizontal lines)
+  // Draw true Heavy-Hex couplers
   auto addEdge = [&](int n1, int n2) {
     auto *edge = response->add_edges();
     edge->set_node1(n1);
     edge->set_node2(n2);
   };
 
+  // Hexagon continuous ring (12 qubits)
   addEdge(0, 1);
   addEdge(1, 2);
+  addEdge(2, 3);
   addEdge(3, 4);
   addEdge(4, 5);
+  addEdge(5, 6);
   addEdge(6, 7);
   addEdge(7, 8);
+  addEdge(8, 9);
+  addEdge(9, 10);
+  addEdge(10, 11);
+  addEdge(11, 0);
 
-  // Vertical connections (Couplers)
-  addEdge(0, 3);
-  addEdge(2, 5);
-  addEdge(3, 6);
-  addEdge(5, 8);
+  // Outer tails
+  addEdge(0, 12);
+  addEdge(2, 13);
+  addEdge(4, 14);
+  addEdge(10, 15);
 
   return grpc::Status::OK;
 }
