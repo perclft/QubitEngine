@@ -26,7 +26,7 @@ def test_quantum_function_forward():
     def ansatz(p, qreg):
         qreg.applyRotationY(0, p[0])
 
-    hamiltonian = ["1.0 Z"]
+    hamiltonian = [(1.0, "Z")]
 
     # We mock or expect the engine to return the evaluated energy
     try:
@@ -45,7 +45,7 @@ def test_quantum_function_backward():
     def ansatz(p, qreg):
         qreg.applyRotationY(0, p[0])
 
-    hamiltonian = ["1.0 Z"]
+    hamiltonian = [(1.0, "Z")]
 
     try:
         energy = QuantumFunction.apply(params, num_qubits, hamiltonian, ansatz)
@@ -66,7 +66,7 @@ def test_quantum_layer():
         qreg.applyRotationY(1, p[1])
         qreg.applyCNOT(0, 1)
 
-    hamiltonian = ["1.0 Z0", "1.0 Z1"]
+    hamiltonian = [(1.0, "Z0"), (1.0, "Z1")]
 
     layer = QuantumLayer(num_qubits, num_params, hamiltonian, ansatz)
     
