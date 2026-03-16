@@ -460,38 +460,34 @@ grpc::Status QubitEngineServiceImpl::RunVQE(
   }
 
   // SPSA Constants
-  double c = 0.05;
-  double gamma = 0.101;
   double alpha = 0.602;
+  double gamma = 0.101;
   double A = max_iters * 0.1;
-  double a = 0.2;
+  double a = learning_rate; // Use slider!
+  double c = 0.1;           // Increased for better sensitivity
 
   for (int k = 0; k < max_iters; k++) {
     double current_energy = 0.0;
 
+    auto evalEnergy = [&](const std::vector<double> &p) -> double {
+      QuantumRegister qreg(num_qubits);
+      applyAnsatz(p, qreg);
+      double energy = 0.0;
+      for (const auto &term : hamiltonian) {
+        energy += term.coefficient * qreg.expectationValue(term.pauli_string);
+      }
+      return energy;
+    };
+
     if (use_gradient_descent) {
       // --- Gradient Descent Logic ---
-      // 1. Calculate Analytical Gradients
       auto grads = QuantumDifferentiator::calculateGradients(
           num_qubits, params, applyAnsatz, hamiltonian);
 
-      // 2. Update Parameters
       for (size_t i = 0; i < params.size(); ++i) {
         params[i] -= learning_rate * grads[i];
       }
-
-      // 3. Evaluate Energy (for reporting) - could optimize by reusing a
-      // shift eval but let's be explicit Note: QuantumDifferentiator
-      // evaluates energy internally but doesn't return the "center" value. We
-      // do one extra call here for logging.
-      {
-        QuantumRegister qreg(num_qubits);
-        applyAnsatz(params, qreg);
-        for (const auto &term : hamiltonian) {
-          current_energy +=
-              term.coefficient * qreg.expectationValue(term.pauli_string);
-        }
-      }
+      current_energy = evalEnergy(params);
 
     } else {
       // --- SPSA Logic ---
@@ -503,16 +499,6 @@ grpc::Status QubitEngineServiceImpl::RunVQE(
       std::bernoulli_distribution dist(0.5);
       for (size_t i = 0; i < params.size(); ++i)
         delta[i] = dist(gen) ? 1.0 : -1.0;
-
-      auto evalEnergy = [&](const std::vector<double> &p) -> double {
-        QuantumRegister qreg(num_qubits);
-        applyAnsatz(p, qreg);
-        double energy = 0.0;
-        for (const auto &term : hamiltonian) {
-          energy += term.coefficient * qreg.expectationValue(term.pauli_string);
-        }
-        return energy;
-      };
 
       std::vector<double> p_plus = params;
       std::vector<double> p_minus = params;
@@ -529,11 +515,12 @@ grpc::Status QubitEngineServiceImpl::RunVQE(
         params[i] -= ak * g_est * delta[i];
       }
 
-      current_energy = (E_plus + E_minus) / 2.0;
+      // Report central energy, not perturbed average, for smoother chart
+      current_energy = evalEnergy(params);
     }
 
-    // Stream Progress
-    if (k % 5 == 0 || k == max_iters - 1) {
+    // Stream Progress every iteration for smooth visual
+    if (k % 1 == 0 || k == max_iters - 1) {
       qubit_engine::VQEResponse resp;
       resp.set_iteration(k);
       resp.set_energy(current_energy);
