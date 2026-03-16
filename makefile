@@ -22,7 +22,7 @@ proto:
 build-engine:
 	@echo "Building C++ Engine..."
 	@mkdir -p backend/build
-	cd backend/build && cmake .. && cmake --build . --config Release
+	cd backend/build && cmake .. -DCMAKE_TOOLCHAIN_FILE=/Users/sahil/vcpkg/scripts/buildsystems/vcpkg.cmake && cmake --build . --config Release
 
 # Build Rust TUI
 build-tui:

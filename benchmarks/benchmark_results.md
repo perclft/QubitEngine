@@ -202,4 +202,3 @@ Benchmark                    Time             CPU   Iterations UserCounters...
 BM_ApplyHadamard/20       1.07 ms        0.469 ms         1496 bytes_per_second=66.6051Gi/s
 BM_ApplyHadamard/25       21.6 ms         15.3 ms           45 bytes_per_second=65.5638Gi/s
 BM_ApplyHadamard/28       1115 ms          732 ms            1 bytes_per_second=10.9235Gi/s
-```

@@ -17,13 +17,14 @@ FetchContent_MakeAvailable(googlebenchmark)
 
 find_package(OpenMP)
 find_package(Threads REQUIRED)
+find_package(Eigen3 CONFIG REQUIRED)
 
 # --- Metal (MacOS) ---
 if(APPLE)
     enable_language(OBJCXX)
     find_library(METAL_LIB Metal REQUIRED)
     find_library(FOUNDATION_LIB Foundation REQUIRED)
-    set(METAL_SOURCES ../backend/src/backends/MetalBackend.mm)
+    set(METAL_SOURCES ../backend/src/backends/metal/MetalContext.mm)
     add_compile_definitions(ENABLE_METAL)
 else()
     set(METAL_SOURCES "")
@@ -59,8 +60,14 @@ endif()
 set(BACKEND_SOURCES
     ../backend/src/QuantumRegister.cpp
     ../backend/src/backends/CpuBackend.cpp
+    ../backend/src/backends/MPSBackend.cpp
+    ../backend/src/backends/StabilizerBackend.cpp
     ../backend/src/backends/GPUQuantumRegister.cpp
     ../backend/src/CircuitOptimizer.cpp
+    ../backend/src/QuantumDifferentiator.cpp
+    ../backend/src/QuantumJIT.cpp
+    ../backend/src/OpenQASM.cpp
+    ../backend/src/ipc/SharedMemory.cpp
     ${METAL_SOURCES}
 )
 
@@ -75,6 +82,7 @@ target_link_libraries(memory_benchmark
     PRIVATE
     benchmark::benchmark
     Threads::Threads
+    Eigen3::Eigen
 )
 
 add_executable(antigravity_memory_benchmark AntigravityMemoryBenchmark.cpp ${BACKEND_SOURCES})
@@ -82,6 +90,7 @@ target_link_libraries(antigravity_memory_benchmark
     PRIVATE
     benchmark::benchmark
     Threads::Threads
+    Eigen3::Eigen
 )
 
 if(APPLE)

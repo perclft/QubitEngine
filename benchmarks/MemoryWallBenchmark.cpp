@@ -2,6 +2,8 @@
 #include <benchmark/benchmark.h>
 #include <iostream>
 
+using namespace qubit_engine;
+
 // Benchmark for Hadamard Gate to test Memory Wall
 static void BM_ApplyHadamard(benchmark::State &state) {
   int num_qubits = state.range(0);

@@ -458,6 +458,20 @@ impl Component for RouterComponent {
                                     }));
                                 }
                             }
+                            KeyCode::Char('r') => {
+                                // Re-fetch hardware topology from backend
+                                let tx = self.engine_tx.clone();
+                                let endpoint = self.endpoint.clone();
+                                let timestamp = chrono::Local::now().format("%H:%M:%S").to_string();
+                                self.execution_log.push_back(format!(
+                                    "[{}] Refreshing hardware topology...",
+                                    timestamp
+                                ));
+                                cap_log(&mut self.execution_log);
+                                tokio::spawn(async move {
+                                    grpc::get_topology(endpoint, tx).await;
+                                });
+                            }
                             KeyCode::Char('c') => {
                                 if self.is_executing {
                                     if let Some(task) = self.current_task.take() {

@@ -14,17 +14,16 @@ COPY . .
 RUN mkdir -p backend/src/generated
 
 # 2. GENERATE PROTOBUFS
-# We map api/proto/quantum.proto -> backend/src/generated/
-RUN protoc -I api/proto \
+# Use repo root as include path so cross-proto imports resolve (e.g. cache.proto -> api/proto/quantum.proto)
+RUN protoc -I . -I api/proto \
     --grpc_out=backend/src/generated --plugin=protoc-gen-grpc=`which grpc_cpp_plugin` \
     --cpp_out=backend/src/generated \
     api/proto/*.proto
 
 # 3. Build Binary
-# We build from root because that's where CMakeLists.txt is now
-RUN cmake -B build \
+RUN cmake -B build -S backend \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_CXX_FLAGS="-O3" . && \
+    -DCMAKE_CXX_FLAGS="-O3" && \
     cmake --build build --config Release
 
 # --- Stage 2: Runtime (Debian Slim) ---

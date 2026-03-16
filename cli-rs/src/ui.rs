@@ -380,7 +380,7 @@ fn draw_circuit_diagram_view(f: &mut Frame, app: &mut RouterComponent, area: Rec
 
 fn draw_footer(f: &mut Frame, area: Rect) {
     let footer = Paragraph::new(
-        " Views: 1/2/3 | Navigate: ↑/↓ | Tab/Shift+Tab | Execute: Enter | VQE: v | Cancel: c | Quit: q ",
+        " Views: 1/2/3 | Navigate: ↑/↓ | Tab/Shift+Tab | Execute: Enter | VQE: v | Reload Topo: r | Cancel: c | Quit: q ",
     )
     .block(Block::default().borders(Borders::ALL));
     f.render_widget(footer, area);

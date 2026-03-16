@@ -57,8 +57,9 @@ echo "" >> "$OUTPUT_FILE"
 # 1. Run Python Benchmarks
 echo "Running Python Benchmarks (Scaling, Throughput, Entanglement)..."
 
-# Ensure Python can find qubit_engine.so
-export PYTHONPATH="$PROJECT_ROOT/bin:$PYTHONPATH"
+# Ensure Python can find qubit_engine
+cp "$PROJECT_ROOT/bin/core."*".so" "$PROJECT_ROOT/python/qubit_engine/core.so" 2>/dev/null || true
+export PYTHONPATH="$PROJECT_ROOT/python:$PYTHONPATH"
 PYTHON_CMD="python3 python/tests/benchmark_suite.py"
 
 # Capture the output, strip the ASCII headers/footers the python script adds
@@ -82,7 +83,7 @@ if [ ! -d "$PROJECT_ROOT/benchmarks/build" ]; then
     echo "Building C++ Memory Wall Benchmark..."
     mkdir -p "$PROJECT_ROOT/benchmarks/build"
     cd "$PROJECT_ROOT/benchmarks/build"
-    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="/opt/homebrew" > /dev/null
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="/Users/sahil/vcpkg/scripts/buildsystems/vcpkg.cmake" > /dev/null
     make memory_benchmark > /dev/null
     cd "$PROJECT_ROOT"
 fi
