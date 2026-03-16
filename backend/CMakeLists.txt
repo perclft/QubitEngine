@@ -147,11 +147,10 @@ set(PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/../api/proto/quantum.proto)
 set(GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(MAKE_DIRECTORY ${GENERATED_DIR})
 
-protobuf_generate_cpp(PROTO_SRC_GENERATED_CPP PROTO_HDR_GENERATED_CPP
-    ${PROTO_FILE}
-    IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/../api/proto
-    OUTPUT_DIRECTORY ${GENERATED_DIR}
-)
+# Removed redundant protobuf_generate_cpp as grpc_generate_cpp now handles both
+set(PROTO_SRC_GENERATED_CPP "")
+set(PROTO_HDR_GENERATED_CPP "")
+
 
 function(grpc_generate_cpp srcs hdrs)
     cmake_parse_arguments(grpc "" "OUTPUT_DIRECTORY;IMPORT_DIRS" "" ${ARGN})
@@ -197,14 +196,19 @@ function(grpc_generate_cpp srcs hdrs)
         get_filename_component(abs_fil ${fil} REALPATH)
         get_filename_component(fil_we ${fil} NAME_WE)
 
+        list(APPEND ${srcs} "${_g_output_dir}/${fil_we}.pb.cc")
+        list(APPEND ${hdrs} "${_g_output_dir}/${fil_we}.pb.h")
         list(APPEND ${srcs} "${_g_output_dir}/${fil_we}.grpc.pb.cc")
         list(APPEND ${hdrs} "${_g_output_dir}/${fil_we}.grpc.pb.h")
 
         add_custom_command(
-            OUTPUT "${_g_output_dir}/${fil_we}.grpc.pb.cc"
+            OUTPUT "${_g_output_dir}/${fil_we}.pb.cc"
+                   "${_g_output_dir}/${fil_we}.pb.h"
+                   "${_g_output_dir}/${fil_we}.grpc.pb.cc"
                    "${_g_output_dir}/${fil_we}.grpc.pb.h"
             COMMAND protobuf::protoc
-            ARGS --grpc_out=${_g_output_dir}
+            ARGS --cpp_out=${_g_output_dir}
+                 --grpc_out=${_g_output_dir}
                  --plugin=protoc-gen-grpc=${gRPC_CPP_PLUGIN_EXECUTABLE}
                  ${_g_import_dirs}
                  ${abs_fil}
@@ -224,6 +228,19 @@ grpc_generate_cpp(GRPC_SRC_GENERATED_CPP GRPC_HDR_GENERATED_CPP
     OUTPUT_DIRECTORY ${GENERATED_DIR}
 )
 
+# --- Proto Library ---
+add_library(qubit_engine_proto STATIC
+    ${GRPC_SRC_GENERATED_CPP}
+    ${GRPC_HDR_GENERATED_CPP}
+)
+target_link_libraries(qubit_engine_proto 
+    PUBLIC 
+        gRPC::grpc++ 
+        protobuf::libprotobuf
+)
+target_include_directories(qubit_engine_proto PUBLIC ${GENERATED_DIR})
+set_target_properties(qubit_engine_proto PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 # --- GPU Sources ---
 set(GPU_SOURCES "")
 if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
@@ -241,6 +258,7 @@ add_library(qubit_engine_core STATIC
     src/backends/CpuBackend.cpp
     src/backends/MPSBackend.cpp
     src/backends/StabilizerBackend.cpp
+    src/backends/CloudBackend.cpp
     src/backends/GPUQuantumRegister.cpp
     src/CircuitOptimizer.cpp
     src/QuantumDifferentiator.cpp
@@ -251,8 +269,11 @@ add_library(qubit_engine_core STATIC
     ${GPU_SOURCES}
 )
 
-target_include_directories(qubit_engine_core PUBLIC src)
+target_include_directories(qubit_engine_core PUBLIC src ${GENERATED_DIR})
 set_target_properties(qubit_engine_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+target_link_libraries(qubit_engine_core PUBLIC qubit_engine_proto)
+
 
 # Platform-specific link libraries for core
 if(APPLE)
@@ -280,6 +301,13 @@ endif()
 target_link_libraries(qubit_engine_core PUBLIC Threads::Threads)
 target_link_libraries(qubit_engine_core PUBLIC Eigen3::Eigen)
 
+target_link_libraries(qubit_engine_core
+    PUBLIC
+        gRPC::grpc++
+        gRPC::grpc
+        gRPC::gpr
+)
+
 # =================================================================
 # Main Executable
 # =================================================================
@@ -287,8 +315,6 @@ add_executable(qubit_engine
     src/ServiceImpl.cpp
     src/ServiceImpl_Visualize.cpp
     src/main.cpp
-    ${PROTO_SRC_GENERATED_CPP}
-    ${GRPC_SRC_GENERATED_CPP}
 )
 
 target_include_directories(qubit_engine PUBLIC
@@ -300,11 +326,11 @@ target_include_directories(qubit_engine PUBLIC
 target_link_libraries(qubit_engine
     PRIVATE
     qubit_engine_core
+    qubit_engine_proto
     gRPC::grpc++
     gRPC::grpc
     gRPC::gpr
     gRPC::grpc++_reflection
-    protobuf::libprotobuf 
     gflags
     glog::glog 
     OpenSSL::SSL
@@ -324,8 +350,12 @@ pybind11_add_module(qubit_engine_module MODULE
 )
 set_target_properties(qubit_engine_module PROPERTIES OUTPUT_NAME "core")
 
-target_include_directories(qubit_engine_module PRIVATE src)
-target_link_libraries(qubit_engine_module PRIVATE qubit_engine_core)
+target_include_directories(qubit_engine_module PRIVATE src ${GENERATED_DIR})
+target_link_libraries(qubit_engine_module PRIVATE 
+    qubit_engine_core
+    qubit_engine_proto
+)
+
 
 # =================================================================
 # Testing

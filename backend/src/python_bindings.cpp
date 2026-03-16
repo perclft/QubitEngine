@@ -16,6 +16,10 @@
 // Include Stabilizer Backend
 #include "backends/StabilizerBackend.hpp"
 
+#ifdef MPI_ENABLED
+#include <mpi.h>
+#endif
+
 namespace py = pybind11;
 
 // Wrapper to adapt Python callables to AnsatzFunction signature
@@ -71,7 +75,7 @@ PYBIND11_MODULE(core, m) {
 
   // --- QuantumRegister Binding ---
   py::class_<QuantumRegister>(m, "QuantumRegister")
-      .def(py::init<size_t>(), "Initialize a quantum register with N qubits")
+      .def(py::init<size_t, bool>(), py::arg("num_qubits"), py::arg("force_local") = false, "Initialize a quantum register with N qubits")
       .def("applyHadamard", &QuantumRegister::applyHadamard)
       .def("applyX", &QuantumRegister::applyX)
       .def("applyY", &QuantumRegister::applyY)
@@ -88,6 +92,8 @@ PYBIND11_MODULE(core, m) {
       .def("measure", &QuantumRegister::measure)
       .def("getProbabilities", &QuantumRegister::getProbabilities)
       .def("expectationValue", &QuantumRegister::expectationValue)
+      .def("getRank", &QuantumRegister::getRank)
+      .def("getSize", &QuantumRegister::getSize)
       .def("getStateVector", [](QuantumRegister &q) {
           auto* vec_ptr = new std::vector<std::complex<double>>(std::move(q.getStateVector()));
           auto capsule = py::capsule(vec_ptr, [](void *p) {
@@ -271,4 +277,18 @@ PYBIND11_MODULE(core, m) {
                                       initial_params);
           },
           "Run SPSA Optimizer natively in C++");
+
+  m.def("finalize", []() {
+#ifdef MPI_ENABLED
+    int initialized;
+    MPI_Initialized(&initialized);
+    if (initialized) {
+      int finalized;
+      MPI_Finalized(&finalized);
+      if (!finalized) {
+        MPI_Finalize();
+      }
+    }
+#endif
+  });
 }

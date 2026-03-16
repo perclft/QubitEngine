@@ -365,10 +365,58 @@ void CpuBackend::applyCNOT(size_t control, size_t target) {
     return;
   }
 
-  // MPI Logic omitted for brevity as CNOT global is complex without dedicated
-  // buffers
-  std::cerr << "Global CNOT not fully implemented in this refactor."
-            << std::endl;
+  if (c_is_global && !t_is_global) {
+    size_t rank_bit = c_stride / local_dim;
+    if (local_rank & rank_bit) {
+      applyX(target);
+    }
+    return;
+  }
+
+  if (!c_is_global && t_is_global) {
+#ifdef MPI_ENABLED
+    size_t rank_bit = t_stride / local_dim;
+    int partner = local_rank ^ rank_bit;
+    std::vector<Complex> recv_buf(local_dim);
+
+    // This is basically a conditional swap with partner rank
+    MPI_Sendrecv(state.data(), local_dim * 2, MPI_FLOAT, partner, 0,
+                 recv_buf.data(), local_dim * 2, MPI_FLOAT, partner, 0,
+                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
+    for (long long i = 0; i < static_cast<long long>(local_dim); ++i) {
+      if ((i & c_stride)) {
+        state[i] = recv_buf[i];
+      }
+    }
+    return;
+#else
+    std::cerr << "Error: Global CNOT requested but MPI not enabled." << std::endl;
+    return;
+#endif
+  }
+
+  if (c_is_global && t_is_global) {
+#ifdef MPI_ENABLED
+    size_t c_rank_bit = c_stride / local_dim;
+    size_t t_rank_bit = t_stride / local_dim;
+    if (local_rank & c_rank_bit) {
+      // Control is 1, so we flip the global target
+      int partner = local_rank ^ t_rank_bit;
+      std::vector<Complex> recv_buf(local_dim);
+      MPI_Sendrecv(state.data(), local_dim * 2, MPI_FLOAT, partner, 0,
+                   recv_buf.data(), local_dim * 2, MPI_FLOAT, partner, 0,
+                   MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      state.assign(recv_buf.begin(), recv_buf.end());
+    }
+    return;
+#endif
+  }
+
+  std::cerr << "Complex Global CNOT not fully implemented." << std::endl;
 }
 
 // --- Advanced Gates ---

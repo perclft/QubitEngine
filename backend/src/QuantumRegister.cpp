@@ -3,15 +3,25 @@
 #include "backends/CpuBackend.hpp"
 #include "backends/CudaBackend.hpp"
 #include "backends/MPSBackend.hpp"
+#include "backends/CloudBackend.hpp"
 #include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
+#include <cstdlib> // getenv
 
 namespace qubit_engine {
 
 // --- Lifecycle ---
 QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
+  // Phase 4: Cloud Offloading Check
+  const char* cloud_url = std::getenv("QUBIT_CLOUD_URL");
+  if (cloud_url && !force_local) {
+    backend = std::make_unique<CloudBackend>(n, std::string(cloud_url));
+    std::cout << "QuantumRegister: Using CloudBackend (Remote: " << cloud_url << ")" << std::endl;
+    return;
+  }
+
   // Phase 4: Tensor Network Acceleration
   if (n >= 25 && !force_local) {
     // Emulate using MPS for circuits >= 25 qubits to showcase memory

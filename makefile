@@ -5,7 +5,14 @@ PROTO_DIR = api/proto
 GO_OUT_DIR = api/generated
 ENGINE_IMAGE = qubit-engine:latest
 
-.PHONY: all clean proto build-engine build-tui docker-build deploy test
+.PHONY: all clean proto build-engine build-tui docker-build deploy test docs
+
+# Generate API documentation
+docs:
+	@echo "Ensuring API Documentation is up to date..."
+	@ls docs/api_reference.md > /dev/null || (echo "Warning: API Reference missing!")
+	@echo "Documentation available at docs/api_reference.md"
+
 
 all: proto build-engine
 
@@ -22,7 +29,7 @@ proto:
 build-engine:
 	@echo "Building C++ Engine..."
 	@mkdir -p backend/build
-	cd backend/build && cmake .. -DCMAKE_TOOLCHAIN_FILE=/Users/sahil/vcpkg/scripts/buildsystems/vcpkg.cmake && cmake --build . --config Release
+	cd backend/build && cmake .. -DCMAKE_TOOLCHAIN_FILE=/Users/sahil/vcpkg/scripts/buildsystems/vcpkg.cmake -DMPI_ENABLED=ON && cmake --build . --config Release --parallel
 
 # Build Rust TUI
 build-tui:

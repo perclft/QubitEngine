@@ -1,85 +1,60 @@
 #pragma once
 
 #include "IQuantumBackend.hpp"
-#include <chrono>
-#include <cstdlib> // getenv
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <thread>
+#include "quantum.grpc.pb.h"
+#include <grpcpp/grpcpp.h>
+#include <memory>
 #include <vector>
+
+namespace qubit_engine {
 
 class CloudBackend : public IQuantumBackend {
 public:
-  CloudBackend(int num_qubits) : num_qubits_(num_qubits) {
-    // Secure Credential Loading
-    const char *apiKey = std::getenv("CLOUD_API_KEY");
-    const char *providerUrl = std::getenv("CLOUD_PROVIDER_URL");
+  CloudBackend(size_t num_qubits, const std::string &remote_url);
+  virtual ~CloudBackend() = default;
 
-    if (!apiKey || !providerUrl) {
-      // For MVP, if not set, warn but maybe default to a demo mode?
-      // User requested strict credentials. Let's throw to enforce best
-      // practice. Actually, for better UX, let's allow it but warn heavily.
-      std::cerr
-          << "CRITICAL WARNING: CLOUD_API_KEY or CLOUD_PROVIDER_URL not set."
-          << std::endl;
-      // throw std::runtime_error("Missing Cloud Credentials in Environment");
-      m_apiKey = "DEMO_KEY";
-      m_providerUrl = "https://api.quantum-cloud.io/v1";
-    } else {
-      m_apiKey = apiKey;
-      m_providerUrl = providerUrl;
-    }
+  // --- Core Gates ---
+  void applyHadamard(size_t target) override;
+  void applyX(size_t target) override;
+  void applyY(size_t target) override;
+  void applyZ(size_t target) override;
+  void applyCNOT(size_t control, size_t target) override;
 
-    std::cout << "Connected to Cloud Provider: " << m_providerUrl << std::endl;
-  }
+  // --- Advanced Gates ---
+  void applyToffoli(size_t control1, size_t control2, size_t target) override;
+  void applyPhaseS(size_t target) override;
+  void applyPhaseT(size_t target) override;
+  void applyRotationX(size_t target, Precision angle) override;
+  void applyRotationY(size_t target, Precision angle) override;
+  void applyRotationZ(size_t target, Precision angle) override;
+  void applySWAP(size_t qubit1, size_t qubit2) override;
+  void applyCZ(size_t control, size_t target) override;
 
-  void applyGate(const qubit_engine::GateOperation &op) override {
-    // Buffer the operation for batch submission
-    m_bufferedOps.push_back(op);
-  }
+  // --- Noise ---
+  void applyDepolarizingNoise(Precision probability) override;
 
-  void getResult(qubit_engine::StateResponse *response) override {
-    std::cout << "[Cloud] Authenticating..." << std::endl;
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+  // --- Measurement & Analysis ---
+  int measure(size_t target) override;
+  std::vector<double> getProbabilities() override;
+  double expectationValue(const std::string &pauli_string) override;
 
-    std::cout << "[Cloud] Submitting Job (" << m_bufferedOps.size()
-              << " gates) to " << m_providerUrl << "..." << std::endl;
-    // Simulate Network Latency
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+  // --- State Access ---
+  std::vector<Complex> getStateVector() const override;
 
-    std::cout << "[Cloud] Job Status: QUEUE -> RUNNING -> COMPLETED"
-              << std::endl;
-
-    // Mock a Result: Return a simple |0...0> or random state
-    // Since we offloaded, we don't have the state vector locally!
-    // Cloud providers usually return counts (shots).
-    // Our API expects a state vector (Simulator style) or we can just return
-    // empty and counts? Protocol defines `state_vector` and
-    // `classical_results`.
-
-    // Let's fake a perfect |0> state for simplicity, or random.
-    // Or better: Just set the server ID to indicate cloud execution.
-
-    response->set_server_id("Cloud::IBM_Q_Hamburg");
-
-    // Return a dummy state vector (normalized) to satisfy frontend renderer
-    // |00...0>
-    if (num_qubits_ > 0) {
-      auto *c = response->add_state_vector();
-      c->set_real(1.0);
-      c->set_imag(0.0);
-      for (size_t i = 1; i < (1ULL << num_qubits_); ++i) {
-        auto *z = response->add_state_vector();
-        z->set_real(0.0);
-        z->set_imag(0.0);
-      }
-    }
-  }
+  // --- Hardware Properties ---
+  size_t getNumQubits() const override { return num_qubits_; }
 
 private:
-  int num_qubits_;
-  std::string m_apiKey;
-  std::string m_providerUrl;
-  std::vector<qubit_engine::GateOperation> m_bufferedOps;
+  size_t num_qubits_;
+  std::string remote_url_;
+  std::unique_ptr<QuantumCompute::Stub> stub_;
+  
+  // Buffering the circuit for batch remote execution
+  qubit_engine::CircuitRequest request_;
+
+  void ensureRemoteExecution() const;
+  mutable qubit_engine::StateResponse last_response_;
+  mutable bool needs_sync_ = true;
 };
+
+} // namespace qubit_engine
