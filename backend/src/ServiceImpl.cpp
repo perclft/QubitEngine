@@ -176,12 +176,34 @@ void QubitEngineServiceImpl::serializeState(
 
 // Factory Helper Removed - Access via QuantumRegister directly
 
+// Authentication Helper
+bool QubitEngineServiceImpl::ValidateAuth(grpc::ServerContext *context) const {
+  const auto& client_metadata = context->client_metadata();
+  auto iter = client_metadata.find("authorization");
+  if (iter == client_metadata.end()) {
+    return false;
+  }
+  std::string token(iter->second.data(), iter->second.length());
+  // Basic bearer token extraction
+  if (token.rfind("Bearer ", 0) == 0) {
+    token = token.substr(7);
+  }
+  
+  const char* env_token = std::getenv("QUBIT_ENGINE_AUTH_TOKEN");
+  std::string expected_token = env_token ? env_token : "default-secret-token";
+  return token == expected_token;
+}
+
 grpc::Status
 QubitEngineServiceImpl::RunCircuit(grpc::ServerContext *context,
                                    const qubit_engine::CircuitRequest *request,
                                    qubit_engine::StateResponse *response) {
 
   spdlog::debug("RunCircuit method invoked!");
+
+  if (!ValidateAuth(context)) {
+    return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "Invalid or missing authorization token");
+  }
 
   int n = request->num_qubits();
 
@@ -297,6 +319,10 @@ grpc::Status QubitEngineServiceImpl::StreamGates(
 
   spdlog::debug("StreamGates method invoked!");
 
+  if (!ValidateAuth(context)) {
+    return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "Invalid or missing authorization token");
+  }
+
   // We need to initialize the register. But wait, how do we know 'N'?
   // Protocol Design Flaw detected and patched on the fly:
   // We expect the FIRST message to contain a special "setup" op or just
@@ -360,6 +386,10 @@ grpc::Status QubitEngineServiceImpl::RunVQE(
     grpc::ServerWriter<qubit_engine::VQEResponse> *writer) {
 
   spdlog::info("Starting VQE Optimization...");
+
+  if (!ValidateAuth(context)) {
+    return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "Invalid or missing authorization token");
+  }
 
   // 1. Setup
   int num_qubits = 0;
@@ -528,6 +558,10 @@ grpc::Status QubitEngineServiceImpl::GetHardwareTopology(
     qubit_engine::HardwareTopologyResponse *response) {
 
   spdlog::info("Serving GetHardwareTopology request...");
+
+  if (!ValidateAuth(context)) {
+    return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "Invalid or missing authorization token");
+  }
 
   // Honeycomb-shaped mathematically correct 16-qubit Heavy-Hex Lattice
   struct NodeDef {

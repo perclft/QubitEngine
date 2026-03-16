@@ -40,4 +40,5 @@ private:
                       qubit_engine::CircuitRequest::MeasurementStrategy
                           strategy = qubit_engine::CircuitRequest::FULL_STATE,
                       bool use_shm = false);
+  bool ValidateAuth(grpc::ServerContext *context) const;
 };

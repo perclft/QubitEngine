@@ -1,0 +1,185 @@
+syntax = "proto3";
+
+package qubit_engine;
+
+// Standard options for Go (used in your original file)
+option go_package = "github.com/perclft/QubitEngine/api/generated";
+
+// Standard options for C++ (often included for generated headers)
+option cc_enable_arenas = true;
+option java_multiple_files = true;
+option java_package = "com.perclft.qubitengine";
+
+// ------------------------------------------------------------------
+// Service Definition
+// ------------------------------------------------------------------
+
+service QuantumCompute {
+  // Synchronous run for small to medium circuits.
+  rpc RunCircuit (CircuitRequest) returns (StateResponse) {}
+  
+  // Streaming method for large or interactive circuits.
+  // Sends a stream of gates and receives a stream of FULL STATE VECTORS.
+  rpc StreamGates (stream GateOperation) returns (stream StateResponse) {}
+
+  // Visualization method for Web (Server-Side Streaming only).
+  // gRPC-Web does not support bidirectional streaming.
+  // This executes a circuit and streams back the state after EACH step.
+  rpc VisualizeCircuit (CircuitRequest) returns (stream StateResponse) {}
+
+  // VQE Simulation for Quantum Chemistry
+  rpc RunVQE (VQERequest) returns (stream VQEResponse) {}
+
+  // Fetch Hardware Topology for Visualization
+  rpc GetHardwareTopology (HardwareTopologyRequest) returns (HardwareTopologyResponse) {}
+}
+
+// ------------------------------------------------------------------
+// Messages (Data Structures)
+// ------------------------------------------------------------------
+
+message CircuitRequest {
+  int32 num_qubits = 1;
+  repeated GateOperation operations = 2;
+  // Probability of a depolarizing error occurring per step (0.0 - 1.0)
+  double noise_probability = 3;
+
+  enum ExecutionBackend {
+    SIMULATOR = 0;
+    MOCK_HARDWARE = 1;
+    REAL_IBM_Q = 2; // Future use
+  }
+  ExecutionBackend execution_backend = 4;
+
+  enum MeasurementStrategy {
+    FULL_STATE = 0;
+    SPARSE_STATE = 1;
+    EXPECTATION_VALUES = 2;
+  }
+  MeasurementStrategy measurement_strategy = 5;
+  bool use_shm = 6;
+}
+
+message GateOperation {
+  enum GateType {
+    HADAMARD = 0;
+    PAULI_X = 1;
+    CNOT = 2;
+    MEASURE = 3;
+    TOFFOLI = 4;
+    PHASE_S = 5;            // S Gate (Z90)
+    PHASE_T = 6;            // T Gate (Z45)
+    ROTATION_Y = 7;
+    ROTATION_Z = 8;
+    PAULI_Y = 9;
+    PAULI_Z = 10;
+    ROTATION_X = 11;
+    SWAP = 12;
+    CZ = 13;
+    DEPOLARIZING_NOISE = 14;
+  }
+  GateType type = 1;
+  uint32 target_qubit = 2;
+  uint32 control_qubit = 3;
+  // Register to store the classical measurement result
+  uint32 classical_register = 4;
+
+  // Rotation angle in radians (for RX, RY, RZ gates)
+  double angle = 5;
+
+  // For Toffoli (second control qubit)
+  uint32 second_control_qubit = 6;
+
+  // For SWAP and two-target gates (second target qubit)
+  uint32 second_target_qubit = 7;
+
+  // For DEPOLARIZING_NOISE (error probability 0.0 - 1.0)
+  double noise_probability = 8;
+}
+
+message StateResponse {
+  message ComplexNumber {
+    // Note: Using 'double' is standard for quantum state vectors.
+    double real = 1;
+    double imag = 2;
+  }
+  // The full state vector of size 2^num_qubits
+  repeated ComplexNumber state_vector = 1;
+
+  // Return measured classical bits (e.g., Qubit 0 -> 1)
+  map<uint32, bool> classical_results = 2;
+
+  // Identity of the server (Hostname/Pod ID) that processed this step
+  string server_id = 3;
+
+  // Sparse representations if Strategy != FULL_STATE
+  repeated Measurement sparse_states = 4;
+  repeated double expectation_values = 5;
+
+  // Shared memory descriptor if Zero-Copy IPC is utilized
+  string shm_descriptor = 6;
+}
+
+message Measurement {
+  uint32 qubit_index = 1;
+  bool result = 2;
+  double probability = 3; // Probability of the measured result
+}
+
+// ------------------------------------------------------------------
+// VQE / Chemistry Messages
+// ------------------------------------------------------------------
+
+message PauliTerm {
+    string pauli_string = 1;
+    double coefficient = 2;
+}
+
+message VQERequest {
+    enum Molecule {
+        H2 = 0;   // Hydrogen molecule
+        LiH = 1;  // Lithium Hydride
+    }
+    Molecule molecule = 1 [deprecated = true];
+    int32 max_iterations = 2;
+    double learning_rate = 3; // For Gradient Descent
+
+    enum OptimizerType {
+        SPSA = 0;             // Simultaneous Perturbation Stochastic Approximation
+        GRADIENT_DESCENT = 1; // Native Differentiable Simulation (Parameter Shift)
+    }
+    OptimizerType optimizer_type = 4;
+
+    repeated PauliTerm observables = 5;
+}
+
+message VQEResponse {
+    int32 iteration = 1;
+    double energy = 2;        // Expected energy in Hartrees
+    repeated double parameters = 3; // Current ansatz parameters (angles)
+    bool converged = 4;
+}
+
+// ------------------------------------------------------------------
+// Hardware Topology Messages
+// ------------------------------------------------------------------
+
+message HardwareTopologyRequest {
+    // Empty for now, could specify backend types later
+}
+
+message QubitNode {
+    int32 id = 1;
+    double x = 2;
+    double y = 3;
+}
+
+message CouplerEdge {
+    int32 node1 = 1;
+    int32 node2 = 2;
+}
+
+message HardwareTopologyResponse {
+    repeated QubitNode nodes = 1;
+    repeated CouplerEdge edges = 2;
+}

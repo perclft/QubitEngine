@@ -320,3 +320,171 @@ void QuantumDifferentiator::applyGateDerivativeToState(
     break;
   }
 }
+
+// --- GPU Adjoint Differentiation ---
+#include "backends/GPUQuantumRegister.hpp"
+
+#ifdef ENABLE_CUDA
+#include "kernels/GateKernels.hpp"
+#endif
+
+std::vector<double> QuantumDifferentiator::calculateGradientsAdjointGPU(
+    int num_qubits,
+    const std::vector<double> &current_params,
+    AnsatzFunc<QuantumRegister> applyAnsatz,
+    const std::vector<PauliTerm> &hamiltonian) {
+  
+  size_t num_params = current_params.size();
+  std::vector<double> gradients(num_params, 0.0);
+
+#ifndef ENABLE_CUDA
+  // Fallback to CPU if CUDA is not enabled during build
+  return calculateGradientsAdjoint<QuantumRegister>(num_qubits, current_params, applyAnsatz, hamiltonian);
+#else
+  if (hamiltonian.empty() || num_params == 0) {
+    return gradients;
+  }
+
+  // --- Step 1: Record the circuit tape using CPU QuantumRegister ---
+  QuantumRegister tape_reg(num_qubits, true);
+  tape_reg.enableRecording(true);
+  applyAnsatz(current_params, tape_reg);
+  tape_reg.enableRecording(false);
+  
+  const auto &tape = tape_reg.getTape();
+
+  // Build map: tape index -> parameter index
+  std::vector<int> tape_param_index(tape.size(), -1);
+  int param_counter = 0;
+  for (size_t i = 0; i < tape.size(); ++i) {
+    auto t = tape[i].type;
+    if (t == QuantumRegister::RecordedGate::RX ||
+        t == QuantumRegister::RecordedGate::RY ||
+        t == QuantumRegister::RecordedGate::RZ) {
+      if (param_counter < static_cast<int>(num_params)) {
+        tape_param_index[i] = param_counter++;
+      }
+    }
+  }
+
+  // --- Step 2: Forward pass on GPU to get |ψ⟩ ---
+  GPUQuantumRegister psi_reg(num_qubits);
+  for (const auto& gate : tape) {
+    psi_reg.applyRegisteredGate(gate);
+  }
+  
+  size_t dim = 1ULL << num_qubits;
+  size_t size_bytes = dim * 2 * sizeof(double); // cuDoubleComplex size
+  
+  // psi_ptr is managed by psi_reg, do not free it manually!
+  void* psi_ptr = psi_reg.getDeviceState();
+
+  // --- Step 3: Compute |λ⟩ = H|ψ⟩ on GPU ---
+  void* lambda_ptr = qe::cuda::allocateDeviceState(size_bytes);
+  qe::cuda::setDeviceStateZero(lambda_ptr, size_bytes);
+
+  void* pauli_psi_ptr = qe::cuda::allocateDeviceState(size_bytes);
+  
+  for (const auto &term : hamiltonian) {
+    qe::cuda::setDeviceStateZero(pauli_psi_ptr, size_bytes);
+    
+    // Encode Pauli ops
+    // 0=I, 1=X, 2=Y, 3=Z
+    std::vector<int> pauli_ops(num_qubits, 0);
+    for (size_t q = 0; q < static_cast<size_t>(num_qubits) && q < term.pauli_string.size(); ++q) {
+      char op = term.pauli_string[term.pauli_string.size() - 1 - q]; // Need to match correct qubit endianness. The current C++ loop uses `q` directly.
+      if (op == 'X') pauli_ops[q] = 1;
+      else if (op == 'Y') pauli_ops[q] = 2;
+      else if (op == 'Z') pauli_ops[q] = 3;
+    }
+    
+    // Override! The CPU codebase loops `q` from 0 to term.pauli_string.size()-1
+    // and checks bit `(i >> q) & 1`.
+    for (size_t q = 0; q < static_cast<size_t>(num_qubits) && q < term.pauli_string.size(); ++q) {
+      char op = term.pauli_string[q];
+      if (op == 'X') pauli_ops[q] = 1;
+      else if (op == 'Y') pauli_ops[q] = 2;
+      else if (op == 'Z') pauli_ops[q] = 3;
+      else pauli_ops[q] = 0;
+    }
+
+    int* d_pauli_ops;
+    cudaMalloc(&d_pauli_ops, num_qubits * sizeof(int));
+    cudaMemcpy(d_pauli_ops, pauli_ops.data(), num_qubits * sizeof(int), cudaMemcpyHostToDevice);
+
+    // Apply term.coefficient * P|ψ⟩ and add to lambda
+    qe::cuda::launchApplyPauliTerm(lambda_ptr, psi_ptr, num_qubits, d_pauli_ops, term.coefficient);
+    cudaFree(d_pauli_ops);
+  }
+  
+  qe::cuda::freeDeviceState(pauli_psi_ptr);
+
+  // --- Step 4: Backward pass ---
+  void* dpsi_ptr = qe::cuda::allocateDeviceState(size_bytes);
+  // Device pointer for single double result
+  double* d_grad_out;
+  cudaMalloc(&d_grad_out, sizeof(double));
+
+  for (int i = static_cast<int>(tape.size()) - 1; i >= 0; --i) {
+    const auto &gate = tape[i];
+
+    // a. Un-apply gate from |ψ⟩
+    psi_reg.applyRegisteredGateInverse(gate);
+
+    // b. If parameterized, compute gradient contribution
+    if (tape_param_index[i] >= 0) {
+      int pidx = tape_param_index[i];
+
+      // Compute dU/dθ |ψ⟩ => dpsi
+      qe::cuda::setDeviceStateZero(dpsi_ptr, size_bytes);
+      if (gate.type == QuantumRegister::RecordedGate::RY) {
+        qe::cuda::launchDerivativeRY(dpsi_ptr, psi_ptr, num_qubits, gate.qubits[0], gate.params[0]);
+      } else if (gate.type == QuantumRegister::RecordedGate::RX) {
+        qe::cuda::launchDerivativeRX(dpsi_ptr, psi_ptr, num_qubits, gate.qubits[0], gate.params[0]);
+      } else if (gate.type == QuantumRegister::RecordedGate::RZ) {
+        qe::cuda::launchDerivativeRZ(dpsi_ptr, psi_ptr, num_qubits, gate.qubits[0], gate.params[0]);
+      }
+
+      // clear d_grad_out
+      cudaMemset(d_grad_out, 0, sizeof(double));
+
+      // grad[pidx] += 2 * Re(⟨λ|dU/dθ|ψ⟩)
+      qe::cuda::launchAdjointInnerProduct(dpsi_ptr, lambda_ptr, d_grad_out, dim);
+      
+      double grad_val = 0.0;
+      cudaMemcpy(&grad_val, d_grad_out, sizeof(double), cudaMemcpyDeviceToHost);
+      gradients[pidx] += grad_val;
+    }
+
+    // c. Un-apply gate from |λ⟩
+    // To do this, we temporarily wrap lambda_ptr in a dummy GPUQuantumRegister, 
+    // or just call the Inverse kernels directly. 
+    // We already have inverse kernels available via launchHadamard, etc., but the easiest is
+    // to swap device pointers in psi_reg temporarily.
+    // However, GPUQuantumRegister doesn't let us swap pointers.
+    // Let's implement static applyInverse wrapper locally.
+    auto applyInv = [&](void* device_state_ptr) {
+      if (gate.type == QuantumRegister::RecordedGate::H) qe::cuda::launchHadamard(device_state_ptr, num_qubits, gate.qubits[0]);
+      else if (gate.type == QuantumRegister::RecordedGate::X) qe::cuda::launchapplyX(device_state_ptr, num_qubits, gate.qubits[0]);
+      else if (gate.type == QuantumRegister::RecordedGate::Y) qe::cuda::launchapplyY(device_state_ptr, num_qubits, gate.qubits[0]);
+      else if (gate.type == QuantumRegister::RecordedGate::Z) qe::cuda::launchapplyZ(device_state_ptr, num_qubits, gate.qubits[0]);
+      else if (gate.type == QuantumRegister::RecordedGate::CNOT) qe::cuda::launchCNOT(device_state_ptr, num_qubits, gate.qubits[0], gate.qubits[1]);
+      else if (gate.type == QuantumRegister::RecordedGate::CZ) qe::cuda::launchCZ(device_state_ptr, num_qubits, gate.qubits[0], gate.qubits[1]);
+      else if (gate.type == QuantumRegister::RecordedGate::SWAP) qe::cuda::launchSWAP(device_state_ptr, num_qubits, gate.qubits[0], gate.qubits[1]);
+      else if (gate.type == QuantumRegister::RecordedGate::RX) qe::cuda::launchRotationX(device_state_ptr, num_qubits, gate.qubits[0], -gate.params[0]);
+      else if (gate.type == QuantumRegister::RecordedGate::RY) qe::cuda::launchRotationY(device_state_ptr, num_qubits, gate.qubits[0], -gate.params[0]);
+      else if (gate.type == QuantumRegister::RecordedGate::RZ) qe::cuda::launchRotationZ(device_state_ptr, num_qubits, gate.qubits[0], -gate.params[0]);
+      else if (gate.type == QuantumRegister::RecordedGate::PHASE_S) qe::cuda::launchRotationZ(device_state_ptr, num_qubits, gate.qubits[0], -M_PI/2.0);
+      else if (gate.type == QuantumRegister::RecordedGate::PHASE_T) qe::cuda::launchRotationZ(device_state_ptr, num_qubits, gate.qubits[0], -M_PI/4.0);
+      else if (gate.type == QuantumRegister::RecordedGate::TOFFOLI) qe::cuda::launchToffoli(device_state_ptr, num_qubits, gate.qubits[0], gate.qubits[1], gate.qubits[2]);
+    };
+    applyInv(lambda_ptr);
+  }
+
+  cudaFree(d_grad_out);
+  qe::cuda::freeDeviceState(dpsi_ptr);
+  qe::cuda::freeDeviceState(lambda_ptr);
+
+  return gradients;
+#endif
+}

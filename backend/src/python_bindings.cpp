@@ -54,8 +54,15 @@ PYBIND11_MODULE(core, m) {
       .def(
           "get_state_vector",
           [](const qubit_engine::StabilizerBackend &s) {
-            // Wrap throwing call to ensure error passes cleanly to Python
-            return s.getStateVector();
+            auto* vec_ptr = new std::vector<std::complex<double>>(std::move(s.getStateVector()));
+            auto capsule = py::capsule(vec_ptr, [](void *p) {
+                delete reinterpret_cast<std::vector<std::complex<double>>*>(p);
+            });
+            return py::array_t<std::complex<double>>(
+                vec_ptr->size(),
+                vec_ptr->data(),
+                capsule
+            );
           },
           "Get the full state vector (throws exception due to exponential "
           "scaling)")
@@ -81,7 +88,17 @@ PYBIND11_MODULE(core, m) {
       .def("measure", &QuantumRegister::measure)
       .def("getProbabilities", &QuantumRegister::getProbabilities)
       .def("expectationValue", &QuantumRegister::expectationValue)
-      .def("getStateVector", &QuantumRegister::getStateVector);
+      .def("getStateVector", [](QuantumRegister &q) {
+          auto* vec_ptr = new std::vector<std::complex<double>>(std::move(q.getStateVector()));
+          auto capsule = py::capsule(vec_ptr, [](void *p) {
+              delete reinterpret_cast<std::vector<std::complex<double>>*>(p);
+          });
+          return py::array_t<std::complex<double>>(
+              vec_ptr->size(),
+              vec_ptr->data(),
+              capsule
+          );
+      });
 
   // --- GPUQuantumRegister Binding ---
   py::class_<GPUQuantumRegister>(m, "GPUQuantumRegister")
@@ -92,7 +109,17 @@ PYBIND11_MODULE(core, m) {
       .def("applyY", &GPUQuantumRegister::applyY)
       .def("applyZ", &GPUQuantumRegister::applyZ)
       .def("applyRotationY", &GPUQuantumRegister::applyRotationY)
-      .def("getStateVector", &GPUQuantumRegister::getStateVector);
+      .def("getStateVector", [](const GPUQuantumRegister &q) {
+          auto* vec_ptr = new std::vector<std::complex<double>>(std::move(q.getStateVector()));
+          auto capsule = py::capsule(vec_ptr, [](void *p) {
+              delete reinterpret_cast<std::vector<std::complex<double>>*>(p);
+          });
+          return py::array_t<std::complex<double>>(
+              vec_ptr->size(),
+              vec_ptr->data(),
+              capsule
+          );
+      });
 
   // --- QuantumDifferentiator Binding ---
   m.def(
@@ -189,18 +216,15 @@ PYBIND11_MODULE(core, m) {
         for (const auto &item : hamiltonian_data) {
           hamiltonian.push_back({item.first, item.second});
         }
-        // Note: GPU adjoint currently delegates to CPU adjoint.
-        // The ansatz is executed with QuantumRegister (CPU).
-        // Future: Add GPU-accelerated adjoint path.
+        
         QuantumDifferentiator::AnsatzFunc<QuantumRegister> cpp_ansatz =
             [&](const std::vector<double> &p, QuantumRegister &q) {
               ansatz_func(p, &q);
             };
-        return QuantumDifferentiator::calculateGradientsAdjoint(
+        return QuantumDifferentiator::calculateGradientsAdjointGPU(
             num_qubits, params, cpp_ansatz, hamiltonian);
       },
-      "Calculate analytical gradients using Adjoint Method (GPU - currently "
-      "delegates to CPU)");
+      "Calculate analytical gradients using Adjoint Method on GPU (Fallback to CPU if CUDA is disabled)");
 
   // --- AdamOptimizer Binding ---
   using qubit_engine::optimizers::AdamOptimizer;

@@ -151,6 +151,13 @@ public:
     return gradients;
   }
 
+  // GPU Adjoint Differentiation implementation
+  static std::vector<double> calculateGradientsAdjointGPU(
+      int num_qubits,
+      const std::vector<double> &current_params,
+      AnsatzFunc<QuantumRegister> applyAnsatz,
+      const std::vector<PauliTerm> &hamiltonian);
+
 private:
   using Complex = qubit_engine::Complex;
   using P = qubit_engine::Precision;

@@ -1,0 +1,38 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.37.0",
+    "google-protobuf": "^4.0.2",
+    "grpc-web": "^2.0.2",
+    "lucide-react": "^0.577.0",
+    "next": "16.1.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "tailwind-merge": "^3.5.0"
+  },
+  "devDependencies": {
+    "@grpc/grpc-js": "^1.14.3",
+    "@grpc/proto-loader": "^0.8.0",
+    "@tailwindcss/postcss": "^4",
+    "@types/google-protobuf": "^3.15.12",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.6",
+    "grpc-tools": "^1.13.1",
+    "json-schema-to-ts": "^3.1.1",
+    "tailwindcss": "^4",
+    "ts-proto": "^2.11.5",
+    "typescript": "^5"
+  }
+}

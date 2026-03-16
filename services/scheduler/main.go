@@ -22,7 +22,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"strings"
+	"github.com/improbable-eng/grpc-web/go/grpcweb"
 )
 
 var (
@@ -445,21 +448,85 @@ func main() {
 		}
 	}()
 
-	// Start gRPC server
+	// Start gRPC server with Auth Interceptor
+	authInterceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			return nil, status.Errorf(codes.Unauthenticated, "metadata is not provided")
+		}
+		authHeader, ok := md["authorization"]
+		if !ok || len(authHeader) == 0 {
+			return nil, status.Errorf(codes.Unauthenticated, "authorization token is not provided")
+		}
+		token := strings.TrimPrefix(authHeader[0], "Bearer ")
+		expectedToken := os.Getenv("QUBIT_ENGINE_AUTH_TOKEN")
+		if expectedToken == "" {
+			expectedToken = "default-secret-token"
+		}
+		if token != expectedToken {
+			return nil, status.Errorf(codes.Unauthenticated, "invalid authorization token")
+		}
+		return handler(ctx, req)
+	}
+
+	streamAuthInterceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		md, ok := metadata.FromIncomingContext(ss.Context())
+		if !ok {
+			return status.Errorf(codes.Unauthenticated, "metadata is not provided")
+		}
+		authHeader, ok := md["authorization"]
+		if !ok || len(authHeader) == 0 {
+			return status.Errorf(codes.Unauthenticated, "authorization token is not provided")
+		}
+		token := strings.TrimPrefix(authHeader[0], "Bearer ")
+		expectedToken := os.Getenv("QUBIT_ENGINE_AUTH_TOKEN")
+		if expectedToken == "" {
+			expectedToken = "default-secret-token"
+		}
+		if token != expectedToken {
+			return status.Errorf(codes.Unauthenticated, "invalid authorization token")
+		}
+		return handler(srv, ss)
+	}
+
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		slog.Error("Failed to listen", "error", err)
 		os.Exit(1)
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(authInterceptor),
+		grpc.StreamInterceptor(streamAuthInterceptor),
+	)
 	pb.RegisterQuantumSchedulerServer(grpcServer, server)
 
 	slog.Info("Quantum Scheduler starting",
 		"port", *port,
+		"grpc-web", ":8080",
 		"redis", *redisAddr,
 		"engine", *engineAddr,
 	)
+
+	// Wrap server with gRPC-Web
+	wrappedGrpc := grpcweb.WrapServer(grpcServer, grpcweb.WithOriginFunc(func(origin string) bool { return true }))
+
+	httpServer := &http.Server{
+		Addr: ":8080",
+		Handler: http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+			if wrappedGrpc.IsGrpcWebRequest(req) {
+				wrappedGrpc.ServeHTTP(res, req)
+			} else {
+				http.DefaultServeMux.ServeHTTP(res, req)
+			}
+		}),
+	}
+	
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil {
+			slog.Error("gRPC-Web server failed", "error", err)
+		}
+	}()
 
 	if err := grpcServer.Serve(lis); err != nil {
 		slog.Error("Failed to serve", "error", err)

@@ -10,6 +10,10 @@ grpc::Status QubitEngineServiceImpl::VisualizeCircuit(
   std::cout << "[VisualizeCircuit] Received request for "
             << request->num_qubits() << " qubits." << std::endl;
 
+  if (!ValidateAuth(context)) {
+    return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "Invalid or missing authorization token");
+  }
+
   // 1. Initialize Register
   QuantumRegister qreg(request->num_qubits());
 

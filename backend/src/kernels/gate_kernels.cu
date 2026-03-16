@@ -400,5 +400,157 @@ void launchComputeProbabilities(const void *deviceState, double *deviceProbs,
   // cudaDeviceSynchronize(); // Phase 4: Async kernels
 }
 
+// --- Memory Helpers ---
+void* allocateDeviceState(size_t size_bytes) {
+  void* ptr;
+  cudaMalloc(&ptr, size_bytes);
+  return ptr;
+}
+
+void freeDeviceState(void* ptr) {
+  cudaFree(ptr);
+}
+
+void copyDeviceToDevice(void* dst, const void* src, size_t size_bytes) {
+  cudaMemcpy(dst, src, size_bytes, cudaMemcpyDeviceToDevice);
+}
+
+void setDeviceStateZero(void* ptr, size_t size_bytes) {
+  cudaMemset(ptr, 0, size_bytes);
+}
+
+// --- Deriv Kernels ---
+
+__global__ void kDerivativeRY(cuDoubleComplex* out, const cuDoubleComplex* in, int num_qubits, int target, double angle) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int half_dim = 1 << (num_qubits - 1);
+  if (idx >= half_dim) return;
+
+  int i0 = ((idx >> target) << (target + 1)) | (idx & ((1 << target) - 1));
+  int i1 = i0 | (1 << target);
+
+  cuDoubleComplex v0 = in[i0];
+  cuDoubleComplex v1 = in[i1];
+
+  double c = cos(angle / 2.0);
+  double s = sin(angle / 2.0);
+  double h = 0.5;
+
+  cuDoubleComplex out0 = out[i0];
+  cuDoubleComplex out1 = out[i1];
+
+  out[i0] = add(out0, scale(sub(scale(v0, -s), scale(v1, c)), h));
+  out[i1] = add(out1, scale(sub(scale(v0, c), scale(v1, s)), h));
+}
+
+__global__ void kDerivativeRX(cuDoubleComplex* out, const cuDoubleComplex* in, int num_qubits, int target, double angle) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int half_dim = 1 << (num_qubits - 1);
+  if (idx >= half_dim) return;
+
+  int i0 = ((idx >> target) << (target + 1)) | (idx & ((1 << target) - 1));
+  int i1 = i0 | (1 << target);
+
+  cuDoubleComplex v0 = in[i0];
+  cuDoubleComplex v1 = in[i1];
+
+  double c = cos(angle / 2.0);
+  double s = sin(angle / 2.0);
+
+  cuDoubleComplex neg_ic = make_cuDoubleComplex(0, -c * 0.5);
+  double neg_s_half = -s * 0.5;
+
+  out[i0] = add(out[i0], add(scale(v0, neg_s_half), mul(neg_ic, v1)));
+  out[i1] = add(out[i1], add(mul(neg_ic, v0), scale(v1, neg_s_half)));
+}
+
+__global__ void kDerivativeRZ(cuDoubleComplex* out, const cuDoubleComplex* in, int num_qubits, int target, double angle) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int half_dim = 1 << (num_qubits - 1);
+  if (idx >= half_dim) return;
+
+  int i0 = ((idx >> target) << (target + 1)) | (idx & ((1 << target) - 1));
+  int i1 = i0 | (1 << target);
+
+  cuDoubleComplex d0_phase = make_cuDoubleComplex(cos(-angle/2.0), sin(-angle/2.0));
+  cuDoubleComplex d0 = mul(scale(make_cuDoubleComplex(0, -1), 0.5), d0_phase);
+  
+  cuDoubleComplex d1_phase = make_cuDoubleComplex(cos(angle/2.0), sin(angle/2.0));
+  cuDoubleComplex d1 = mul(scale(make_cuDoubleComplex(0, 1), 0.5), d1_phase);
+
+  out[i0] = add(out[i0], mul(d0, in[i0]));
+  out[i1] = add(out[i1], mul(d1, in[i1]));
+}
+
+__global__ void kAdjointInnerProduct(const cuDoubleComplex* dpsi, const cuDoubleComplex* lambda, double* grad_out, int dim) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if(idx < dim) {
+    cuDoubleComplex dp = dpsi[idx];
+    cuDoubleComplex lam = lambda[idx];
+    double re = cuCreal(lam) * cuCreal(dp) + cuCimag(lam) * cuCimag(dp); // Re(conj(lam) * dp)
+    atomicAdd(grad_out, 2.0 * re);
+  }
+}
+
+__global__ void kApplyPauliTerm(cuDoubleComplex* out, const cuDoubleComplex* in, int num_qubits, const int* d_pauli_ops, double coeff) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int dim = 1 << num_qubits;
+  if (idx >= dim) return;
+
+  int j = idx;
+  cuDoubleComplex c = make_cuDoubleComplex(coeff, 0);
+
+  for (int q = 0; q < num_qubits; ++q) {
+    int op = d_pauli_ops[q];
+    if (op == 0) continue; // I
+    
+    int bit_set = (idx >> q) & 1;
+    if (op == 1) { // X
+      j ^= (1 << q);
+    } else if (op == 2) { // Y
+      j ^= (1 << q);
+      c = mul(c, bit_set ? make_cuDoubleComplex(0, -1) : make_cuDoubleComplex(0, 1));
+    } else if (op == 3) { // Z
+      if (bit_set) c = scale(c, -1.0);
+    }
+  }
+
+  out[j] = add(out[j], mul(c, in[idx]));
+}
+
+void launchDerivativeRY(void* out, const void* in, int num_qubits, int target, double angle) {
+  int half_dim = 1 << (num_qubits - 1);
+  int blockSize = 256;
+  int numBlocks = (half_dim + blockSize - 1) / blockSize;
+  kDerivativeRY<<<numBlocks, blockSize>>>((cuDoubleComplex*)out, (const cuDoubleComplex*)in, num_qubits, target, angle);
+}
+
+void launchDerivativeRX(void* out, const void* in, int num_qubits, int target, double angle) {
+  int half_dim = 1 << (num_qubits - 1);
+  int blockSize = 256;
+  int numBlocks = (half_dim + blockSize - 1) / blockSize;
+  kDerivativeRX<<<numBlocks, blockSize>>>((cuDoubleComplex*)out, (const cuDoubleComplex*)in, num_qubits, target, angle);
+}
+
+void launchDerivativeRZ(void* out, const void* in, int num_qubits, int target, double angle) {
+  int half_dim = 1 << (num_qubits - 1);
+  int blockSize = 256;
+  int numBlocks = (half_dim + blockSize - 1) / blockSize;
+  kDerivativeRZ<<<numBlocks, blockSize>>>((cuDoubleComplex*)out, (const cuDoubleComplex*)in, num_qubits, target, angle);
+}
+
+void launchAdjointInnerProduct(const void* dpsi, const void* lambda, double* grad_out, int dim) {
+  int blockSize = 256;
+  int numBlocks = (dim + blockSize - 1) / blockSize;
+  kAdjointInnerProduct<<<numBlocks, blockSize>>>((const cuDoubleComplex*)dpsi, (const cuDoubleComplex*)lambda, grad_out, dim);
+}
+
+void launchApplyPauliTerm(void* out, const void* in, int num_qubits, const int* d_pauli_ops, double coeff) {
+  int dim = 1 << num_qubits;
+  int blockSize = 256;
+  int numBlocks = (dim + blockSize - 1) / blockSize;
+  kApplyPauliTerm<<<numBlocks, blockSize>>>((cuDoubleComplex*)out, (const cuDoubleComplex*)in, num_qubits, d_pauli_ops, coeff);
+}
+
 } // namespace cuda
 } // namespace qe

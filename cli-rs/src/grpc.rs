@@ -122,7 +122,7 @@ pub async fn run_circuit(server_addr: String, circuit_path: String, tx: mpsc::Se
         });
     }
 
-    let req = tonic::Request::new(crate::api::CircuitRequest {
+    let mut req = tonic::Request::new(crate::api::CircuitRequest {
         num_qubits: circuit.qubits,
         operations: ops,
         noise_probability: 0.0,
@@ -130,6 +130,11 @@ pub async fn run_circuit(server_addr: String, circuit_path: String, tx: mpsc::Se
         measurement_strategy: 0,
         use_shm: false,
     });
+
+    let token = std::env::var("QUBIT_ENGINE_AUTH_TOKEN").unwrap_or_else(|_| "default-secret-token".to_string());
+    if let Ok(meta_value) = format!("Bearer {}", token).parse() {
+        req.metadata_mut().insert("authorization", meta_value);
+    }
 
     let _ = tx
         .send(AppEvent::Grpc(GrpcEvent::Log(String::from(
@@ -230,13 +235,18 @@ pub async fn run_vqe(server_addr: String, tx: mpsc::Sender<AppEvent>) {
         )))
         .await;
 
-    let req = tonic::Request::new(crate::api::VqeRequest {
+    let mut req = tonic::Request::new(crate::api::VqeRequest {
         molecule: 0, // H2
         max_iterations: 100,
         learning_rate: 0.2,  // Faster convergence
         optimizer_type: 1,   // GRADIENT_DESCENT
         observables: vec![], // Added missing observables
     });
+
+    let token = std::env::var("QUBIT_ENGINE_AUTH_TOKEN").unwrap_or_else(|_| "default-secret-token".to_string());
+    if let Ok(meta_value) = format!("Bearer {}", token).parse() {
+        req.metadata_mut().insert("authorization", meta_value);
+    }
 
     let res = client.run_vqe(req).await;
     let mut stream = match res {
@@ -286,7 +296,12 @@ pub async fn get_topology(server_addr: String, tx: mpsc::Sender<AppEvent>) {
         }
     };
 
-    let req = tonic::Request::new(crate::api::HardwareTopologyRequest {});
+    let mut req = tonic::Request::new(crate::api::HardwareTopologyRequest {});
+
+    let token = std::env::var("QUBIT_ENGINE_AUTH_TOKEN").unwrap_or_else(|_| "default-secret-token".to_string());
+    if let Ok(meta_value) = format!("Bearer {}", token).parse() {
+        req.metadata_mut().insert("authorization", meta_value);
+    }
 
     match client.get_hardware_topology(req).await {
         Ok(res) => {

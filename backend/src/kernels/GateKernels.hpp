@@ -47,5 +47,19 @@ struct cuDoubleComplex;
 void launchFusedUnitary(void *deviceState, int num_qubits, const int *d_targets,
                         int k, const cuDoubleComplex *h_unitary);
 
+// --- Memory Management Helpers ---
+void* allocateDeviceState(size_t size_bytes);
+void freeDeviceState(void* ptr);
+void copyDeviceToDevice(void* dst, const void* src, size_t size_bytes);
+void setDeviceStateZero(void* ptr, size_t size_bytes);
+
+// --- Adjoint Helpers ---
+void launchDerivativeRY(void* out, const void* in, int num_qubits, int target, double angle);
+void launchDerivativeRX(void* out, const void* in, int num_qubits, int target, double angle);
+void launchDerivativeRZ(void* out, const void* in, int num_qubits, int target, double angle);
+
+void launchAdjointInnerProduct(const void* dpsi, const void* lambda, double* grad_out, int dim);
+void launchApplyPauliTerm(void* out, const void* in, int num_qubits, const int* d_pauli_ops, double coeff);
+
 } // namespace cuda
 } // namespace qe
