@@ -9,6 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "clsx": "^2.1.1",
     "framer-motion": "^12.37.0",
     "google-protobuf": "^4.0.2",
@@ -17,6 +20,7 @@
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "recharts": "^3.8.0",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {

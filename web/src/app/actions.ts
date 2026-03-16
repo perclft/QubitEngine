@@ -2,18 +2,15 @@
 
 import * as grpc from '@grpc/grpc-js';
 import { QuantumComputeClient } from '../api/quantum';
+import { QuantumSchedulerClient } from '../api/scheduler';
 import { CircuitRequest, GateOperation_GateType } from '../api/quantum';
 
 const ENGINE_ADDR = process.env.ENGINE_ADDR || '127.0.0.1:50051';
+const SCHEDULER_ADDR = process.env.SCHEDULER_ADDR || '127.0.0.1:50053';
 
-const getClient = () => {
-  return new QuantumComputeClient(
-    ENGINE_ADDR,
-    grpc.credentials.createInsecure()
-  );
-};
+const getClient = () => new QuantumComputeClient(ENGINE_ADDR, grpc.credentials.createInsecure());
+const getSchedulerClient = () => new QuantumSchedulerClient(SCHEDULER_ADDR, grpc.credentials.createInsecure());
 
-// Add Auth Metadata Helper
 const getMetadata = () => {
   const meta = new grpc.Metadata();
   const token = process.env.QUBIT_ENGINE_AUTH_TOKEN || 'default-secret-token';
@@ -21,83 +18,194 @@ const getMetadata = () => {
   return meta;
 };
 
+// Gate type string -> enum mapping
+const GATE_MAP: Record<string, GateOperation_GateType> = {
+  HADAMARD: GateOperation_GateType.HADAMARD,
+  PAULI_X: GateOperation_GateType.PAULI_X,
+  PAULI_Y: GateOperation_GateType.PAULI_Y,
+  PAULI_Z: GateOperation_GateType.PAULI_Z,
+  CNOT: GateOperation_GateType.CNOT,
+  SWAP: GateOperation_GateType.SWAP,
+  PHASE_S: GateOperation_GateType.PHASE_S,
+  PHASE_T: GateOperation_GateType.PHASE_T,
+  ROTATION_X: GateOperation_GateType.ROTATION_X,
+  ROTATION_Y: GateOperation_GateType.ROTATION_Y,
+  ROTATION_Z: GateOperation_GateType.ROTATION_Z,
+  TOFFOLI: GateOperation_GateType.TOFFOLI,
+  MEASURE: GateOperation_GateType.MEASURE,
+  CZ: GateOperation_GateType.CZ,
+};
+
+// ─── Dashboard: GHZ Demo ───────────────────────────────────────────────
 export async function runDemoCircuit(numQubits: number) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const client = getClient();
-    
-    // Create a 3-qubit GHZ state circuit as demo
     const req: CircuitRequest = {
-      numQubits: numQubits,
+      numQubits,
       operations: [
-        {
-          type: GateOperation_GateType.HADAMARD,
-          targetQubit: 0,
-          controlQubit: 0,
-          classicalRegister: 0,
-          angle: 0,
-          secondControlQubit: 0,
-          secondTargetQubit: 0,
-          noiseProbability: 0
-        },
-        {
-          type: GateOperation_GateType.CNOT,
-          targetQubit: 1,
-          controlQubit: 0,
-          classicalRegister: 0,
-          angle: 0,
-          secondControlQubit: 0,
-          secondTargetQubit: 0,
-          noiseProbability: 0
-        },
-        {
-          type: GateOperation_GateType.CNOT,
-          targetQubit: 2,
-          controlQubit: 1,
-          classicalRegister: 0,
-          angle: 0,
-          secondControlQubit: 0,
-          secondTargetQubit: 0,
-          noiseProbability: 0
-        }
+        { type: GateOperation_GateType.HADAMARD, targetQubit: 0, controlQubit: 0, classicalRegister: 0, angle: 0, secondControlQubit: 0, secondTargetQubit: 0, noiseProbability: 0 },
+        { type: GateOperation_GateType.CNOT, targetQubit: 1, controlQubit: 0, classicalRegister: 0, angle: 0, secondControlQubit: 0, secondTargetQubit: 0, noiseProbability: 0 },
+        { type: GateOperation_GateType.CNOT, targetQubit: 2, controlQubit: 1, classicalRegister: 0, angle: 0, secondControlQubit: 0, secondTargetQubit: 0, noiseProbability: 0 },
       ],
       noiseProbability: 0,
-      executionBackend: 0, // SIMULATOR
-      measurementStrategy: 1, // SPARSE_STATE (only probabilities > 1e-6)
-      useShm: false
+      executionBackend: 0,
+      measurementStrategy: 1,
+      useShm: false,
     };
-
     client.runCircuit(req, getMetadata(), (err, response) => {
-      if (err) {
-        console.error("gRPC Error:", err);
-        resolve({ error: err.message });
-        return;
-      }
-      
-      const results = response.sparseStates.map(st => ({
-        index: st.qubitIndex,
-        probability: st.probability
-      }));
-      
+      if (err) { resolve({ error: err.message }); return; }
       resolve({
         serverId: response.serverId,
-        results
+        results: response.sparseStates.map(st => ({ index: st.qubitIndex, probability: st.probability })),
       });
     });
   });
 }
 
+// ─── Dashboard: Topology ────────────────────────────────────────────────
 export async function getTopology() {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const client = getClient();
     client.getHardwareTopology({}, getMetadata(), (err, response) => {
-      if (err) {
-        console.error("gRPC Error:", err);
-        resolve({ error: err.message });
-        return;
-      }
+      if (err) { resolve({ error: err.message }); return; }
+      resolve({ nodes: response.nodes, edges: response.edges });
+    });
+  });
+}
+
+// ─── Circuit Lab: Custom Circuit ────────────────────────────────────────
+export async function runCustomCircuit(
+  numQubits: number,
+  ops: { type: string; targetQubit: number; controlQubit: number; angle: number }[],
+  noiseProbability: number,
+  backend: number,
+) {
+  return new Promise((resolve) => {
+    const client = getClient();
+    const req: CircuitRequest = {
+      numQubits,
+      operations: ops.map(op => ({
+        type: GATE_MAP[op.type] ?? GateOperation_GateType.HADAMARD,
+        targetQubit: op.targetQubit,
+        controlQubit: op.controlQubit,
+        classicalRegister: 0,
+        angle: op.angle || 0,
+        secondControlQubit: 0,
+        secondTargetQubit: 0,
+        noiseProbability: 0,
+      })),
+      noiseProbability,
+      executionBackend: backend,
+      measurementStrategy: 0, // FULL_STATE
+      useShm: false,
+    };
+    client.runCircuit(req, getMetadata(), (err, response) => {
+      if (err) { resolve({ error: err.message }); return; }
       resolve({
-        nodes: response.nodes,
-        edges: response.edges
+        serverId: response.serverId,
+        stateVector: response.stateVector.map(sv => ({ real: sv.real, imag: sv.imag })),
+        sparseStates: response.sparseStates.map(st => ({ index: st.qubitIndex, probability: st.probability })),
+      });
+    });
+  });
+}
+
+// ─── VQE Explorer: Run VQE (streaming) ─────────────────────────────────
+export async function runVQE(molecule: number, maxIterations: number, learningRate: number, optimizerType: number) {
+  return new Promise((resolve) => {
+    const client = getClient();
+    const req = { molecule, maxIterations, learningRate, optimizerType, observables: [] };
+    const iterations: any[] = [];
+    const stream = client.runVqe(req, getMetadata());
+    stream.on('data', (response: any) => {
+      iterations.push({
+        iteration: response.iteration,
+        energy: response.energy,
+        parameters: response.parameters,
+        converged: response.converged,
+      });
+    });
+    stream.on('error', (err: any) => {
+      if (iterations.length > 0) {
+        resolve({ iterations });
+      } else {
+        resolve({ error: err.message });
+      }
+    });
+    stream.on('end', () => {
+      resolve({ iterations });
+    });
+  });
+}
+
+// ─── Visualizer: Step-by-step Circuit (streaming) ───────────────────────
+export async function visualizeCircuit(numQubits: number) {
+  return new Promise((resolve) => {
+    const client = getClient();
+    const req: CircuitRequest = {
+      numQubits,
+      operations: [
+        { type: GateOperation_GateType.HADAMARD, targetQubit: 0, controlQubit: 0, classicalRegister: 0, angle: 0, secondControlQubit: 0, secondTargetQubit: 0, noiseProbability: 0 },
+        { type: GateOperation_GateType.CNOT, targetQubit: 1, controlQubit: 0, classicalRegister: 0, angle: 0, secondControlQubit: 0, secondTargetQubit: 0, noiseProbability: 0 },
+        { type: GateOperation_GateType.CNOT, targetQubit: 2, controlQubit: 1, classicalRegister: 0, angle: 0, secondControlQubit: 0, secondTargetQubit: 0, noiseProbability: 0 },
+      ],
+      noiseProbability: 0,
+      executionBackend: 0,
+      measurementStrategy: 0,
+      useShm: false,
+    };
+    const steps: any[] = [];
+    const stream = client.visualizeCircuit(req, getMetadata());
+    stream.on('data', (response: any) => {
+      const probabilities = response.stateVector.map((sv: any) => sv.real * sv.real + sv.imag * sv.imag);
+      steps.push({ probabilities, serverId: response.serverId });
+    });
+    stream.on('error', (err: any) => {
+      if (steps.length > 0) {
+        resolve({ steps });
+      } else {
+        resolve({ error: err.message });
+      }
+    });
+    stream.on('end', () => {
+      resolve({ steps });
+    });
+  });
+}
+
+// ─── Job Queue: List Jobs ───────────────────────────────────────────────
+export async function listJobs() {
+  return new Promise((resolve) => {
+    const client = getSchedulerClient();
+    client.listJobs({ userId: "", stateFilter: 0, limit: 50, offset: 0 }, getMetadata(), (err, response) => {
+      if (err) { resolve({ error: err.message }); return; }
+      resolve({
+        jobs: response.jobs.map(j => ({
+          jobId: j.jobId,
+          state: j.state,
+          positionInQueue: j.positionInQueue,
+          progressPercent: j.progressPercent,
+          workerId: j.workerId,
+          errorMessage: j.errorMessage,
+        })),
+        totalCount: response.totalCount,
+      });
+    });
+  });
+}
+
+// ─── Job Queue: Get Job Status ──────────────────────────────────────────
+export async function getJobStatus(jobId: string) {
+  return new Promise((resolve) => {
+    const client = getSchedulerClient();
+    client.getJobStatus({ jobId, submittedAt: 0, estimatedWaitSeconds: 0 }, getMetadata(), (err, response) => {
+      if (err) { resolve({ error: err.message }); return; }
+      resolve({
+        jobId: response.jobId,
+        state: response.state,
+        progressPercent: response.progressPercent,
+        workerId: response.workerId,
+        errorMessage: response.errorMessage,
       });
     });
   });
