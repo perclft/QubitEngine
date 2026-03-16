@@ -178,6 +178,12 @@ void QubitEngineServiceImpl::serializeState(
 
 // Authentication Helper
 bool QubitEngineServiceImpl::ValidateAuth(grpc::ServerContext *context) const {
+  // Allow disabling auth for unit tests (direct service calls bypass gRPC channel)
+  const char* skip = std::getenv("QUBIT_ENGINE_SKIP_AUTH");
+  if (skip && std::string(skip) == "1") {
+    return true;
+  }
+
   const auto& client_metadata = context->client_metadata();
   auto iter = client_metadata.find("authorization");
   if (iter == client_metadata.end()) {
