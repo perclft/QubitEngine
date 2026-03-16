@@ -19,6 +19,23 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+const testAuthToken = "test-e2e-token"
+
+// tokenAuth implements grpc.PerRPCCredentials to inject the auth header.
+type tokenAuth struct {
+	token string
+}
+
+func (t tokenAuth) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return map[string]string{
+		"authorization": "Bearer " + t.token,
+	}, nil
+}
+
+func (t tokenAuth) RequireTransportSecurity() bool {
+	return false
+}
+
 // Mock Engine
 type mockEngine struct {
 	pb.UnimplementedQuantumComputeServer
@@ -91,6 +108,7 @@ func TestSchedulerIntegration(t *testing.T) {
 	)
 	cmdRun.Stdout = os.Stdout
 	cmdRun.Stderr = os.Stderr
+	cmdRun.Env = append(os.Environ(), "QUBIT_ENGINE_AUTH_TOKEN="+testAuthToken)
 
 	if err := cmdRun.Start(); err != nil {
 		t.Fatalf("failed to start scheduler: %v", err)
@@ -103,7 +121,10 @@ func TestSchedulerIntegration(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// 5. Connect to Scheduler
-	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", schedulerPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", schedulerPort),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithPerRPCCredentials(tokenAuth{token: testAuthToken}),
+	)
 	if err != nil {
 		t.Fatalf("failed to dial scheduler: %v", err)
 	}
