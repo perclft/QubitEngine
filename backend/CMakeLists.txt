@@ -3,6 +3,9 @@ project(QubitEngine)
 
 set(CMAKE_CXX_STANDARD 20)
 
+if(WIN32)
+    add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
+endif()
 find_package(gRPC CONFIG REQUIRED)
 find_package(Protobuf REQUIRED)
 find_package(OpenSSL REQUIRED)
