@@ -20,7 +20,9 @@ service QuantumCompute {
   
   // Streaming method for large or interactive circuits.
   // Sends a stream of gates and receives a stream of FULL STATE VECTORS.
-  rpc StreamGates (stream GateOperation) returns (stream StateResponse) {}
+  //
+  // IMPORTANT: the first message MUST be an init message specifying num_qubits.
+  rpc StreamGates (stream GateStreamRequest) returns (stream StateResponse) {}
 
   // Visualization method for Web (Server-Side Streaming only).
   // gRPC-Web does not support bidirectional streaming.
@@ -95,6 +97,23 @@ message GateOperation {
 
   // For DEPOLARIZING_NOISE (error probability 0.0 - 1.0)
   double noise_probability = 8;
+}
+
+// ------------------------------------------------------------------
+// Streaming Gate Protocol
+// ------------------------------------------------------------------
+
+message GateStreamInit {
+  int32 num_qubits = 1;
+  // Optional: if true, server may return shm_descriptor instead of state_vector.
+  bool use_shm = 2;
+}
+
+message GateStreamRequest {
+  oneof msg {
+    GateStreamInit init = 1;
+    GateOperation op = 2;
+  }
 }
 
 message StateResponse {

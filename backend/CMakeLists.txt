@@ -258,6 +258,7 @@ endif()
 # =================================================================
 add_library(qubit_engine_core STATIC
     src/QuantumRegister.cpp
+    src/ConfigManager.cpp
     src/backends/CpuBackend.cpp
     src/backends/MPSBackend.cpp
     src/backends/StabilizerBackend.cpp
@@ -268,6 +269,7 @@ add_library(qubit_engine_core STATIC
     src/QuantumJIT.cpp
     src/OpenQASM.cpp
     src/ipc/SharedMemory.cpp
+    src/QuantumMetrics.cpp
     ${METAL_SOURCES}
     ${GPU_SOURCES}
 )
@@ -450,5 +452,8 @@ if(MPI_FOUND)
         OpenSSL::SSL
         OpenSSL::Crypto
         $<$<BOOL:${UNIX}>:dl>
+        $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
+        $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
+        spdlog::spdlog
     )
 endif()

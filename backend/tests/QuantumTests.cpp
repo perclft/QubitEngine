@@ -3,6 +3,7 @@
 #include "../src/QuantumRegister.hpp"
 using qubit_engine::QuantumRegister;
 #include "Types.hpp"
+#include "../src/Exceptions.hpp"
 #include <complex>
 #include <gtest/gtest.h>
 
@@ -80,7 +81,7 @@ TEST(QuantumTest, ReverseCNOT) {
 TEST(QuantumTest, LogicValidation) {
   // Test Self-Control Error
   QuantumRegister q(2);
-  EXPECT_THROW(q.applyCNOT(0, 0), std::invalid_argument);
+  EXPECT_THROW(q.applyCNOT(0, 0), InvalidArgumentException);
 }
 
 TEST(QuantumTest, GradientDescentTest) {

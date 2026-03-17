@@ -4,12 +4,52 @@ import * as grpc from '@grpc/grpc-js';
 import { QuantumComputeClient } from '../api/quantum';
 import { QuantumSchedulerClient } from '../api/scheduler';
 import { CircuitRequest, GateOperation_GateType } from '../api/quantum';
+import { ExecutionResult, TopologyData, ComplexNumber } from '../components/types';
+
+// --- Types ---
+
+export interface VQEResult {
+  iteration: number;
+  energy: number;
+  parameters: number[];
+  converged: boolean;
+}
+
+export interface JobStatusResult {
+  jobId: string;
+  state: number;
+  positionInQueue: number;
+  progressPercent: number;
+  workerId: string;
+  errorMessage: string;
+}
+
+export interface JobListResult {
+  jobs: JobStatusResult[];
+  totalCount: number;
+}
+
+// --- Singleton Clients ---
+
+let _computeClient: QuantumComputeClient | null = null;
+let _schedulerClient: QuantumSchedulerClient | null = null;
 
 const ENGINE_ADDR = process.env.ENGINE_ADDR || '127.0.0.1:50051';
 const SCHEDULER_ADDR = process.env.SCHEDULER_ADDR || '127.0.0.1:50053';
 
-const getClient = () => new QuantumComputeClient(ENGINE_ADDR, grpc.credentials.createInsecure());
-const getSchedulerClient = () => new QuantumSchedulerClient(SCHEDULER_ADDR, grpc.credentials.createInsecure());
+const getClient = () => {
+  if (!_computeClient) {
+    _computeClient = new QuantumComputeClient(ENGINE_ADDR, grpc.credentials.createInsecure());
+  }
+  return _computeClient;
+};
+
+const getSchedulerClient = () => {
+  if (!_schedulerClient) {
+    _schedulerClient = new QuantumSchedulerClient(SCHEDULER_ADDR, grpc.credentials.createInsecure());
+  }
+  return _schedulerClient;
+};
 
 const getMetadata = () => {
   const meta = new grpc.Metadata();
@@ -37,7 +77,7 @@ const GATE_MAP: Record<string, GateOperation_GateType> = {
 };
 
 // ─── Dashboard: GHZ Demo ───────────────────────────────────────────────
-export async function runDemoCircuit(numQubits: number) {
+export async function runDemoCircuit(numQubits: number): Promise<ExecutionResult | { error: string }> {
   return new Promise((resolve) => {
     const client = getClient();
     const req: CircuitRequest = {
@@ -56,19 +96,22 @@ export async function runDemoCircuit(numQubits: number) {
       if (err) { resolve({ error: err.message }); return; }
       resolve({
         serverId: response.serverId,
-        results: response.sparseStates.map(st => ({ index: st.qubitIndex, probability: st.probability })),
+        results: response.sparseStates.map((st: any) => ({ index: st.qubitIndex, probability: st.probability })),
       });
     });
   });
 }
 
 // ─── Dashboard: Topology ────────────────────────────────────────────────
-export async function getTopology() {
+export async function getTopology(): Promise<TopologyData | { error: string }> {
   return new Promise((resolve) => {
     const client = getClient();
     client.getHardwareTopology({}, getMetadata(), (err, response) => {
       if (err) { resolve({ error: err.message }); return; }
-      resolve({ nodes: response.nodes, edges: response.edges });
+      resolve({ 
+        nodes: response.nodes.map((n: any) => ({ id: n.id.toString(), x: n.x, y: n.y })), 
+        edges: response.edges.map((e: any) => ({ node1: e.node1.toString(), node2: e.node2.toString() })) 
+      });
     });
   });
 }
@@ -79,7 +122,7 @@ export async function runCustomCircuit(
   ops: { type: string; targetQubit: number; controlQubit: number; angle: number }[],
   noiseProbability: number,
   backend: number,
-) {
+): Promise<ExecutionResult | { error: string }> {
   return new Promise((resolve) => {
     const client = getClient();
     const req: CircuitRequest = {
@@ -103,19 +146,19 @@ export async function runCustomCircuit(
       if (err) { resolve({ error: err.message }); return; }
       resolve({
         serverId: response.serverId,
-        stateVector: response.stateVector.map(sv => ({ real: sv.real, imag: sv.imag })),
-        sparseStates: response.sparseStates.map(st => ({ index: st.qubitIndex, probability: st.probability })),
+        stateVector: response.stateVector.map((sv: any) => ({ real: sv.real, imag: sv.imag })),
+        results: response.sparseStates.map((st: any) => ({ index: st.qubitIndex, probability: st.probability })),
       });
     });
   });
 }
 
 // ─── VQE Explorer: Run VQE (streaming) ─────────────────────────────────
-export async function runVQE(molecule: number, maxIterations: number, learningRate: number, optimizerType: number) {
+export async function runVQE(molecule: number, maxIterations: number, learningRate: number, optimizerType: number): Promise<{ iterations: VQEResult[] } | { error: string }> {
   return new Promise((resolve) => {
     const client = getClient();
     const req = { molecule, maxIterations, learningRate, optimizerType, observables: [] };
-    const iterations: any[] = [];
+    const iterations: VQEResult[] = [];
     const stream = client.runVqe(req, getMetadata());
     stream.on('data', (response: any) => {
       iterations.push({
@@ -139,7 +182,7 @@ export async function runVQE(molecule: number, maxIterations: number, learningRa
 }
 
 // ─── Visualizer: Step-by-step Circuit (streaming) ───────────────────────
-export async function visualizeCircuit(numQubits: number) {
+export async function visualizeCircuit(numQubits: number): Promise<{ steps: any[] } | { error: string }> {
   return new Promise((resolve) => {
     const client = getClient();
     const req: CircuitRequest = {
@@ -174,13 +217,13 @@ export async function visualizeCircuit(numQubits: number) {
 }
 
 // ─── Job Queue: List Jobs ───────────────────────────────────────────────
-export async function listJobs() {
+export async function listJobs(): Promise<JobListResult | { error: string }> {
   return new Promise((resolve) => {
     const client = getSchedulerClient();
     client.listJobs({ userId: "", stateFilter: 0, limit: 50, offset: 0 }, getMetadata(), (err, response) => {
       if (err) { resolve({ error: err.message }); return; }
       resolve({
-        jobs: response.jobs.map(j => ({
+        jobs: response.jobs.map((j: any) => ({
           jobId: j.jobId,
           state: j.state,
           positionInQueue: j.positionInQueue,
@@ -195,7 +238,7 @@ export async function listJobs() {
 }
 
 // ─── Job Queue: Get Job Status ──────────────────────────────────────────
-export async function getJobStatus(jobId: string) {
+export async function getJobStatus(jobId: string): Promise<JobStatusResult | { error: string }> {
   return new Promise((resolve) => {
     const client = getSchedulerClient();
     client.getJobStatus({ jobId, submittedAt: 0, estimatedWaitSeconds: 0 }, getMetadata(), (err, response) => {
@@ -203,6 +246,7 @@ export async function getJobStatus(jobId: string) {
       resolve({
         jobId: response.jobId,
         state: response.state,
+        positionInQueue: response.positionInQueue,
         progressPercent: response.progressPercent,
         workerId: response.workerId,
         errorMessage: response.errorMessage,

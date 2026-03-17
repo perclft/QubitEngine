@@ -1,5 +1,8 @@
 #include "ServiceImpl.hpp"
+#include "GateDispatch.hpp"
+#include <atomic>
 #include "QuantumRegister.hpp"
+#include "Exceptions.hpp"
 #include "ipc/SharedMemory.hpp"
 #include <cmath>
 #include <cstdint> // FIX: Added for uint32_t
@@ -50,65 +53,13 @@ bool hasEnoughMemory(int num_qubits) {
 #endif
 }
 
-// Helper to map GateOperation to QuantumRegister calls
+// Helper to map GateOperation to QuantumRegister calls.
+// Delegates to the shared dispatchGate() to avoid duplicate switch blocks.
 void QubitEngineServiceImpl::applyGate(QuantumRegister &qreg,
                                        const qubit_engine::GateOperation &op,
                                        qubit_engine::StateResponse *response) {
-  switch (op.type()) {
-  case qubit_engine::GateOperation::HADAMARD:
-    qreg.applyHadamard(op.target_qubit());
-    break;
-  case qubit_engine::GateOperation::PAULI_X:
-    qreg.applyX(op.target_qubit());
-    break;
-  case qubit_engine::GateOperation::CNOT:
-    qreg.applyCNOT(op.control_qubit(), op.target_qubit());
-    break;
-  case qubit_engine::GateOperation::MEASURE: {
-    bool result = qreg.measure(op.target_qubit());
-    uint32_t reg_id = (op.classical_register() > 0) ? op.classical_register()
-                                                    : op.target_qubit();
-    (*response->mutable_classical_results())[reg_id] = result;
-    break;
-  }
-  // Phase 3: New Gates
-  case qubit_engine::GateOperation::TOFFOLI:
-    qreg.applyToffoli(op.control_qubit(), op.second_control_qubit(),
-                      op.target_qubit());
-    break;
-  case qubit_engine::GateOperation::PHASE_S:
-    qreg.applyPhaseS(op.target_qubit());
-    break;
-  case qubit_engine::GateOperation::PHASE_T:
-    qreg.applyPhaseT(op.target_qubit());
-    break;
-  case qubit_engine::GateOperation::ROTATION_Y:
-    qreg.applyRotationY(op.target_qubit(), op.angle());
-    break;
-  case qubit_engine::GateOperation::ROTATION_Z:
-    qreg.applyRotationZ(op.target_qubit(), op.angle());
-    break;
-  case qubit_engine::GateOperation::PAULI_Y:
-    qreg.applyY(op.target_qubit());
-    break;
-  case qubit_engine::GateOperation::PAULI_Z:
-    qreg.applyZ(op.target_qubit());
-    break;
-  case qubit_engine::GateOperation::ROTATION_X:
-    qreg.applyRotationX(op.target_qubit(), op.angle());
-    break;
-  case qubit_engine::GateOperation::SWAP:
-    qreg.applySWAP(op.target_qubit(), op.second_target_qubit());
-    break;
-  case qubit_engine::GateOperation::CZ:
-    qreg.applyCZ(op.control_qubit(), op.target_qubit());
-    break;
-  case qubit_engine::GateOperation::DEPOLARIZING_NOISE:
-    qreg.applyDepolarizingNoise(op.noise_probability());
-    break;
-  default:
-    throw std::invalid_argument("Unknown Gate Type");
-  }
+  qubit_engine::dispatchGate(qreg, op, nullptr,
+                             response->mutable_classical_results());
 }
 
 // Helper to serialize state vector
@@ -118,7 +69,8 @@ void QubitEngineServiceImpl::serializeState(
   if (strategy == qubit_engine::CircuitRequest::FULL_STATE) {
     if (use_shm) {
       // Generate pseudo-random descriptor
-      std::string desc = "qe_shm_" + std::to_string(std::rand());
+      static std::atomic<uint64_t> shm_counter{0};
+      std::string desc = "qe_shm_" + std::to_string(shm_counter.fetch_add(1, std::memory_order_relaxed));
 #ifdef _WIN32
       std::string full_desc = "Local\\" + desc;
 #else
@@ -303,10 +255,10 @@ QubitEngineServiceImpl::RunCircuit(grpc::ServerContext *context,
     // Serialize Result
     serializeState(qreg, response, request->measurement_strategy(),
                    request->use_shm());
-  } catch (const std::invalid_argument &e) {
+  } catch (const qubit_engine::InvalidArgumentException &e) {
     spdlog::error("Invalid argument during RunCircuit: {}", e.what());
     return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, e.what());
-  } catch (const std::out_of_range &e) {
+  } catch (const qubit_engine::QubitOutOfRangeException &e) {
     spdlog::error("Out of range error during RunCircuit: {}", e.what());
     return grpc::Status(grpc::StatusCode::OUT_OF_RANGE, e.what());
   } catch (const std::exception &e) {
@@ -321,7 +273,7 @@ QubitEngineServiceImpl::RunCircuit(grpc::ServerContext *context,
 grpc::Status QubitEngineServiceImpl::StreamGates(
     grpc::ServerContext *context,
     grpc::ServerReaderWriter<qubit_engine::StateResponse,
-                             qubit_engine::GateOperation> *stream) {
+                             qubit_engine::GateStreamRequest> *stream) {
 
   spdlog::debug("StreamGates method invoked!");
 
@@ -329,46 +281,53 @@ grpc::Status QubitEngineServiceImpl::StreamGates(
     return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "Invalid or missing authorization token");
   }
 
-  // We need to initialize the register. But wait, how do we know 'N'?
-  // Protocol Design Flaw detected and patched on the fly:
-  // We expect the FIRST message to contain a special "setup" op or just
-  // assume default/grow. BETTER: Client sends a "special" No-Op gate meant to
-  // init? OR: We infer N from the first target qubit? No, unsafe. PATCH:
-  // We'll assume the client sends a "SETUP" message or we lazy init.
-  // ACTUALLY: Let's assume the first message MIGHT contain a hint.
-  // BUT strictly, we'll start with a default or wait for a "Alloc" operation
-  // (not defined). WORKAROUND: We'll assume N=30 (Max) effectively or N=1 and
-  // grow? No vector doesn't grow. DECISION: We will initialize with 3 qubits
-  // by default for this demo, OR check metadata? Let's rely on metadata
-  // "num_qubits" passed in context? No, too complex. SIMPLEST: Initialize 3
-  // qubits (demo size) or check valid max index seen? HARDCODED DEMO FIX:
-  // We'll init 3 qubits. (Production would require a Setup message).
+  qubit_engine::GateStreamRequest first;
+  if (!stream->Read(&first)) {
+    return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                        "StreamGates requires an initial init message");
+  }
+  if (first.msg_case() != qubit_engine::GateStreamRequest::kInit) {
+    return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                        "First StreamGates message must be init");
+  }
 
-  int num_qubits = 3;
-  QuantumRegister qreg(num_qubits);
+  const auto &init = first.init();
+  const int num_qubits = init.num_qubits();
+  const bool use_shm = init.use_shm();
+
+  if (num_qubits <= 0 || num_qubits > 30) {
+    return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                        "Qubits must be between 1 and 30");
+  }
+
+  QuantumRegister qreg(static_cast<size_t>(num_qubits));
 
   try {
-    qubit_engine::GateOperation op;
-    while (stream->Read(&op)) {
+    qubit_engine::GateStreamRequest req;
+    while (stream->Read(&req)) {
       qubit_engine::StateResponse response;
 
-      // Check if we need to expand? (Not implemented for robustness, strict
-      // size)
-      if (op.target_qubit() >= num_qubits || op.control_qubit() >= num_qubits) {
-        // For now, silently ignore or error effectively?
-        // Let's just run applyGate, it throws if out of bounds.
+      if (req.msg_case() == qubit_engine::GateStreamRequest::kInit) {
+        // Init can only appear once at the beginning; reject mid-stream.
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                            "StreamGates init message is only allowed as the first message");
       }
 
+      if (req.msg_case() != qubit_engine::GateStreamRequest::kOp) {
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                            "StreamGates received unknown message type");
+      }
+
+      const auto &op = req.op();
       applyGate(qreg, op, &response);
-      serializeState(qreg, &response, qubit_engine::CircuitRequest::FULL_STATE,
-                     false);
+      serializeState(qreg, &response, qubit_engine::CircuitRequest::FULL_STATE, use_shm);
 
       stream->Write(response);
     }
-  } catch (const std::invalid_argument &e) {
+  } catch (const qubit_engine::InvalidArgumentException &e) {
     spdlog::error("Invalid argument during StreamGates: {}", e.what());
     return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, e.what());
-  } catch (const std::out_of_range &e) {
+  } catch (const qubit_engine::QubitOutOfRangeException &e) {
     spdlog::error("Out of range error during StreamGates: {}", e.what());
     return grpc::Status(grpc::StatusCode::OUT_OF_RANGE, e.what());
   } catch (const std::exception &e) {

@@ -1,29 +1,40 @@
 #pragma once
-#include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
+#include <map>
 
-// Mock classes to satisfy usage
+// Guarded by ENABLE_PROMETHEUS if we wanted to be strictly optional,
+// but we'll provide a clean interface.
 namespace prometheus {
-class Registry {};
-} // namespace prometheus
+class Registry;
+class Counter;
+class Histogram;
+class Exposer;
+}
 
 class QuantumMetrics {
 public:
-  static QuantumMetrics &Instance() {
-    static QuantumMetrics instance;
-    return instance;
-  }
+  static QuantumMetrics &Instance();
 
-  void Start(const std::string &bind_address = "0.0.0.0:9090") {
-    std::cout << "[Metrics] Prometheus (Mock) disabled for build stability."
-              << std::endl;
-  }
+  // Starts the Prometheus HTTP server (Exposer)
+  void Start(const std::string &bind_address = "0.0.0.0:9090");
+
+  void IncrementJobCounter(const std::string &status); // e.g., "success", "failed"
+  void RecordJobDuration(double seconds);
+  void RecordGateApplication();
 
   std::shared_ptr<prometheus::Registry> GetRegistry() { return registry_; }
 
 private:
-  QuantumMetrics() { registry_ = std::make_shared<prometheus::Registry>(); }
+  QuantumMetrics();
+  ~QuantumMetrics();
 
   std::shared_ptr<prometheus::Registry> registry_;
+  std::unique_ptr<prometheus::Exposer> exposer_; // HTTP server
+
+  // Families / Metrics
+  prometheus::Counter *job_counter_ = nullptr;
+  prometheus::Histogram *job_duration_ = nullptr;
+  prometheus::Counter *gate_counter_ = nullptr;
 };

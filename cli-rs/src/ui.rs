@@ -54,8 +54,8 @@ pub fn draw(f: &mut Frame, app: &mut RouterComponent) {
 }
 
 fn draw_header(f: &mut Frame, app: &RouterComponent, area: Rect) {
-    let status = if app.is_executing {
-        if app.is_vqe {
+    let status = if app.sim.is_executing {
+        if app.sim.is_vqe {
             " ● VQE Running"
         } else {
             " ● Simulating"
@@ -74,7 +74,7 @@ fn draw_header(f: &mut Frame, app: &RouterComponent, area: Rect) {
         Span::raw(format!(" | R&D Terminal [{}]", app.endpoint)),
         Span::styled(
             status,
-            Style::default().fg(if app.is_executing {
+            Style::default().fg(if app.sim.is_executing {
                 Color::Green
             } else {
                 Color::DarkGray
@@ -144,8 +144,8 @@ fn draw_circuit_list(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
 }
 
 fn draw_execution_view(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
-    let title = if app.is_executing {
-        if app.is_vqe {
+    let title = if app.sim.is_executing {
+        if app.sim.is_vqe {
             " VQE Convergence (H2 Molecule) "
         } else {
             " Execution View (Streaming...) "
@@ -154,24 +154,25 @@ fn draw_execution_view(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
         " Execution View "
     };
 
-    if app.is_vqe {
-        if app.vqe_history.is_empty() {
-            let log_vec: Vec<String> = app.execution_log.iter().cloned().collect();
+    if app.sim.is_vqe {
+        if app.sim.vqe_history.is_empty() {
+            let log_vec: Vec<String> = app.sim.execution_log.iter().cloned().collect();
             let content = log_vec.join("\n");
             let p =
                 Paragraph::new(content).block(Block::default().title(title).borders(Borders::ALL));
             f.render_widget(p, area);
         } else {
             let data: Vec<(f64, f64)> = app
+                .sim
                 .vqe_history
                 .iter()
                 .map(|(i, e)| (*i as f64, *e))
                 .collect();
 
             // Use cached bounds — O(1) reads instead of O(N) folds per frame
-            let min_energy = app.vqe_min_energy;
-            let max_energy = app.vqe_max_energy;
-            let max_iter = app.vqe_max_iter.max(1.0);
+            let min_energy = app.sim.vqe_min_energy;
+            let max_energy = app.sim.vqe_max_energy;
+            let max_iter = app.sim.vqe_max_iter.max(1.0);
 
             let vqe_chunks = Layout::default()
                 .direction(Direction::Vertical)
@@ -234,7 +235,7 @@ fn draw_execution_view(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
 
             // 3. High-Frequency Sparkline
             let max_points = vqe_chunks[2].width.saturating_sub(2) as usize;
-            let recent: Vec<_> = app.vqe_history.iter().rev().take(max_points).collect();
+            let recent: Vec<_> = app.sim.vqe_history.iter().rev().take(max_points).collect();
             let spark_data: Vec<_> = recent.into_iter().rev().map(|(_, e)| *e).collect();
 
             // Normalize for Sparkline (0-100 u64)
@@ -264,15 +265,15 @@ fn draw_execution_view(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
             f.render_widget(sparkline, vqe_chunks[2]);
         }
     } else {
-        if app.probabilities.is_empty() {
-            let content = if app.execution_log.is_empty() {
-                if app.is_executing {
+        if app.sim.probabilities.is_empty() {
+            let content = if app.sim.execution_log.is_empty() {
+                if app.sim.is_executing {
                     "Connecting...".to_string()
                 } else {
                     "Select a circuit and press Enter to execute.\nPress 'v' to run VQE optimization on H2.\nPress 'c' to cancel.\nPress 'q' to quit.".to_string()
                 }
             } else {
-                let log_vec: Vec<String> = app.execution_log.iter().cloned().collect();
+                let log_vec: Vec<String> = app.sim.execution_log.iter().cloned().collect();
                 log_vec.join("\n")
             };
             let p =
@@ -280,6 +281,7 @@ fn draw_execution_view(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
             f.render_widget(p, area);
         } else {
             let data: Vec<(&str, u64)> = app
+                .sim
                 .probabilities
                 .iter()
                 .map(|(k, v)| (k.as_str(), *v))
@@ -306,11 +308,11 @@ fn draw_execution_view(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
 
 fn draw_topology_view(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
     // Clone topology data for the 'static paint() closure
-    let edges: Vec<(usize, usize)> = app.topology_edges.clone();
-    let nodes: Vec<(f64, f64)> = app.topology_nodes.clone();
-    let labels: Vec<(f64, f64, String)> = app.topo_label_cache.clone();
-    let x_bounds = [app.topo_min_x, app.topo_max_x];
-    let y_bounds = [app.topo_min_y, app.topo_max_y];
+    let edges: Vec<(usize, usize)> = app.topology.edges.clone();
+    let nodes: Vec<(f64, f64)> = app.topology.nodes.clone();
+    let labels: Vec<(f64, f64, String)> = app.topology.label_cache.clone();
+    let x_bounds = [app.topology.min_x, app.topology.max_x];
+    let y_bounds = [app.topology.min_y, app.topology.max_y];
 
     let canvas = Canvas::default()
         .block(
@@ -353,19 +355,19 @@ fn draw_topology_view(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
 }
 
 fn draw_circuit_diagram_view(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
-    let title = if app.circuit_name.is_empty() {
+    let title = if app.circuit.name.is_empty() {
         " Circuit Diagram ".to_string()
     } else {
-        format!(" Circuit Diagram — {} ", app.circuit_name)
+        format!(" Circuit Diagram — {} ", app.circuit.name)
     };
 
     // Viewport slicing: only pass the visible lines to the layout engine
     // This bounds rendering to O(visible_height) regardless of total circuit depth
     let visible_height = area.height.saturating_sub(2) as usize; // minus top/bottom borders
-    let start = app.circuit_scroll as usize;
-    let end = (start + visible_height).min(app.circuit_diagram.len());
-    let visible_lines = if start < app.circuit_diagram.len() {
-        &app.circuit_diagram[start..end]
+    let start = app.circuit.scroll as usize;
+    let end = (start + visible_height).min(app.circuit.diagram.len());
+    let visible_lines = if start < app.circuit.diagram.len() {
+        &app.circuit.diagram[start..end]
     } else {
         &[]
     };

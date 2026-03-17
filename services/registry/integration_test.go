@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	api "github.com/perclft/QubitEngine/api/generated"
+	pb "github.com/perclft/QubitEngine/services/registry/generated"
 )
 
 func TestSaveCircuit(t *testing.T) {
@@ -23,15 +25,15 @@ func TestSaveCircuit(t *testing.T) {
 		WithArgs(sqlmock.AnyArg(), "Test Circuit", "A test circuit", "general", "null", 2, 1, sqlmock.AnyArg(), true, sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	req := &SaveCircuitRequest{
+	req := &pb.SaveCircuitRequest{
 		Name:        "Test Circuit",
 		Description: "A test circuit",
 		Domain:      "general",
 		IsPublic:    true,
-		Circuit: &CircuitRequest{
+		Circuit: &api.CircuitRequest{
 			NumQubits: 2,
-			Operations: []GateOperation{
-				{Type: 1, TargetQubit: 0},
+			Operations: []*api.GateOperation{
+				{Type: api.GateOperation_PAULI_X, TargetQubit: 0},
 			},
 		},
 	}
@@ -63,10 +65,10 @@ func TestLoadCircuit(t *testing.T) {
 	ctx := context.Background()
 
 	circuitId := "test-uuid-1234"
-	mockCircuit := CircuitRequest{
+	mockCircuit := api.CircuitRequest{
 		NumQubits: 2,
-		Operations: []GateOperation{
-			{Type: 1, TargetQubit: 0},
+		Operations: []*api.GateOperation{
+			{Type: api.GateOperation_PAULI_X, TargetQubit: 0},
 		},
 	}
 	circuitJSON, _ := json.Marshal(mockCircuit)
@@ -84,8 +86,9 @@ func TestLoadCircuit(t *testing.T) {
 		WithArgs(circuitId).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	req := &LoadCircuitRequest{
+	req := &pb.LoadCircuitRequest{
 		CircuitId: circuitId,
+		Version:   0,
 	}
 
 	loaded, err := server.LoadCircuit(ctx, req)

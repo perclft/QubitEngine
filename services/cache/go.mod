@@ -2,8 +2,11 @@ module github.com/perclft/QubitEngine/services/cache
 
 go 1.23
 
+replace github.com/perclft/QubitEngine/api => ../../api
+
 require (
 	github.com/go-redis/redis/v8 v8.11.5
+	github.com/perclft/QubitEngine/api v0.0.0-00010101000000-000000000000
 	google.golang.org/grpc v1.68.0
 )
 

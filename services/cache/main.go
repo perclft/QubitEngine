@@ -9,10 +9,15 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"os/signal"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	api "github.com/perclft/QubitEngine/api/generated"
+	pb "github.com/perclft/QubitEngine/services/cache/generated"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -44,6 +49,7 @@ type ComplexNumber struct {
 // ------------------------------------------------------------------
 
 type CacheServer struct {
+	pb.UnimplementedResultCacheServer
 	rdb        *redis.Client
 	defaultTTL time.Duration
 	hits       int64
@@ -61,7 +67,7 @@ func NewCacheServer(rdb *redis.Client, defaultTTL time.Duration) *CacheServer {
 // CacheResult - Store a circuit result
 // ------------------------------------------------------------------
 
-func (s *CacheServer) CacheResult(ctx context.Context, req *CacheRequest) (*CacheResponse, error) {
+func (s *CacheServer) CacheResult(ctx context.Context, req *pb.CacheRequest) (*pb.CacheResponse, error) {
 	if req.CircuitHash == "" {
 		return nil, status.Error(codes.InvalidArgument, "circuit_hash required")
 	}
@@ -100,7 +106,7 @@ func (s *CacheServer) CacheResult(ctx context.Context, req *CacheRequest) (*Cach
 	log.Printf("💾 Cached result: %s (qubits=%d, ops=%d, TTL=%v)",
 		req.CircuitHash[:16], req.NumQubits, req.NumOperations, ttl)
 
-	return &CacheResponse{
+	return &pb.CacheResponse{
 		Success:  true,
 		Message:  "Result cached successfully",
 		CacheKey: cacheKey,
@@ -111,13 +117,13 @@ func (s *CacheServer) CacheResult(ctx context.Context, req *CacheRequest) (*Cach
 // GetCachedResult - Retrieve a cached result
 // ------------------------------------------------------------------
 
-func (s *CacheServer) GetCachedResult(ctx context.Context, req *CacheLookup) (*CacheHit, error) {
+func (s *CacheServer) GetCachedResult(ctx context.Context, req *pb.CacheLookup) (*pb.CacheHit, error) {
 	cacheKey := fmt.Sprintf("cache:%s", req.CircuitHash)
 
 	data, err := s.rdb.Get(ctx, cacheKey).Bytes()
 	if err == redis.Nil {
 		atomic.AddInt64(&s.misses, 1)
-		return &CacheHit{Found: false}, nil
+		return &pb.CacheHit{Found: false}, nil
 	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "redis error: %v", err)
@@ -138,7 +144,7 @@ func (s *CacheServer) GetCachedResult(ctx context.Context, req *CacheLookup) (*C
 
 	log.Printf("✅ Cache HIT: %s (hits=%d)", req.CircuitHash[:16], entry.HitCount)
 
-	return &CacheHit{
+	return &pb.CacheHit{
 		Found:     true,
 		Result:    entry.Result.ToProto(),
 		CachedAt:  entry.CachedAt,
@@ -151,7 +157,7 @@ func (s *CacheServer) GetCachedResult(ctx context.Context, req *CacheLookup) (*C
 // InvalidateCache - Remove a cached result
 // ------------------------------------------------------------------
 
-func (s *CacheServer) InvalidateCache(ctx context.Context, req *CacheLookup) (*CacheResponse, error) {
+func (s *CacheServer) InvalidateCache(ctx context.Context, req *pb.CacheLookup) (*pb.CacheResponse, error) {
 	cacheKey := fmt.Sprintf("cache:%s", req.CircuitHash)
 
 	deleted, err := s.rdb.Del(ctx, cacheKey).Result()
@@ -161,17 +167,17 @@ func (s *CacheServer) InvalidateCache(ctx context.Context, req *CacheLookup) (*C
 
 	if deleted > 0 {
 		log.Printf("🗑️ Cache invalidated: %s", req.CircuitHash[:16])
-		return &CacheResponse{Success: true, Message: "Cache invalidated"}, nil
+		return &pb.CacheResponse{Success: true, Message: "Cache invalidated"}, nil
 	}
 
-	return &CacheResponse{Success: false, Message: "Key not found"}, nil
+	return &pb.CacheResponse{Success: false, Message: "Key not found"}, nil
 }
 
 // ------------------------------------------------------------------
 // GetCacheStats - Get cache statistics
 // ------------------------------------------------------------------
 
-func (s *CacheServer) GetCacheStats(ctx context.Context, req *Empty) (*CacheStats, error) {
+func (s *CacheServer) GetCacheStats(ctx context.Context, req *pb.CacheEmpty) (*pb.CacheStats, error) {
 	// Count cache entries
 	keys, _ := s.rdb.Keys(ctx, "cache:*").Result()
 	totalEntries := int64(len(keys))
@@ -190,7 +196,7 @@ func (s *CacheServer) GetCacheStats(ctx context.Context, req *Empty) (*CacheStat
 		hitRate = float64(hits) / float64(total)
 	}
 
-	return &CacheStats{
+	return &pb.CacheStats{
 		TotalEntries:    totalEntries,
 		TotalHits:       hits,
 		TotalMisses:     misses,
@@ -210,63 +216,13 @@ func HashCircuit(numQubits int32, operations []byte) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// ------------------------------------------------------------------
-// Placeholder types (would be generated from protobuf)
-// ------------------------------------------------------------------
-
-type CacheRequest struct {
-	CircuitHash   string
-	NumQubits     int32
-	NumOperations int32
-	Result        *StateResponse
-	TtlSeconds    int32
-}
-
-type StateResponse struct {
-	StateVector []*Complex
-	ServerId    string
-}
-
-type Complex struct {
-	Real float64
-	Imag float64
-}
-
-type CacheResponse struct {
-	Success  bool
-	Message  string
-	CacheKey string
-}
-
-type CacheLookup struct {
-	CircuitHash string
-}
-
-type CacheHit struct {
-	Found     bool
-	Result    *StateResponse
-	CachedAt  int64
-	ExpiresAt int64
-	HitCount  int32
-}
-
-type Empty struct{}
-
-type CacheStats struct {
-	TotalEntries    int64
-	TotalHits       int64
-	TotalMisses     int64
-	HitRate         float64
-	MemoryUsedBytes int64
-}
-
-func (sr *StateResult) ToProto() *StateResponse {
-	resp := &StateResponse{
-		StateVector: make([]*Complex, len(sr.StateVector)),
+func (sr *StateResult) ToProto() *api.StateResponse {
+	resp := &api.StateResponse{
+		StateVector: make([]*api.StateResponse_ComplexNumber, len(sr.StateVector)),
 		ServerId:    sr.ServerId,
 	}
 	for i, c := range sr.StateVector {
-		resp.StateVector[i] = &Complex{Real: c.Real, Imag: c.Imag}
+		resp.StateVector[i] = &api.StateResponse_ComplexNumber{Real: c.Real, Imag: c.Imag}
 	}
 	return resp
 }
@@ -305,15 +261,25 @@ func main() {
 	}
 
 	grpcServer := grpc.NewServer()
-	// RegisterResultCacheServer(grpcServer, server)
+	pb.RegisterResultCacheServer(grpcServer, server)
 
 	log.Printf("📦 Result Cache starting on port %d", *port)
 	log.Printf("   Redis: %s (DB 1)", *redisAddr)
 	log.Printf("   Default TTL: %v", defaultTTL)
 
-	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("Failed to serve: %v", err)
-	}
+	// Graceful shutdown on SIGINT/SIGTERM
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	_ = server // Silence unused variable warning
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Fatalf("Failed to serve: %v", err)
+		}
+	}()
+
+	sig := <-quit
+	log.Printf("Shutdown signal received: %v", sig)
+	grpcServer.GracefulStop()
+	rdb.Close()
+	log.Println("Cache service shut down gracefully")
 }

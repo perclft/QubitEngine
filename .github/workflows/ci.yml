@@ -232,3 +232,13 @@ jobs:
         run: |
           cd services/scheduler
           go test -v ./tests/e2e/...
+
+      - name: Test Registry
+        run: |
+          cd services/registry
+          go test -v ./...
+
+      - name: Test Cache
+        run: |
+          cd services/cache
+          go test -v ./...

@@ -86,6 +86,7 @@ public:
   void applyRegisteredGateInverse(const RecordedGate &gate);
 
 private:
+  void validateQubit(size_t q) const;
   size_t num_qubits;
   std::unique_ptr<IQuantumBackend> backend;
   bool recording_enabled = false;

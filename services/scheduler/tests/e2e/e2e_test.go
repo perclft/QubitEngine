@@ -93,7 +93,7 @@ func TestSchedulerIntegration(t *testing.T) {
 	binPath := filepath.Join(tmpDir, binName)
 	// Using absolute path to main.go. Assuming test runs from services/scheduler
 	rootDir, _ := filepath.Abs("../../")
-	cmdBuild := exec.Command("go", "build", "-o", binPath, ".")
+	cmdBuild := exec.Command("go", "build", "-o", binPath, "./cmd/scheduler")
 	cmdBuild.Dir = rootDir
 	if out, err := cmdBuild.CombinedOutput(); err != nil {
 		t.Fatalf("failed to build scheduler: %v\n%s", err, out)

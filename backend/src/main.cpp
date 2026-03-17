@@ -1,7 +1,10 @@
 #include "QuantumMetrics.hpp"
 #include "ServiceImpl.hpp"
+#include "QuantumRegister.hpp"
+#include "GateDispatch.hpp"
 #include <atomic>
 #include <csignal>
+#include <cstdint>
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/grpcpp.h>
 #include <iostream>
@@ -10,12 +13,172 @@
 #include <string>
 #include <sw/redis++/redis++.h>
 #include <thread>
+#include <unordered_map>
 
 std::atomic<bool> shutdown_requested(false);
 
 void signalHandler(int signal) {
   spdlog::info("Shutdown signal received ({})...", signal);
   shutdown_requested = true;
+}
+
+static inline int64_t unixSecondsNow() {
+  return std::chrono::duration_cast<std::chrono::seconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
+
+static std::string jsonEscape(const std::string &s) {
+  std::string out;
+  out.reserve(s.size() + 16);
+  for (unsigned char c : s) {
+    switch (c) {
+    case '\\':
+      out += "\\\\";
+      break;
+    case '"':
+      out += "\\\"";
+      break;
+    case '\n':
+      out += "\\n";
+      break;
+    case '\r':
+      out += "\\r";
+      break;
+    case '\t':
+      out += "\\t";
+      break;
+    default:
+      if (c < 0x20) {
+        // Minimal escaping for control chars
+        char buf[7];
+        std::snprintf(buf, sizeof(buf), "\\u%04x", (unsigned)c);
+        out += buf;
+      } else {
+        out.push_back((char)c);
+      }
+    }
+  }
+  return out;
+}
+
+static void applyGateForJob(qubit_engine::QuantumRegister &qreg,
+                            const qubit_engine::GateOperation &op,
+                            std::unordered_map<int32_t, bool> &measurements) {
+  qubit_engine::dispatchGate(qreg, op, &measurements, nullptr);
+}
+
+static std::string buildJobResultJson(const std::string &job_id, int32_t shot,
+                                      const std::string &worker_id,
+                                      const std::vector<qubit_engine::Complex>
+                                          &state_vec,
+                                      const std::unordered_map<int32_t, bool>
+                                          &measurements) {
+  std::string json;
+  json.reserve(256 + state_vec.size() * 24);
+  json += "{";
+  json += "\"job_id\":\"" + jsonEscape(job_id) + "\",";
+  json += "\"shot_number\":" + std::to_string(shot) + ",";
+
+  json += "\"state\":{";
+  json += "\"state_vector\":[";
+  for (size_t i = 0; i < state_vec.size(); ++i) {
+    const auto &c = state_vec[i];
+    json += "{\"real\":" + std::to_string(c.real()) +
+            ",\"imag\":" + std::to_string(c.imag()) + "}";
+    if (i + 1 < state_vec.size())
+      json += ",";
+  }
+  json += "],";
+  json += "\"classical_results\":{";
+  bool first = true;
+  for (const auto &kv : measurements) {
+    if (!first)
+      json += ",";
+    first = false;
+    json += "\"" + std::to_string(kv.first) + "\":" + (kv.second ? "true" : "false");
+  }
+  json += "},";
+  json += "\"server_id\":\"" + jsonEscape(worker_id) + "\"";
+  json += "},";
+
+  json += "\"measurements\":{";
+  first = true;
+  for (const auto &kv : measurements) {
+    if (!first)
+      json += ",";
+    first = false;
+    json += "\"" + std::to_string(kv.first) + "\":" + (kv.second ? "true" : "false");
+  }
+  json += "}";
+  json += "}";
+  return json;
+}
+
+static void executeJob(sw::redis::Redis &redis, const std::string &job_id,
+                       const std::string &worker_id) {
+  auto start_time = std::chrono::steady_clock::now();
+  // Fetch canonical execution payload (protobuf-encoded CircuitRequest).
+  const std::string circuit_key = "job:circuitpb:" + job_id;
+  auto circuit_bytes = redis.get(circuit_key);
+  if (!circuit_bytes) {
+    throw std::runtime_error("missing circuit payload at " + circuit_key);
+  }
+
+  qubit_engine::CircuitRequest circuit;
+  if (!circuit.ParseFromString(*circuit_bytes)) {
+    throw std::runtime_error("failed to parse CircuitRequest protobuf for job " +
+                             job_id);
+  }
+
+  int32_t shots = 1;
+  const std::string shots_key = "job:shots:" + job_id;
+  if (auto s = redis.get(shots_key)) {
+    try {
+      shots = std::max<int32_t>(1, std::stoi(*s));
+    } catch (...) {
+      shots = 1;
+    }
+  }
+
+  // Worker-visible status keys (Go scheduler overlays these in GetJobStatus).
+  redis.set("job:state:" + job_id, "2"); // RUNNING
+  redis.set("job:started_at:" + job_id, std::to_string(unixSecondsNow()));
+  redis.set("job:worker_id:" + job_id, worker_id);
+  redis.del("job:error:" + job_id);
+
+  const std::string stream_key = "stream:results:" + job_id;
+
+  // Execute N shots. For now, we run the full circuit per-shot (simple and correct).
+  for (int32_t shot = 1; shot <= shots; ++shot) {
+    qubit_engine::QuantumRegister qreg((size_t)circuit.num_qubits());
+    std::unordered_map<int32_t, bool> measurements;
+
+    for (const auto &op : circuit.operations()) {
+      applyGateForJob(qreg, op, measurements);
+    }
+
+    auto state = qreg.getStateVector();
+    std::string payload =
+        buildJobResultJson(job_id, shot, worker_id, state, measurements);
+
+    // Push to Redis stream for scheduler to forward via gRPC.
+    // Go expects msg.Values["data"] to be a JSON string.
+    std::map<std::string, std::string> fields = {{"data", payload}};
+    redis.xadd(stream_key, "*", fields.begin(), fields.end());
+  }
+
+  // EOF marker signals end of stream to clients.
+  std::map<std::string, std::string> eof_fields = {{"data", "EOF"}};
+  redis.xadd(stream_key, "*", eof_fields.begin(), eof_fields.end());
+
+  redis.set("job:state:" + job_id, "3"); // COMPLETED
+  redis.set("job:completed_at:" + job_id, std::to_string(unixSecondsNow()));
+
+  auto end_time = std::chrono::steady_clock::now();
+  std::chrono::duration<double> diff = end_time - start_time;
+  QuantumMetrics::Instance().RecordJobDuration(diff.count());
+  QuantumMetrics::Instance().IncrementJobCounter("success");
 }
 
 void RunServer() {
@@ -60,6 +223,9 @@ void RunServer() {
 // ... (existing code)
 
 int main(int argc, char **argv) {
+  // Suggestion 16: Start Prometheus metrics server
+  QuantumMetrics::Instance().Start("0.0.0.0:9090");
+
 #ifdef MPI_ENABLED
   // Initialize MPI
   MPI_Init(&argc, &argv);
@@ -104,16 +270,28 @@ int main(int argc, char **argv) {
           redis.hset("jobs:processing", job_id, std::to_string(now));
           
           try {
-             // executeJob(job_id); // Hook into engine cleanly
-             
-             // Success: Remove from processing
+             char hostname[1024];
+             std::string wid = "mpi-worker-" + std::to_string(world_rank);
+             if (gethostname(hostname, 1024) == 0) {
+               wid = std::string(hostname) + ":" + wid;
+             }
+             executeJob(redis, job_id, wid);
              redis.hdel("jobs:processing", job_id);
              spdlog::info("Worker Node {} successfully processed and ACKed job: {}", world_rank, job_id);
-          } catch (...) {
-             // Failure: Move to Dead-Letter Queue
+          } catch (const std::exception& ex) {
              redis.hdel("jobs:processing", job_id);
              redis.lpush("queue:deadletter", job_id);
-             spdlog::error("Worker Node {} failed job {}, sent to DLQ", world_rank, job_id);
+             redis.set("job:state:" + job_id, "4"); // FAILED
+             redis.set("job:completed_at:" + job_id, std::to_string(unixSecondsNow()));
+             redis.set("job:error:" + job_id, ex.what());
+             spdlog::error("Worker Node {} failed job {}: {}", world_rank, job_id, ex.what());
+          } catch (...) {
+             redis.hdel("jobs:processing", job_id);
+             redis.lpush("queue:deadletter", job_id);
+             redis.set("job:state:" + job_id, "4"); // FAILED
+             redis.set("job:completed_at:" + job_id, std::to_string(unixSecondsNow()));
+             redis.set("job:error:" + job_id, "unknown execution failure");
+             spdlog::error("Worker Node {} failed job {} (unknown exception)", world_rank, job_id);
           }
         }
       }
@@ -145,14 +323,28 @@ int main(int argc, char **argv) {
             redis.hset("jobs:processing", job_id, std::to_string(now));
             
             try {
-               // simulate work
-               std::this_thread::sleep_for(std::chrono::milliseconds(100));
+               char hostname[1024];
+               std::string wid = "worker-" + std::to_string(i);
+               if (gethostname(hostname, 1024) == 0) {
+                 wid = std::string(hostname) + ":" + wid;
+               }
+               executeJob(redis, job_id, wid);
                redis.hdel("jobs:processing", job_id);
                spdlog::info("Local Worker {} successfully processed and ACKed job: {}", i, job_id);
+            } catch (const std::exception& ex) {
+               redis.hdel("jobs:processing", job_id);
+               redis.lpush("queue:deadletter", job_id);
+               redis.set("job:state:" + job_id, "4"); // FAILED
+               redis.set("job:completed_at:" + job_id, std::to_string(unixSecondsNow()));
+               redis.set("job:error:" + job_id, ex.what());
+               spdlog::error("Local Worker {} failed job {}: {}", i, job_id, ex.what());
             } catch (...) {
                redis.hdel("jobs:processing", job_id);
                redis.lpush("queue:deadletter", job_id);
-               spdlog::error("Local Worker {} failed job {}, sent to DLQ", i, job_id);
+               redis.set("job:state:" + job_id, "4"); // FAILED
+               redis.set("job:completed_at:" + job_id, std::to_string(unixSecondsNow()));
+               redis.set("job:error:" + job_id, "unknown execution failure");
+               spdlog::error("Local Worker {} failed job {} (unknown exception)", i, job_id);
             }
           }
         }

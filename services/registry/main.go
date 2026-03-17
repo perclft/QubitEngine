@@ -9,10 +9,14 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
+	api "github.com/perclft/QubitEngine/api/generated"
+	pb "github.com/perclft/QubitEngine/services/registry/generated"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -39,6 +43,7 @@ type CircuitRecord struct {
 
 // RegistryServer implements the CircuitRegistry gRPC service
 type RegistryServer struct {
+	pb.UnimplementedCircuitRegistryServer
 	db *sql.DB
 }
 
@@ -77,7 +82,7 @@ func InitDB(db *sql.DB) error {
 }
 
 // SaveCircuit saves a new circuit to the registry
-func (s *RegistryServer) SaveCircuit(ctx context.Context, req *SaveCircuitRequest) (*CircuitMetadata, error) {
+func (s *RegistryServer) SaveCircuit(ctx context.Context, req *pb.SaveCircuitRequest) (*pb.CircuitMetadata, error) {
 	id := uuid.New().String()
 	now := time.Now()
 
@@ -109,10 +114,11 @@ func (s *RegistryServer) SaveCircuit(ctx context.Context, req *SaveCircuitReques
 		return nil, status.Errorf(codes.Internal, "failed to save circuit: %v", err)
 	}
 
-	return &CircuitMetadata{
+	return &pb.CircuitMetadata{
 		Id:            id,
 		Name:          req.Name,
 		Description:   req.Description,
+		Author:        "anonymous",
 		Domain:        req.Domain,
 		Tags:          req.Tags,
 		NumQubits:     req.Circuit.NumQubits,
@@ -125,7 +131,7 @@ func (s *RegistryServer) SaveCircuit(ctx context.Context, req *SaveCircuitReques
 }
 
 // LoadCircuit retrieves a circuit by ID
-func (s *RegistryServer) LoadCircuit(ctx context.Context, req *LoadCircuitRequest) (*CircuitRequest, error) {
+func (s *RegistryServer) LoadCircuit(ctx context.Context, req *pb.LoadCircuitRequest) (*api.CircuitRequest, error) {
 	var circuitJSON string
 	err := s.db.QueryRowContext(ctx, `
 		SELECT circuit_json FROM circuits WHERE id = $1
@@ -141,7 +147,7 @@ func (s *RegistryServer) LoadCircuit(ctx context.Context, req *LoadCircuitReques
 	// Increment run count
 	s.db.ExecContext(ctx, `UPDATE circuits SET run_count = run_count + 1 WHERE id = $1`, req.CircuitId)
 
-	var circuit CircuitRequest
+	var circuit api.CircuitRequest
 	if err := json.Unmarshal([]byte(circuitJSON), &circuit); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to deserialize circuit: %v", err)
 	}
@@ -150,7 +156,7 @@ func (s *RegistryServer) LoadCircuit(ctx context.Context, req *LoadCircuitReques
 }
 
 // ListCircuits returns circuits matching the given filters
-func (s *RegistryServer) ListCircuits(ctx context.Context, req *ListCircuitsRequest) (*CircuitList, error) {
+func (s *RegistryServer) ListCircuits(ctx context.Context, req *pb.ListCircuitsRequest) (*pb.CircuitList, error) {
 	query := `SELECT id, name, description, author, domain, tags, num_qubits, num_operations, version, is_public, fork_count, run_count, created_at, updated_at FROM circuits WHERE 1=1`
 	args := []interface{}{}
 	argIdx := 1
@@ -188,9 +194,9 @@ func (s *RegistryServer) ListCircuits(ctx context.Context, req *ListCircuitsRequ
 	}
 	defer rows.Close()
 
-	var circuits []*CircuitMetadata
+	var circuits []*pb.CircuitMetadata
 	for rows.Next() {
-		var m CircuitMetadata
+		var m pb.CircuitMetadata
 		var tagsJSON string
 		var createdAt, updatedAt time.Time
 
@@ -209,23 +215,24 @@ func (s *RegistryServer) ListCircuits(ctx context.Context, req *ListCircuitsRequ
 		circuits = append(circuits, &m)
 	}
 
-	return &CircuitList{
-		Circuits: circuits,
-		Page:     int32(page),
-		PageSize: int32(pageSize),
+	return &pb.CircuitList{
+		Circuits:   circuits,
+		TotalCount: int32(len(circuits)),
+		Page:       int32(page),
+		PageSize:   int32(pageSize),
 	}, nil
 }
 
 // ForkCircuit creates a copy of an existing circuit
-func (s *RegistryServer) ForkCircuit(ctx context.Context, req *ForkCircuitRequest) (*CircuitMetadata, error) {
+func (s *RegistryServer) ForkCircuit(ctx context.Context, req *pb.ForkCircuitRequest) (*pb.CircuitMetadata, error) {
 	// Load original
-	original, err := s.LoadCircuit(ctx, &LoadCircuitRequest{CircuitId: req.SourceCircuitId})
+	original, err := s.LoadCircuit(ctx, &pb.LoadCircuitRequest{CircuitId: req.SourceCircuitId, Version: 0})
 	if err != nil {
 		return nil, err
 	}
 
 	// Save as new
-	newMeta, err := s.SaveCircuit(ctx, &SaveCircuitRequest{
+	newMeta, err := s.SaveCircuit(ctx, &pb.SaveCircuitRequest{
 		Name:        req.NewName,
 		Description: fmt.Sprintf("Forked from %s", req.SourceCircuitId),
 		Circuit:     original,
@@ -243,7 +250,7 @@ func (s *RegistryServer) ForkCircuit(ctx context.Context, req *ForkCircuitReques
 }
 
 // DeleteCircuit removes a circuit from the registry
-func (s *RegistryServer) DeleteCircuit(ctx context.Context, req *DeleteCircuitRequest) (*Empty, error) {
+func (s *RegistryServer) DeleteCircuit(ctx context.Context, req *pb.DeleteCircuitRequest) (*pb.RegistryEmpty, error) {
 	result, err := s.db.ExecContext(ctx, `DELETE FROM circuits WHERE id = $1`, req.CircuitId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "delete failed: %v", err)
@@ -254,80 +261,8 @@ func (s *RegistryServer) DeleteCircuit(ctx context.Context, req *DeleteCircuitRe
 		return nil, status.Errorf(codes.NotFound, "circuit not found")
 	}
 
-	return &Empty{}, nil
+	return &pb.RegistryEmpty{}, nil
 }
-
-// Placeholder types - these would be generated from protobuf
-type SaveCircuitRequest struct {
-	Name        string
-	Description string
-	Circuit     *CircuitRequest
-	Domain      string
-	Tags        []string
-	IsPublic    bool
-}
-
-type LoadCircuitRequest struct {
-	CircuitId string
-	Version   int32
-}
-
-type ListCircuitsRequest struct {
-	Domain     string
-	Tags       []string
-	Author     string
-	PublicOnly bool
-	Page       int32
-	PageSize   int32
-}
-
-type ForkCircuitRequest struct {
-	SourceCircuitId string
-	NewName         string
-}
-
-type DeleteCircuitRequest struct {
-	CircuitId string
-}
-
-type CircuitMetadata struct {
-	Id            string
-	Name          string
-	Description   string
-	Author        string
-	Domain        string
-	Tags          []string
-	NumQubits     int32
-	NumOperations int32
-	Version       int32
-	CreatedAt     int64
-	UpdatedAt     int64
-	IsPublic      bool
-	ForkCount     int32
-	RunCount      int32
-}
-
-type CircuitList struct {
-	Circuits   []*CircuitMetadata
-	TotalCount int32
-	Page       int32
-	PageSize   int32
-}
-
-type CircuitRequest struct {
-	NumQubits        int32           `json:"num_qubits"`
-	Operations       []GateOperation `json:"operations"`
-	NoiseProbability float64         `json:"noise_probability"`
-}
-
-type GateOperation struct {
-	Type         int32   `json:"type"`
-	TargetQubit  uint32  `json:"target_qubit"`
-	ControlQubit uint32  `json:"control_qubit"`
-	Angle        float64 `json:"angle"`
-}
-
-type Empty struct{}
 
 func main() {
 	dbHost := flag.String("db-host", "localhost", "PostgreSQL host")
@@ -373,11 +308,24 @@ func main() {
 	}
 
 	server := grpc.NewServer()
-	// RegisterCircuitRegistryServer(server, NewRegistryServer(db))
+	pb.RegisterCircuitRegistryServer(server, NewRegistryServer(db))
 
 	slog.Info("Circuit Registry starting", "port", *grpcPort)
-	if err := server.Serve(lis); err != nil {
-		slog.Error("Failed to serve", "error", err)
-		os.Exit(1)
-	}
+
+	// Graceful shutdown on SIGINT/SIGTERM
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		if err := server.Serve(lis); err != nil {
+			slog.Error("Failed to serve", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	sig := <-quit
+	slog.Info("Shutdown signal received", "signal", sig.String())
+	server.GracefulStop()
+	db.Close()
+	slog.Info("Registry shut down gracefully")
 }
