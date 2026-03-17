@@ -31,7 +31,7 @@ QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
   if (n >= 25 && !use_local) {
     // Emulate using MPS for circuits >= 25 qubits to showcase memory
     // compression
-    backend = std::make_unique<MPSBackend>(n);
+    backend = std::make_unique<MPSBackend>(static_cast<int>(n));
     return;
   }
 

@@ -83,6 +83,7 @@ endif()
 find_package(pybind11 CONFIG REQUIRED)
 find_package(gflags CONFIG REQUIRED)
 find_package(glog CONFIG REQUIRED)
+find_package(fmt CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(Eigen3 CONFIG REQUIRED)
 find_package(redis++ CONFIG REQUIRED)
@@ -311,6 +312,10 @@ target_link_libraries(qubit_engine_core
         gRPC::grpc++
         gRPC::grpc
         gRPC::gpr
+        spdlog::spdlog
+        fmt::fmt
+        $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
+        $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
 )
 
 # =================================================================
