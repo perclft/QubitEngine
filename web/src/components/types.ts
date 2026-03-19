@@ -36,3 +36,11 @@ export interface TopologyData {
   edges: EdgeItem[];
   error?: string;
 }
+
+export interface ClusterMetricsData {
+  activeWorkers: number;
+  queueDepth: number;
+  memoryUsagePercent: number;
+  jobsByState: Record<number, number>;
+  error?: string;
+}

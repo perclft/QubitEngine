@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Activity, Server, Compass } from "lucide-react";
 import { WavefunctionChart } from "../components/WavefunctionChart";
 import { TopologyGraph } from "../components/TopologyGraph";
+import { ClusterMetrics } from "../components/ClusterMetrics";
 import { ExecutionResult, TopologyData } from "../components/types";
 
 export default function DashboardPage() {
@@ -60,6 +61,8 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-10">
         {/* Controls */}
         <div className="space-y-4">
+          <ClusterMetrics />
+          
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

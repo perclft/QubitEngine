@@ -24,6 +24,12 @@ public:
   // Marks the shared memory descriptor for deletion (POSIX only, no-op on
   // Windows)
   static void unlinkSegment(const std::string &descriptor);
+
+  // Schedules an automatic cleanup of the memory mapped file after a given timeout
+  static void scheduleCleanup(const std::string &descriptor, void *ptr, size_t sizeBytes, int timeoutMs);
+
+private:
+  static void performCleanup(std::string descriptor, void *ptr, size_t sizeBytes, int timeoutMs);
 };
 
 } // namespace ipc

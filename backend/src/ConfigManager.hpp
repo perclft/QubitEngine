@@ -11,6 +11,7 @@ public:
 
   std::optional<std::string> getCloudUrl() const;
   bool forceLocalExecution() const;
+  std::optional<std::string> getTopologyPath() const;
 
 private:
   ConfigManager() = default;

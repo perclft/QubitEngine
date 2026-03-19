@@ -138,4 +138,9 @@ setup(
     packages=find_packages(),
     zip_safe=False,
     python_requires=">=3.8",
+    extras_require={
+        "qiskit": ["qiskit>=1.0.0"],
+        "pennylane": ["pennylane>=0.35.0"],
+        "all": ["qiskit>=1.0.0", "pennylane>=0.35.0"]
+    },
 )

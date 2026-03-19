@@ -248,7 +248,8 @@ int main(int argc, char **argv) {
     // of waiting on gRPC This removes the heavy 1,000-thread gRPC bottleneck
     // from Go completely.
     try {
-      sw::redis::Redis redis("tcp://localhost:6379");
+      const char* redis_url = std::getenv("REDIS_ADDR") ? std::getenv("REDIS_ADDR") : "tcp://redis:6379";
+      sw::redis::Redis redis(redis_url);
       spdlog::info("Worker Node {} connected to Redis.", world_rank);
 
       while (!shutdown_requested) {
@@ -310,7 +311,8 @@ int main(int argc, char **argv) {
   for (int i = 0; i < num_workers; ++i) {
     workers.emplace_back([i]() {
       try {
-        sw::redis::Redis redis("tcp://localhost:6379");
+        const char* redis_url = std::getenv("REDIS_ADDR") ? std::getenv("REDIS_ADDR") : "tcp://redis:6379";
+        sw::redis::Redis redis(redis_url);
         spdlog::info("Local Worker {} connected to Redis.", i);
 
         while (!shutdown_requested) {

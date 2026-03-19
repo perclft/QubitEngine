@@ -1,6 +1,8 @@
 #include "SharedMemory.hpp"
 #include <iostream>
 #include <stdexcept>
+#include <thread>
+#include <chrono>
 
 #ifdef _WIN32
 #include <mutex>
@@ -141,6 +143,20 @@ void SharedMemory::unlinkSegment(const std::string &descriptor) {
 #else
   shm_unlink(descriptor.c_str());
 #endif
+}
+
+void SharedMemory::scheduleCleanup(const std::string &descriptor, void *ptr, size_t sizeBytes, int timeoutMs) {
+  std::thread(&SharedMemory::performCleanup, descriptor, ptr, sizeBytes, timeoutMs).detach();
+}
+
+void SharedMemory::performCleanup(std::string descriptor, void *ptr, size_t sizeBytes, int timeoutMs) {
+  std::this_thread::sleep_for(std::chrono::milliseconds(timeoutMs));
+  try {
+    closeSegment(descriptor, ptr, sizeBytes);
+    unlinkSegment(descriptor);
+  } catch (...) {
+    // Ignore cleanup destruct errors
+  }
 }
 
 } // namespace ipc

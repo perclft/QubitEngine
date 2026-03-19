@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type SchedulerServer struct {
@@ -37,7 +38,7 @@ func NewSchedulerServer(rdb *redis.Client, engineAddr string) *SchedulerServer {
 		rdb:          rdb,
 		engineAddr:   engineAddr,
 		workerCancel: make(map[string]context.CancelFunc),
-		workerCount:  1000,
+		workerCount:  4,
 	}
 }
 
@@ -326,4 +327,19 @@ func (s *SchedulerServer) StreamJobResults(handle *pb.JobHandle, stream pb.Quant
 			return err
 		}
 	}
+}
+
+func (s *SchedulerServer) GetClusterMetrics(ctx context.Context, req *emptypb.Empty) (*pb.ClusterMetricsResponse, error) {
+	queueLen, _ := s.rdb.ZCard(ctx, "queue:jobs").Result()
+	
+	// Real system stats would derive these metrics
+	return &pb.ClusterMetricsResponse{
+		ActiveWorkers:      int32(s.workerCount),
+		QueueDepth:         int32(queueLen),
+		MemoryUsagePercent: 42.5,
+		JobsByState: map[int32]int32{
+			int32(models.StateQueued):  int32(queueLen),
+			int32(models.StateRunning): 0,
+		},
+	}, nil
 }

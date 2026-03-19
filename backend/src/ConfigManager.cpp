@@ -22,4 +22,11 @@ bool ConfigManager::forceLocalExecution() const {
   return false;
 }
 
+std::optional<std::string> ConfigManager::getTopologyPath() const {
+  if (const char* env_p = std::getenv("QUBIT_TOPOLOGY_PATH")) {
+    return std::string(env_p);
+  }
+  return std::nullopt;
+}
+
 } // namespace qubit_engine

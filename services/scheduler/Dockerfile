@@ -11,7 +11,7 @@ COPY services/scheduler/ services/scheduler/
 
 WORKDIR /build/services/scheduler
 RUN go mod download 2>/dev/null || go mod tidy
-RUN CGO_ENABLED=0 GOOS=linux go build -o scheduler ./main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o scheduler ./cmd/scheduler/main.go
 
 # Runtime stage
 FROM alpine:latest

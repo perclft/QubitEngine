@@ -5,6 +5,7 @@ package qubit_engine;
 option go_package = "github.com/perclft/QubitEngine/api/generated";
 
 import "api/proto/quantum.proto";
+import "google/protobuf/empty.proto";
 
 // ------------------------------------------------------------------
 // Quantum Job Scheduler Service
@@ -26,6 +27,9 @@ service QuantumScheduler {
     
     // List all jobs for a user
     rpc ListJobs(ListJobsRequest) returns (JobList);
+    
+    // Get real-time cluster metrics for visualization
+    rpc GetClusterMetrics(google.protobuf.Empty) returns (ClusterMetricsResponse);
 }
 
 // ------------------------------------------------------------------
@@ -108,4 +112,15 @@ message ListJobsRequest {
 message JobList {
     repeated JobStatus jobs = 1;
     int32 total_count = 2;
+}
+
+// ------------------------------------------------------------------
+// Cluster Metrics
+// ------------------------------------------------------------------
+
+message ClusterMetricsResponse {
+    int32 active_workers = 1;
+    int32 queue_depth = 2;
+    double memory_usage_percent = 3;
+    map<int32, int32> jobs_by_state = 4; // Map JobState to count
 }

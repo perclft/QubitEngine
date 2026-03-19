@@ -1,0 +1,54 @@
+name: Release Backend Binaries
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build-backend:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update && sudo apt-get install -y cmake ninja-build
+
+    - name: Set up dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install cmake ninja
+
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11
+      with:
+        vcpkgDirectory: '${{ github.workspace }}/vcpkg'
+
+    - name: Configure CMake
+      run: |
+        cmake -B backend/build -S backend -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build Complete Project
+      run: cmake --build backend/build --config Release
+
+    - name: Archive artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: qubit_engine_${{ runner.os }}
+        path: |
+          bin/qubit_engine*
+          bin/core.*
+
+    - name: Upload Release Asset
+      uses: softprops/action-gh-release@v2
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: |
+          bin/qubit_engine*
+          bin/core.*

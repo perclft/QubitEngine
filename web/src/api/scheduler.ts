@@ -2,7 +2,7 @@
 // versions:
 //   protoc-gen-ts_proto  v2.11.5
 //   protoc               v3.19.1
-// source: scheduler.proto
+// source: api/proto/scheduler.proto
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
@@ -20,6 +20,11 @@ import {
   type ServiceError,
   type UntypedServiceImplementation,
 } from "@grpc/grpc-js";
+export interface Empty {}
+export const Empty: any = {
+  encode: () => ({ finish: () => new Uint8Array() }),
+  decode: () => ({})
+};
 import { CircuitRequest, StateResponse } from "./quantum";
 
 export const protobufPackage = "qubit_engine";
@@ -199,6 +204,19 @@ export interface ListJobsRequest {
 export interface JobList {
   jobs: JobStatus[];
   totalCount: number;
+}
+
+export interface ClusterMetricsResponse {
+  activeWorkers: number;
+  queueDepth: number;
+  memoryUsagePercent: number;
+  /** Map JobState to count */
+  jobsByState: { [key: number]: number };
+}
+
+export interface ClusterMetricsResponse_JobsByStateEntry {
+  key: number;
+  value: number;
 }
 
 function createBaseJobRequest(): JobRequest {
@@ -1256,6 +1274,239 @@ export const JobList: MessageFns<JobList> = {
   },
 };
 
+function createBaseClusterMetricsResponse(): ClusterMetricsResponse {
+  return { activeWorkers: 0, queueDepth: 0, memoryUsagePercent: 0, jobsByState: {} };
+}
+
+export const ClusterMetricsResponse: MessageFns<ClusterMetricsResponse> = {
+  encode(message: ClusterMetricsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.activeWorkers !== 0) {
+      writer.uint32(8).int32(message.activeWorkers);
+    }
+    if (message.queueDepth !== 0) {
+      writer.uint32(16).int32(message.queueDepth);
+    }
+    if (message.memoryUsagePercent !== 0) {
+      writer.uint32(25).double(message.memoryUsagePercent);
+    }
+    globalThis.Object.entries(message.jobsByState).forEach(([key, value]: [string, number]) => {
+      ClusterMetricsResponse_JobsByStateEntry.encode({ key: key as any, value }, writer.uint32(34).fork()).join();
+    });
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ClusterMetricsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseClusterMetricsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.activeWorkers = reader.int32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.queueDepth = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 25) {
+            break;
+          }
+
+          message.memoryUsagePercent = reader.double();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          const entry4 = ClusterMetricsResponse_JobsByStateEntry.decode(reader, reader.uint32());
+          if (entry4.value !== undefined) {
+            message.jobsByState[entry4.key] = entry4.value;
+          }
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ClusterMetricsResponse {
+    return {
+      activeWorkers: isSet(object.activeWorkers)
+        ? globalThis.Number(object.activeWorkers)
+        : isSet(object.active_workers)
+        ? globalThis.Number(object.active_workers)
+        : 0,
+      queueDepth: isSet(object.queueDepth)
+        ? globalThis.Number(object.queueDepth)
+        : isSet(object.queue_depth)
+        ? globalThis.Number(object.queue_depth)
+        : 0,
+      memoryUsagePercent: isSet(object.memoryUsagePercent)
+        ? globalThis.Number(object.memoryUsagePercent)
+        : isSet(object.memory_usage_percent)
+        ? globalThis.Number(object.memory_usage_percent)
+        : 0,
+      jobsByState: isObject(object.jobsByState)
+        ? (globalThis.Object.entries(object.jobsByState) as [string, any][]).reduce(
+          (acc: { [key: number]: number }, [key, value]: [string, any]) => {
+            acc[globalThis.Number(key)] = globalThis.Number(value);
+            return acc;
+          },
+          {},
+        )
+        : isObject(object.jobs_by_state)
+        ? (globalThis.Object.entries(object.jobs_by_state) as [string, any][]).reduce(
+          (acc: { [key: number]: number }, [key, value]: [string, any]) => {
+            acc[globalThis.Number(key)] = globalThis.Number(value);
+            return acc;
+          },
+          {},
+        )
+        : {},
+    };
+  },
+
+  toJSON(message: ClusterMetricsResponse): unknown {
+    const obj: any = {};
+    if (message.activeWorkers !== 0) {
+      obj.activeWorkers = Math.round(message.activeWorkers);
+    }
+    if (message.queueDepth !== 0) {
+      obj.queueDepth = Math.round(message.queueDepth);
+    }
+    if (message.memoryUsagePercent !== 0) {
+      obj.memoryUsagePercent = message.memoryUsagePercent;
+    }
+    if (message.jobsByState) {
+      const entries = globalThis.Object.entries(message.jobsByState) as [string, number][];
+      if (entries.length > 0) {
+        obj.jobsByState = {};
+        entries.forEach(([k, v]) => {
+          obj.jobsByState[k] = Math.round(v);
+        });
+      }
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ClusterMetricsResponse>, I>>(base?: I): ClusterMetricsResponse {
+    return ClusterMetricsResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ClusterMetricsResponse>, I>>(object: I): ClusterMetricsResponse {
+    const message = createBaseClusterMetricsResponse();
+    message.activeWorkers = object.activeWorkers ?? 0;
+    message.queueDepth = object.queueDepth ?? 0;
+    message.memoryUsagePercent = object.memoryUsagePercent ?? 0;
+    message.jobsByState = (globalThis.Object.entries(object.jobsByState ?? {}) as [string, number][]).reduce(
+      (acc: { [key: number]: number }, [key, value]: [string, number]) => {
+        if (value !== undefined) {
+          acc[globalThis.Number(key)] = globalThis.Number(value);
+        }
+        return acc;
+      },
+      {},
+    );
+    return message;
+  },
+};
+
+function createBaseClusterMetricsResponse_JobsByStateEntry(): ClusterMetricsResponse_JobsByStateEntry {
+  return { key: 0, value: 0 };
+}
+
+export const ClusterMetricsResponse_JobsByStateEntry: MessageFns<ClusterMetricsResponse_JobsByStateEntry> = {
+  encode(message: ClusterMetricsResponse_JobsByStateEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.key !== 0) {
+      writer.uint32(8).int32(message.key);
+    }
+    if (message.value !== 0) {
+      writer.uint32(16).int32(message.value);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ClusterMetricsResponse_JobsByStateEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseClusterMetricsResponse_JobsByStateEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.key = reader.int32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.value = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ClusterMetricsResponse_JobsByStateEntry {
+    return {
+      key: isSet(object.key) ? globalThis.Number(object.key) : 0,
+      value: isSet(object.value) ? globalThis.Number(object.value) : 0,
+    };
+  },
+
+  toJSON(message: ClusterMetricsResponse_JobsByStateEntry): unknown {
+    const obj: any = {};
+    if (message.key !== 0) {
+      obj.key = Math.round(message.key);
+    }
+    if (message.value !== 0) {
+      obj.value = Math.round(message.value);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ClusterMetricsResponse_JobsByStateEntry>, I>>(
+    base?: I,
+  ): ClusterMetricsResponse_JobsByStateEntry {
+    return ClusterMetricsResponse_JobsByStateEntry.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ClusterMetricsResponse_JobsByStateEntry>, I>>(
+    object: I,
+  ): ClusterMetricsResponse_JobsByStateEntry {
+    const message = createBaseClusterMetricsResponse_JobsByStateEntry();
+    message.key = object.key ?? 0;
+    message.value = object.value ?? 0;
+    return message;
+  },
+};
+
 export type QuantumSchedulerService = typeof QuantumSchedulerService;
 export const QuantumSchedulerService = {
   /** Submit a circuit job to the queue */
@@ -1308,6 +1559,17 @@ export const QuantumSchedulerService = {
     responseSerialize: (value: JobList): Buffer => Buffer.from(JobList.encode(value).finish()),
     responseDeserialize: (value: Buffer): JobList => JobList.decode(value),
   },
+  /** Get real-time cluster metrics for visualization */
+  getClusterMetrics: {
+    path: "/qubit_engine.QuantumScheduler/GetClusterMetrics" as const,
+    requestStream: false as const,
+    responseStream: false as const,
+    requestSerialize: (value: Empty): Buffer => Buffer.from(Empty.encode(value).finish()),
+    requestDeserialize: (value: Buffer): Empty => Empty.decode(value),
+    responseSerialize: (value: ClusterMetricsResponse): Buffer =>
+      Buffer.from(ClusterMetricsResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer): ClusterMetricsResponse => ClusterMetricsResponse.decode(value),
+  },
 } as const;
 
 export interface QuantumSchedulerServer extends UntypedServiceImplementation {
@@ -1321,6 +1583,8 @@ export interface QuantumSchedulerServer extends UntypedServiceImplementation {
   streamJobResults: handleServerStreamingCall<JobHandle, JobResult>;
   /** List all jobs for a user */
   listJobs: handleUnaryCall<ListJobsRequest, JobList>;
+  /** Get real-time cluster metrics for visualization */
+  getClusterMetrics: handleUnaryCall<Empty, ClusterMetricsResponse>;
 }
 
 export interface QuantumSchedulerClient extends Client {
@@ -1391,6 +1655,22 @@ export interface QuantumSchedulerClient extends Client {
     metadata: Metadata,
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: JobList) => void,
+  ): ClientUnaryCall;
+  /** Get real-time cluster metrics for visualization */
+  getClusterMetrics(
+    request: Empty,
+    callback: (error: ServiceError | null, response: ClusterMetricsResponse) => void,
+  ): ClientUnaryCall;
+  getClusterMetrics(
+    request: Empty,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: ClusterMetricsResponse) => void,
+  ): ClientUnaryCall;
+  getClusterMetrics(
+    request: Empty,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: ClusterMetricsResponse) => void,
   ): ClientUnaryCall;
 }
 

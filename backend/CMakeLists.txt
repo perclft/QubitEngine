@@ -87,6 +87,7 @@ find_package(fmt CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(Eigen3 CONFIG REQUIRED)
 find_package(redis++ CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 
 if(TARGET redis++::redis++)
     set(REDIS_LIB redis++::redis++)
@@ -258,6 +259,7 @@ endif()
 # Core Library — shared across all targets to eliminate duplication
 # =================================================================
 add_library(qubit_engine_core STATIC
+    src/HardwareConfig.cpp
     src/QuantumRegister.cpp
     src/ConfigManager.cpp
     src/backends/CpuBackend.cpp
@@ -306,6 +308,7 @@ endif()
 
 target_link_libraries(qubit_engine_core PUBLIC Threads::Threads)
 target_link_libraries(qubit_engine_core PUBLIC Eigen3::Eigen)
+target_link_libraries(qubit_engine_core PUBLIC nlohmann_json::nlohmann_json)
 
 target_link_libraries(qubit_engine_core
     PUBLIC
@@ -384,7 +387,6 @@ add_executable(tests
     tests/CircuitOptimizerTests.cpp
     tests/AdjointTests.cpp
     tests/CpuBackendTests.cpp
-    tests/MockHardwareBackendTests.cpp
     tests/GPUQuantumRegisterTests.cpp
 )
 

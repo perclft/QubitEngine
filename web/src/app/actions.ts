@@ -4,7 +4,7 @@ import * as grpc from '@grpc/grpc-js';
 import { QuantumComputeClient } from '../api/quantum';
 import { QuantumSchedulerClient } from '../api/scheduler';
 import { CircuitRequest, GateOperation_GateType } from '../api/quantum';
-import { ExecutionResult, TopologyData, ComplexNumber } from '../components/types';
+import { ExecutionResult, TopologyData, ComplexNumber, ClusterMetricsData } from '../components/types';
 
 // --- Types ---
 
@@ -250,6 +250,21 @@ export async function getJobStatus(jobId: string): Promise<JobStatusResult | { e
         progressPercent: response.progressPercent,
         workerId: response.workerId,
         errorMessage: response.errorMessage,
+      });
+    });
+  });
+}
+// --- Cluster Metrics ---------------------------------------------------
+export async function getClusterMetrics(): Promise<ClusterMetricsData | { error: string }> {
+  return new Promise((resolve) => {
+    const client = getSchedulerClient();
+    (client as any).getClusterMetrics({}, getMetadata(), (err: any, response: any) => {
+      if (err) { resolve({ error: err.message }); return; }
+      resolve({
+        activeWorkers: response.activeWorkers,
+        queueDepth: response.queueDepth,
+        memoryUsagePercent: response.memoryUsagePercent,
+        jobsByState: response.jobsByState || {},
       });
     });
   });

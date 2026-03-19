@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates wget libstdc++6 zlib1g libssl3 \
     libopenmpi-dev openmpi-bin \
     libspdlog-dev libfmt-dev \
-    libeigen3-dev \
+    libeigen3-dev nlohmann-json3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Build prometheus-cpp from source
@@ -89,6 +89,7 @@ COPY --from=builder /build/bin/benchmark /usr/local/bin/benchmark
 # Copy installed libs
 COPY --from=builder /usr/local/lib/libhiredis* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libredis++* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libprometheus-cpp* /usr/local/lib/
 RUN ldconfig
 # Also copy nvidia-ml and other potentially needed libs if they are dynamic
 # But for now libcudart is the main one linked.

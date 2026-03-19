@@ -2,7 +2,7 @@
 // versions:
 //   protoc-gen-ts_proto  v2.11.5
 //   protoc               v3.19.1
-// source: quantum.proto
+// source: api/proto/quantum.proto
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
@@ -241,6 +241,17 @@ export function gateOperation_GateTypeToJSON(object: GateOperation_GateType): st
     default:
       return "UNRECOGNIZED";
   }
+}
+
+export interface GateStreamInit {
+  numQubits: number;
+  /** Optional: if true, server may return shm_descriptor instead of state_vector. */
+  useShm: boolean;
+}
+
+export interface GateStreamRequest {
+  init?: GateStreamInit | undefined;
+  op?: GateOperation | undefined;
 }
 
 export interface StateResponse {
@@ -759,6 +770,168 @@ export const GateOperation: MessageFns<GateOperation> = {
     message.secondControlQubit = object.secondControlQubit ?? 0;
     message.secondTargetQubit = object.secondTargetQubit ?? 0;
     message.noiseProbability = object.noiseProbability ?? 0;
+    return message;
+  },
+};
+
+function createBaseGateStreamInit(): GateStreamInit {
+  return { numQubits: 0, useShm: false };
+}
+
+export const GateStreamInit: MessageFns<GateStreamInit> = {
+  encode(message: GateStreamInit, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.numQubits !== 0) {
+      writer.uint32(8).int32(message.numQubits);
+    }
+    if (message.useShm !== false) {
+      writer.uint32(16).bool(message.useShm);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GateStreamInit {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGateStreamInit();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.numQubits = reader.int32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.useShm = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GateStreamInit {
+    return {
+      numQubits: isSet(object.numQubits)
+        ? globalThis.Number(object.numQubits)
+        : isSet(object.num_qubits)
+        ? globalThis.Number(object.num_qubits)
+        : 0,
+      useShm: isSet(object.useShm)
+        ? globalThis.Boolean(object.useShm)
+        : isSet(object.use_shm)
+        ? globalThis.Boolean(object.use_shm)
+        : false,
+    };
+  },
+
+  toJSON(message: GateStreamInit): unknown {
+    const obj: any = {};
+    if (message.numQubits !== 0) {
+      obj.numQubits = Math.round(message.numQubits);
+    }
+    if (message.useShm !== false) {
+      obj.useShm = message.useShm;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GateStreamInit>, I>>(base?: I): GateStreamInit {
+    return GateStreamInit.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GateStreamInit>, I>>(object: I): GateStreamInit {
+    const message = createBaseGateStreamInit();
+    message.numQubits = object.numQubits ?? 0;
+    message.useShm = object.useShm ?? false;
+    return message;
+  },
+};
+
+function createBaseGateStreamRequest(): GateStreamRequest {
+  return { init: undefined, op: undefined };
+}
+
+export const GateStreamRequest: MessageFns<GateStreamRequest> = {
+  encode(message: GateStreamRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.init !== undefined) {
+      GateStreamInit.encode(message.init, writer.uint32(10).fork()).join();
+    }
+    if (message.op !== undefined) {
+      GateOperation.encode(message.op, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GateStreamRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGateStreamRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.init = GateStreamInit.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.op = GateOperation.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GateStreamRequest {
+    return {
+      init: isSet(object.init) ? GateStreamInit.fromJSON(object.init) : undefined,
+      op: isSet(object.op) ? GateOperation.fromJSON(object.op) : undefined,
+    };
+  },
+
+  toJSON(message: GateStreamRequest): unknown {
+    const obj: any = {};
+    if (message.init !== undefined) {
+      obj.init = GateStreamInit.toJSON(message.init);
+    }
+    if (message.op !== undefined) {
+      obj.op = GateOperation.toJSON(message.op);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GateStreamRequest>, I>>(base?: I): GateStreamRequest {
+    return GateStreamRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GateStreamRequest>, I>>(object: I): GateStreamRequest {
+    const message = createBaseGateStreamRequest();
+    message.init = (object.init !== undefined && object.init !== null)
+      ? GateStreamInit.fromPartial(object.init)
+      : undefined;
+    message.op = (object.op !== undefined && object.op !== null) ? GateOperation.fromPartial(object.op) : undefined;
     return message;
   },
 };
@@ -1869,13 +2042,15 @@ export const QuantumComputeService = {
   /**
    * Streaming method for large or interactive circuits.
    * Sends a stream of gates and receives a stream of FULL STATE VECTORS.
+   *
+   * IMPORTANT: the first message MUST be an init message specifying num_qubits.
    */
   streamGates: {
     path: "/qubit_engine.QuantumCompute/StreamGates" as const,
     requestStream: true as const,
     responseStream: true as const,
-    requestSerialize: (value: GateOperation): Buffer => Buffer.from(GateOperation.encode(value).finish()),
-    requestDeserialize: (value: Buffer): GateOperation => GateOperation.decode(value),
+    requestSerialize: (value: GateStreamRequest): Buffer => Buffer.from(GateStreamRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): GateStreamRequest => GateStreamRequest.decode(value),
     responseSerialize: (value: StateResponse): Buffer => Buffer.from(StateResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer): StateResponse => StateResponse.decode(value),
   },
@@ -1923,8 +2098,10 @@ export interface QuantumComputeServer extends UntypedServiceImplementation {
   /**
    * Streaming method for large or interactive circuits.
    * Sends a stream of gates and receives a stream of FULL STATE VECTORS.
+   *
+   * IMPORTANT: the first message MUST be an init message specifying num_qubits.
    */
-  streamGates: handleBidiStreamingCall<GateOperation, StateResponse>;
+  streamGates: handleBidiStreamingCall<GateStreamRequest, StateResponse>;
   /**
    * Visualization method for Web (Server-Side Streaming only).
    * gRPC-Web does not support bidirectional streaming.
@@ -1957,10 +2134,12 @@ export interface QuantumComputeClient extends Client {
   /**
    * Streaming method for large or interactive circuits.
    * Sends a stream of gates and receives a stream of FULL STATE VECTORS.
+   *
+   * IMPORTANT: the first message MUST be an init message specifying num_qubits.
    */
-  streamGates(): ClientDuplexStream<GateOperation, StateResponse>;
-  streamGates(options: Partial<CallOptions>): ClientDuplexStream<GateOperation, StateResponse>;
-  streamGates(metadata: Metadata, options?: Partial<CallOptions>): ClientDuplexStream<GateOperation, StateResponse>;
+  streamGates(): ClientDuplexStream<GateStreamRequest, StateResponse>;
+  streamGates(options: Partial<CallOptions>): ClientDuplexStream<GateStreamRequest, StateResponse>;
+  streamGates(metadata: Metadata, options?: Partial<CallOptions>): ClientDuplexStream<GateStreamRequest, StateResponse>;
   /**
    * Visualization method for Web (Server-Side Streaming only).
    * gRPC-Web does not support bidirectional streaming.
