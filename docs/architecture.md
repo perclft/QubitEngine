@@ -5,11 +5,11 @@
 QubitEngine is a multi-language quantum simulation platform with five major layers:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Rust TUI (Ratatui)                    │
-│              Interactive terminal dashboard              │
-└────────────────────────┬────────────────────────────────┘
-                         │ gRPC Streaming
+┌───────────────────────────┬─────────────────────────────┐
+│    Next.js Web Client     │      Rust TUI (Ratatui)     │
+│  (React/TypeScript UI)    │   (Terminal dashboard)      │
+└─────────────┬─────────────┴──────────────┬──────────────┘
+              │ gRPC-Web over Envoy        │ gRPC Streaming
 ┌────────────────────────▼────────────────────────────────┐
 │             Go Application Mesh (gRPC)                  │
 │  ┌──────────┐  ┌──────────┐  ┌───────┐                 │

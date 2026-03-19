@@ -40,11 +40,11 @@ Key capabilities:
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Rust TUI (Ratatui)                    │
-│              Interactive terminal dashboard              │
-└────────────────────────┬────────────────────────────────┘
-                         │ gRPC Streaming
+┌───────────────────────────┬─────────────────────────────┐
+│    Next.js Web Client     │      Rust TUI (Ratatui)     │
+│  (React/TypeScript UI)    │   (Terminal dashboard)      │
+└─────────────┬─────────────┴──────────────┬──────────────┘
+              │ gRPC-Web over Envoy        │ gRPC Streaming
 ┌────────────────────────▼────────────────────────────────┐
 │             Go Application Mesh (gRPC)                  │
 │  ┌──────────┐  ┌──────────┐  ┌───────┐                 │
@@ -98,6 +98,7 @@ QubitEngine/
 │   ├── scheduler/      # Priority job queue (Redis)
 │   ├── registry/       # Circuit storage (PostgreSQL)
 │   └── cache/          # Result cache (Redis)
+├── web/                # Next.js web frontend (TypeScript, gRPC-Web)
 └── docs/               # Architecture documentation
 ```
 
@@ -117,6 +118,7 @@ vcpkg will install: `grpc`, `protobuf`, `abseil`, `gtest`, `prometheus-cpp`, `gf
 
 | Tool | Version | For |
 |------|---------|-----|
+| **Node.js** | ≥ 18.x | Web frontend (`web`) |
 | **Rust** | ≥ 1.85 | TUI client (`cli-rs`) |
 | **Go** | ≥ 1.24 | Microservices (scheduler, registry, cache) |
 | **CUDA Toolkit** | ≥ 11.0 | GPU acceleration (NVIDIA) |
@@ -171,6 +173,14 @@ cd services/registry && go build -o registry .
 cd services/cache && go build -o cache .
 ```
 
+### Web Frontend
+
+```bash
+cd web
+npm install
+npm run build
+```
+
 ## 🚀 Running
 
 ### 1. Start the Engine
@@ -197,7 +207,15 @@ cargo run
 docker compose -f deploy/docker/docker-compose.yaml up --build
 ```
 
-This starts: engine (port 50051), PostgreSQL (5432), registry (50052), Redis (6379), scheduler (50053), and cache (50054).
+This starts: engine (port 50051), PostgreSQL (5432), registry (50052), Redis (6379), scheduler (50053), and cache (50054), plus Envoy proxy and Web frontend.
+
+### 4. Web Frontend (Local Development)
+
+```bash
+cd web
+npm run dev
+# The web interface will be available at http://localhost:3000
+```
 
 ## 🧪 Testing
 
