@@ -30,6 +30,9 @@ service QuantumScheduler {
     
     // Get real-time cluster metrics for visualization
     rpc GetClusterMetrics(google.protobuf.Empty) returns (ClusterMetricsResponse);
+    
+    // Stream real-time cluster metrics for visualization
+    rpc StreamClusterMetrics(google.protobuf.Empty) returns (stream ClusterMetricsResponse);
 }
 
 // ------------------------------------------------------------------

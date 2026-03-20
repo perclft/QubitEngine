@@ -21,7 +21,7 @@ namespace qubit_engine {
 namespace ipc {
 
 #ifdef _WIN32
-static std::unordered_map<std::string, HANDLE> active_handles;
+static std::unordered_map<void*, HANDLE> active_handles;
 static std::mutex handle_mutex;
 #endif
 
@@ -51,7 +51,7 @@ void *SharedMemory::createSegment(const std::string &descriptor,
   // Store the handle to keep it alive and prevent leaks
   {
     std::lock_guard<std::mutex> lock(handle_mutex);
-    active_handles[descriptor] = hMapFile;
+    active_handles[pBuf] = hMapFile;
   }
   return pBuf;
 #else
@@ -98,7 +98,7 @@ void *SharedMemory::openSegment(const std::string &descriptor,
 
   {
     std::lock_guard<std::mutex> lock(handle_mutex);
-    active_handles[descriptor] = hMapFile;
+    active_handles[pBuf] = hMapFile;
   }
 
   return pBuf;
@@ -125,7 +125,7 @@ void SharedMemory::closeSegment(const std::string &descriptor, void *ptr,
   UnmapViewOfFile(ptr);
   {
     std::lock_guard<std::mutex> lock(handle_mutex);
-    auto it = active_handles.find(descriptor);
+    auto it = active_handles.find(ptr);
     if (it != active_handles.end()) {
       CloseHandle(it->second);
       active_handles.erase(it);

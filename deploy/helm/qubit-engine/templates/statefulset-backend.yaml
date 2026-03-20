@@ -23,11 +23,18 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext:
-        {{- toYaml .Values.backend.securityContext | nindent 8 }}
+        runAsNonRoot: {{ .Values.backend.securityContext.runAsNonRoot }}
+        runAsUser: {{ .Values.backend.securityContext.runAsUser }}
+        runAsGroup: {{ .Values.backend.securityContext.runAsGroup }}
+        fsGroup: {{ .Values.backend.securityContext.fsGroup }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
-            {{- toYaml .Values.backend.securityContext | nindent 12 }}
+            readOnlyRootFilesystem: {{ .Values.backend.securityContext.readOnlyRootFilesystem }}
+            runAsNonRoot: {{ .Values.backend.securityContext.runAsNonRoot }}
+            runAsUser: {{ .Values.backend.securityContext.runAsUser }}
+            runAsGroup: {{ .Values.backend.securityContext.runAsGroup }}
+            allowPrivilegeEscalation: false
           image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
           command: ["mpirun"]
@@ -61,6 +68,9 @@ spec:
             - name: mpi
               containerPort: 22 # If using SSH-based MPI, otherwise need TCP ports range
               protocol: TCP
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           env:
             - name: MY_POD_IP
               valueFrom:
@@ -76,3 +86,6 @@ spec:
             {{- end }}
           resources:
             {{- toYaml .Values.backend.resources | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}

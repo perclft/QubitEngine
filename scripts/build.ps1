@@ -92,7 +92,7 @@ function Build-Proto {
     $GoBin = Ensure-GoPlugins
 
     $ProtoDir = "$Root\api\proto"
-    $GoOut = "$Root\cli\internal\generated"
+    $GoOut = "$Root"
     
     if (!(Test-Path $GoOut)) { New-Item -ItemType Directory -Force -Path $GoOut | Out-Null }
     
@@ -114,10 +114,26 @@ function Build-Proto {
         Write-Error "Go plugins not found in $GoBin"
     }
 
-    & $ProtocExe -I $ProtoDir `
-        --plugin=protoc-gen-go=$PluginGo --go_out=$GoOut --go_opt=paths=source_relative `
-        --plugin=protoc-gen-go-grpc=$PluginGrpc --go-grpc_out=$GoOut --go-grpc_opt=paths=source_relative `
-        "$ProtoDir\quantum.proto"
+    & $ProtocExe -I . `
+        --plugin=protoc-gen-go=$PluginGo --go_out=$GoOut --go_opt=module=github.com/perclft/QubitEngine `
+        --plugin=protoc-gen-go-grpc=$PluginGrpc --go-grpc_out=$GoOut --go-grpc_opt=module=github.com/perclft/QubitEngine `
+        api/proto/quantum.proto api/proto/scheduler.proto api/proto/registry.proto api/proto/cache.proto
+
+    # Generate TypeScript Protos for Web
+    $PluginTS = "$Root\web\node_modules\.bin\protoc-gen-ts_proto.cmd"
+    if (Test-Path $PluginTS) {
+        Write-Host "Generating TypeScript Protos..." -ForegroundColor Cyan
+        $WebOut = "$Root\web\src\api"
+        if (!(Test-Path $WebOut)) { New-Item -ItemType Directory -Force -Path $WebOut | Out-Null }
+        
+        & $ProtocExe -I . `
+            --plugin=protoc-gen-ts_proto=$PluginTS `
+            --ts_proto_out=$WebOut `
+            --ts_proto_opt=esModuleInterop=true,outputJsonMethods=true,addGrpcMetadata=true,addHttpMetadata=true `
+            api/proto/quantum.proto api/proto/scheduler.proto api/proto/registry.proto api/proto/cache.proto
+    } else {
+        Write-Warning "ts-proto plugin not found at $PluginTS. Skipping TS generation."
+    }
         
     Write-Host "Protobufs generated." -ForegroundColor Green
 }

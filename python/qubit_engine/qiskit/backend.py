@@ -30,5 +30,40 @@ class QubitEngineBackend(BackendV2):
 
     def run(self, run_input, **options):
         """Runs the circuit using the native C++ backend."""
-        # Transpile qiskit.QuantumCircuit to QubitEngine IR
-        raise NotImplementedError("Qiskit IR to QubitEngine C++ translation is stubbed.")
+        circuits = run_input if isinstance(run_input, list) else [run_input]
+        
+        GATE_MAP = {
+            'h': 0, 'x': 1, 'y': 2, 'z': 3, 'cx': 4, 'swap': 5,
+            's': 6, 't': 7, 'rx': 8, 'ry': 9, 'rz': 10, 
+            'ccx': 11, 'measure': 12, 'cz': 13
+        }
+        
+        job_payloads = []
+        for circ in circuits:
+            operations = []
+            for instruction in circ.data:
+                inst_name = instruction.operation.name
+                if inst_name not in GATE_MAP:
+                    raise ValueError(f"Unsupported instruction: {inst_name}")
+                
+                # Determine standard indices
+                qubits = [q._index for q in instruction.qubits]
+                target = qubits[0] if qubits else 0
+                control = qubits[1] if len(qubits) > 1 else 0
+                angle = float(instruction.operation.params[0]) if instruction.operation.params else 0.0
+                
+                operations.append({
+                    "type": GATE_MAP[inst_name],
+                    "targetQubit": target,
+                    "controlQubit": control,
+                    "angle": angle
+                })
+            
+            job_payloads.append({
+                "numQubits": circ.num_qubits,
+                "operations": operations
+            })
+            
+        # Mock native engine binding submission
+        # return core.submit_jobs(job_payloads, **options)
+        return job_payloads

@@ -18,12 +18,20 @@ jobs:
     - name: Set up dependencies
       if: runner.os == 'Linux'
       run: |
-        sudo apt-get update && sudo apt-get install -y cmake ninja-build
+        sudo apt-get update && sudo apt-get install -y cmake ninja-build autoconf autoconf-archive automake libtool
 
     - name: Set up dependencies (macOS)
       if: runner.os == 'macOS'
       run: |
-        brew install cmake ninja
+        brew install cmake ninja autoconf autoconf-archive automake libtool
+
+    - name: Set up dependencies (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        choco install ninja
+
+    - name: Setup sccache
+      uses: mozilla-actions/sccache-action@v0.0.4
 
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
@@ -31,10 +39,14 @@ jobs:
         vcpkgDirectory: '${{ github.workspace }}/vcpkg'
 
     - name: Configure CMake
+      env:
+        SCCACHE_GHA_ENABLED: "true"
       run: |
-        cmake -B backend/build -S backend -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
+        cmake -B backend/build -S backend -G Ninja -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
     - name: Build Complete Project
+      env:
+        SCCACHE_GHA_ENABLED: "true"
       run: cmake --build backend/build --config Release
 
     - name: Archive artifacts

@@ -20,10 +20,10 @@ all: proto build-engine
 proto:
 	@echo "Generating Protobufs..."
 	@mkdir -p $(GO_OUT_DIR)
-	$(PROTOC) -I $(PROTO_DIR) \
-    --go_out=$(GO_OUT_DIR) --go_opt=paths=source_relative \
-    --go-grpc_out=$(GO_OUT_DIR) --go-grpc_opt=paths=source_relative \
-    $(PROTO_DIR)/quantum.proto
+	$(PROTOC) -I . \
+		--go_out=$(GO_OUT_DIR) --go_opt=paths=source_relative \
+		--go-grpc_out=$(GO_OUT_DIR) --go-grpc_opt=paths=source_relative \
+		$(PROTO_DIR)/*.proto
 
 # Build C++ engine (requires vcpkg toolchain)
 build-engine:

@@ -3,6 +3,7 @@
 import * as grpc from '@grpc/grpc-js';
 import { QuantumComputeClient } from '../api/quantum';
 import { QuantumSchedulerClient } from '../api/scheduler';
+import { CircuitRegistryClient, CircuitMetadata } from '../api/registry';
 import { CircuitRequest, GateOperation_GateType } from '../api/quantum';
 import { ExecutionResult, TopologyData, ComplexNumber, ClusterMetricsData } from '../components/types';
 
@@ -36,6 +37,9 @@ let _schedulerClient: QuantumSchedulerClient | null = null;
 
 const ENGINE_ADDR = process.env.ENGINE_ADDR || '127.0.0.1:50051';
 const SCHEDULER_ADDR = process.env.SCHEDULER_ADDR || '127.0.0.1:50053';
+const REGISTRY_ADDR = process.env.REGISTRY_ADDR || '127.0.0.1:50052';
+
+let _registryClient: CircuitRegistryClient | null = null;
 
 const getClient = () => {
   if (!_computeClient) {
@@ -50,6 +54,14 @@ const getSchedulerClient = () => {
   }
   return _schedulerClient;
 };
+
+const getRegistryClient = () => {
+  if (!_registryClient) {
+    _registryClient = new CircuitRegistryClient(REGISTRY_ADDR, grpc.credentials.createInsecure());
+  }
+  return _registryClient;
+};
+
 
 const getMetadata = () => {
   const meta = new grpc.Metadata();
@@ -258,7 +270,7 @@ export async function getJobStatus(jobId: string): Promise<JobStatusResult | { e
 export async function getClusterMetrics(): Promise<ClusterMetricsData | { error: string }> {
   return new Promise((resolve) => {
     const client = getSchedulerClient();
-    (client as any).getClusterMetrics({}, getMetadata(), (err: any, response: any) => {
+    client.getClusterMetrics({}, getMetadata(), (err, response) => {
       if (err) { resolve({ error: err.message }); return; }
       resolve({
         activeWorkers: response.activeWorkers,
@@ -266,6 +278,57 @@ export async function getClusterMetrics(): Promise<ClusterMetricsData | { error:
         memoryUsagePercent: response.memoryUsagePercent,
         jobsByState: response.jobsByState || {},
       });
+    });
+  });
+}
+// --- Circuit Registry --------------------------------------------------
+export async function saveCircuit(name: string, description: string, numQubits: number, ops: { type: string; targetQubit: number; controlQubit: number; angle: number }[]): Promise<CircuitMetadata | { error: string }> {
+  return new Promise((resolve) => {
+    const client = getRegistryClient();
+    const circuit: CircuitRequest = {
+      numQubits,
+      operations: ops.map(op => ({
+        type: GATE_MAP[op.type] ?? GateOperation_GateType.HADAMARD,
+        targetQubit: op.targetQubit,
+        controlQubit: op.controlQubit,
+        classicalRegister: 0,
+        angle: op.angle || 0,
+        secondControlQubit: 0,
+        secondTargetQubit: 0,
+        noiseProbability: 0,
+      })),
+      noiseProbability: 0,
+      executionBackend: 0,
+      measurementStrategy: 0,
+      useShm: false,
+    };
+
+    client.saveCircuit({ name, description, circuit, domain: 'general', tags: [], isPublic: true }, getMetadata(), (err, response) => {
+      if (err) { resolve({ error: err.message }); return; }
+      if (!response) { resolve({ error: "Empty response from registry" }); return; }
+      resolve(response);
+    });
+  });
+}
+
+export async function listSavedCircuits(): Promise<CircuitMetadata[] | { error: string }> {
+  return new Promise((resolve) => {
+    const client = getRegistryClient();
+    client.listCircuits({ domain: '', tags: [], author: '', publicOnly: false, page: 1, pageSize: 50 }, getMetadata(), (err, response) => {
+      if (err) { resolve({ error: err.message }); return; }
+      if (!response) { resolve({ error: "Empty response from registry" }); return; }
+      resolve(response.circuits);
+    });
+  });
+}
+
+export async function loadCircuit(circuitId: string): Promise<CircuitRequest | { error: string }> {
+  return new Promise((resolve) => {
+    const client = getRegistryClient();
+    client.loadCircuit({ circuitId, version: 0 }, getMetadata(), (err, response) => {
+      if (err) { resolve({ error: err.message }); return; }
+      if (!response) { resolve({ error: "Empty response from registry" }); return; }
+      resolve(response);
     });
   });
 }

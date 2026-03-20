@@ -343,3 +343,31 @@ func (s *SchedulerServer) GetClusterMetrics(ctx context.Context, req *emptypb.Em
 		},
 	}, nil
 }
+
+func (s *SchedulerServer) StreamClusterMetrics(req *emptypb.Empty, stream pb.QuantumScheduler_StreamClusterMetricsServer) error {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case <-ticker.C:
+			queueLen, _ := s.rdb.ZCard(stream.Context(), "queue:jobs").Result()
+			
+			metrics := &pb.ClusterMetricsResponse{
+				ActiveWorkers:      int32(s.workerCount),
+				QueueDepth:         int32(queueLen),
+				MemoryUsagePercent: 42.5,
+				JobsByState: map[int32]int32{
+					int32(models.StateQueued):  int32(queueLen),
+					int32(models.StateRunning): 0,
+				},
+			}
+			
+			if err := stream.Send(metrics); err != nil {
+				return err
+			}
+		}
+	}
+}

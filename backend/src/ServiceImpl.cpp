@@ -48,8 +48,19 @@ bool hasEnoughMemory(int num_qubits) {
 
   return available_ram > (required_bytes + overhead);
 #elif defined(_WIN32)
-  return true; // Assume enough memory on Windows for now (or use
-               // GlobalMemoryStatusEx)
+  MEMORYSTATUSEX memInfo;
+  memInfo.dwLength = sizeof(MEMORYSTATUSEX);
+  if (GlobalMemoryStatusEx(&memInfo)) {
+    unsigned __int64 available_ram = memInfo.ullAvailPhys;
+
+    // Memory needed = 2^N * sizeof(complex<double>) (16 bytes)
+    size_t required_elements = 1ULL << num_qubits;
+    size_t required_bytes = required_elements * sizeof(std::complex<double>);
+    size_t overhead = required_bytes / 20;
+
+    return available_ram > (required_bytes + overhead);
+  }
+  return true; // Fallback if API fails
 #else
   return true; // Default for Mac/Other
 #endif
@@ -71,9 +82,16 @@ void QubitEngineServiceImpl::serializeState(
   if (strategy == qubit_engine::CircuitRequest::FULL_STATE) {
     bool shm_success = false;
     if (use_shm) {
-      // Generate pseudo-random descriptor
-      static std::atomic<uint64_t> shm_counter{0};
-      std::string desc = "qe_shm_" + std::to_string(shm_counter.fetch_add(1, std::memory_order_relaxed));
+      // Generate secure random descriptor instead of simple counter
+      static std::random_device rd;
+      static std::mt19937 gen(rd());
+      static const char charset[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+      std::string random_id;
+      for (int i = 0; i < 16; ++i) {
+          random_id += charset[gen() % (sizeof(charset) - 1)];
+      }
+      
+      std::string desc = "qe_shm_" + random_id;
 #ifdef _WIN32
       std::string full_desc = "Local\\" + desc;
 #else
@@ -94,7 +112,7 @@ void QubitEngineServiceImpl::serializeState(
         response->set_shm_descriptor(full_desc);
         shm_success = true;
       } catch (const std::exception& e) {
-        spdlog::warn("SharedMemory creation failed, falling back to gRPC stream: {}", e.what());
+        spdlog::warn("SharedMemory creation failed for {}, falling back to gRPC stream: {}", full_desc, e.what());
         shm_success = false;
       }
     }

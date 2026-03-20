@@ -1,24 +1,29 @@
-# Version Control
-.git
+# Dependencies
+node_modules/
+.npm/
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+bin/
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
 .gitignore
 
-# IDE Settings
-.vscode
-.idea
-.DS_Store
+# Go
+api/generated/api/ # Old accidental dir
+vendor/
 
-# -----------------------------------------------------------
-# C++ Build Artifacts (MUST BE IGNORED)
-# -----------------------------------------------------------
-backend/build
-backend/src/generated
-backend/vcpkg_installed
-
-# -----------------------------------------------------------
-# Go Binaries (Ignore, but KEEP generated source)
-# -----------------------------------------------------------
-bin
-cli/bin
-
-# CRITICAL: Do NOT ignore cli/internal/generated 
-# (The Dockerfile needs these files to build the CLI)
+# Local env
+.env
+.env.local
+.env.*.local

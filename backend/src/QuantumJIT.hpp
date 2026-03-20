@@ -141,6 +141,11 @@ private:
   fuse_tensor_network(const std::vector<CompiledGate> &gates);
 
   int count_fused_blocks(const std::vector<CompiledGate> &gates);
+  
+private:
+  void apply_gate_to_unitary(std::vector<Complex>& unitary, 
+                            const std::vector<int>& block_qubits, 
+                            const CompiledGate& g);
 };
 
 } // namespace jit

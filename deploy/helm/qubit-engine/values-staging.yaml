@@ -1,0 +1,65 @@
+# Staging Overrides for QubitEngine
+global:
+  environment: staging
+  cloudProvider: local
+
+backend:
+  replicaCount: 1
+  image:
+    repository: qubit-engine
+    tag: latest
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    readOnlyRootFilesystem: false
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+frontend:
+  replicaCount: 1
+  image:
+    repository: qubit-web
+    tag: v4
+  service:
+    type: NodePort
+    port: 3000
+
+scheduler:
+  replicaCount: 1
+  image:
+    repository: docker-scheduler
+    tag: latest
+
+registry:
+  replicaCount: 1
+  image:
+    repository: docker-registry
+    tag: latest
+
+cache:
+  replicaCount: 1
+  image:
+    repository: docker-cache
+    tag: latest
+
+externalSecrets:
+  enabled: false
+
+networkPolicy:
+  enabled: false
+
+ingress:
+  enabled: true
+  hosts:
+    - host: staging.qubit.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: [] # Disable SSL for local staging

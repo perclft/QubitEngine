@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getClusterMetrics } from "../app/actions";
 import { ClusterMetricsData } from "./types";
 import { motion } from "framer-motion";
 import { Server, Activity, Database, Cpu } from "lucide-react";
@@ -11,23 +10,26 @@ export function ClusterMetrics() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchMetrics = async () => {
+    const eventSource = new EventSource('/api/metrics');
+
+    eventSource.onmessage = (event) => {
       try {
-        const res = await getClusterMetrics() as ClusterMetricsData;
-        if (res.error) {
-           setError(res.error);
-        } else {
-           setMetrics(res);
-           setError(null);
-        }
-      } catch (err: any) {
-        setError(err.toString());
+        const data = JSON.parse(event.data) as ClusterMetricsData;
+        setMetrics(data);
+        setError(null);
+      } catch (err) {
+        console.error("Failed to parse metrics", err);
       }
     };
 
-    fetchMetrics();
-    const interval = setInterval(fetchMetrics, 2000);
-    return () => clearInterval(interval);
+    eventSource.onerror = () => {
+      setError("Lost connection to metric stream");
+      eventSource.close();
+    };
+
+    return () => {
+      eventSource.close();
+    };
   }, []);
 
   if (error) {

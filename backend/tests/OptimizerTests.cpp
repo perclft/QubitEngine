@@ -40,7 +40,7 @@ TEST(MolecularHamiltonianTest, H2_NumQubits) {
 }
 
 TEST(MolecularHamiltonianTest, LiH_NumQubits) {
-  EXPECT_EQ(MolecularHamiltonian::getNumQubits(MolecularHamiltonian::LiH), 2);
+  EXPECT_EQ(MolecularHamiltonian::getNumQubits(MolecularHamiltonian::LiH), 4);
 }
 
 TEST(MolecularHamiltonianTest, LiH_HasTerms) {

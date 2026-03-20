@@ -11,6 +11,7 @@
 #ifdef MPI_ENABLED
 #include <mpi.h>
 #endif
+#include <complex>
 
 // Intel SIMD intrinsics - only available on x86/x64, not ARM
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) ||             \
@@ -655,51 +656,53 @@ double CpuBackend::expectationValue(const std::string &pauli_string) {
   Precision partial_expected_value = 0.0;
   size_t local_dim = state.size();
 
-  // Each rank computes its share of the expectation value
-  for (size_t i = 0; i < local_dim; ++i) {
-    size_t global_idx = i + (local_rank * local_dim);
-    size_t j_global = global_idx;
-    Complex coeff = 1.0;
-
+    // 1. Identify if this Pauli term requires inter-rank communication
+    size_t global_flip_mask = 0;
     for (size_t q = 0; q < num_qubits && q < pauli_string.size(); ++q) {
-      char op = pauli_string[q];
-      if (op == 'I')
-        continue;
+        if ((pauli_string[q] == 'X' || pauli_string[q] == 'Y') && (1ULL << q) >= local_dim) {
+            global_flip_mask |= (1ULL << q);
+        }
+    }
 
-      bool bit_set = (global_idx >> q) & 1;
+    const Complex* target_data = state.data();
+    std::vector<Complex> recv_buf;
 
-      if (op == 'X') {
-        j_global ^= (1ULL << q);
-      } else if (op == 'Y') {
-        j_global ^= (1ULL << q);
-        // Y|0> = i|1>, Y|1> = -i|0>
-        coeff *= (bit_set ? Complex(0, -1) : Complex(0, 1));
-      } else if (op == 'Z') {
-        if (bit_set)
-          coeff *= -1.0;
+#ifdef MPI_ENABLED
+    if (global_flip_mask != 0 && world_size > 1) {
+        int partner = local_rank ^ (global_flip_mask / local_dim);
+        recv_buf.resize(local_dim);
+        MPI_Sendrecv(const_cast<Complex*>(state.data()), local_dim * 2, MPI_DOUBLE, partner, 0,
+                     recv_buf.data(), local_dim * 2, MPI_DOUBLE, partner, 0,
+                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        target_data = recv_buf.data();
+    }
+#endif
+
+    // 2. Compute partial expectation value
+    for (size_t i = 0; i < local_dim; ++i) {
+      size_t global_idx = i + (local_rank * local_dim);
+      size_t j_global = global_idx;
+      Complex coeff = 1.0;
+
+      for (size_t q = 0; q < num_qubits && q < pauli_string.size(); ++q) {
+        char op = pauli_string[q];
+        if (op == 'I') continue;
+
+        bool bit_set = (global_idx >> q) & 1;
+        if (op == 'X') {
+          j_global ^= (1ULL << q);
+        } else if (op == 'Y') {
+          j_global ^= (1ULL << q);
+          coeff *= (bit_set ? Complex(0, -1) : Complex(0, 1));
+        } else if (op == 'Z') {
+          if (bit_set) coeff *= -1.0;
+        }
       }
-    }
 
-    // Check if the target index j is within this rank's local state
-    size_t j_local_start = local_rank * local_dim;
-    size_t j_local_end = (local_rank + 1) * local_dim;
-
-    if (j_global >= j_local_start && j_global < j_local_end) {
-      size_t j_local = j_global - j_local_start;
-      // <psi|P|psi> = sum_i conj(psi[i]) * coeff * psi[j]
-      partial_expected_value += (std::conj(state[i]) * coeff * state[j_local]).real();
+      size_t j_local = j_global % local_dim;
+      // We now have the correct state[j] either in 'state' or 'recv_buf'
+      partial_expected_value += (std::conj(state[i]) * coeff * target_data[j_local]).real();
     }
-    // Note: If j_global is outside this rank, it means the Pauli operator P 
-    // maps state[i] to a different rank. In a full state-vector simulation, 
-    // those terms also contribute. However, for most Pauli strings (especially 
-    // those used in VQE like ZIII or IZII), j_global == global_idx and they 
-    // stay local. For X/Y terms, they only stay local if the qubit q is 
-    // below the local bit threshold.
-    // Simplifying assumption: We only handle local terms or those that 
-    // stay within the same rank. For a truly general distributed 
-    // expectation value, we'd need to swap halves of the state vector 
-    // similar to how we do for gates.
-  }
 
   double total_expected_value = (double)partial_expected_value;
 

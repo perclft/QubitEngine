@@ -1,10 +1,14 @@
 # --- Stage 1: Builder (Glibc/Debian C++ Compilation) ---
 FROM debian:bookworm-slim AS builder
 
+ARG ENABLE_CUDA=OFF
+
 # Install build tools and dynamic libraries
 # Enable non-free for CUDA
 RUN sed -i 's/Components: main/Components: main contrib non-free non-free-firmware/g' /etc/apt/sources.list.d/debian.sources
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     build-essential cmake git \
     libprotobuf-dev libgrpc-dev libgrpc++-dev protobuf-compiler-grpc \
     libssl-dev zlib1g-dev libc-ares-dev libgflags-dev libgoogle-glog-dev \
@@ -75,7 +79,8 @@ RUN rm -rf backend/build backend/CMakeCache.txt backend/CMakeFiles
 # Note: enable_language(CUDA) will find /usr/bin/nvcc from nvidia-cuda-toolkit
 RUN cmake -B build -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_CXX_COMPILER=mpic++ \
-    -DENABLE_CUDA=OFF \
+    -DENABLE_CUDA=${ENABLE_CUDA} \
+    -DMPI_ENABLED=ON \
     backend && \
     cmake --build build --config Release && \
     chmod +x /build/bin/qubit_engine

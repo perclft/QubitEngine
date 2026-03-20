@@ -331,6 +331,88 @@ std::vector<Complex> QuantumJIT::matrix_multiply(const std::vector<Complex> &A,
   return result;
 }
 
+void QuantumJIT::apply_gate_to_unitary(std::vector<Complex>& unitary, 
+                                      const std::vector<int>& block_qubits, 
+                                      const CompiledGate& g) {
+    auto extract_matrix = [](const CompiledGate &gate) -> std::vector<Complex> {
+        if (gate.type == CompiledGate::SINGLE_QUBIT) {
+            return {Complex(gate.single_matrix[0]), Complex(gate.single_matrix[1]), 
+                    Complex(gate.single_matrix[2]), Complex(gate.single_matrix[3])};
+        } else if (gate.type == CompiledGate::TWO_QUBIT) {
+            std::vector<Complex> v(16);
+            for (int i = 0; i < 16; ++i) v[i] = Complex(gate.two_matrix[i]);
+            return v;
+        } else if (gate.type == CompiledGate::FUSED_BLOCK) {
+            return gate.fused_unitary;
+        }
+        return {};
+    };
+
+    if (unitary.empty()) {
+        size_t dim = 1ULL << block_qubits.size();
+        unitary.assign(dim * dim, Complex(0, 0));
+        for (size_t i = 0; i < dim; i++) unitary[i * dim + i] = Complex(1, 0);
+    }
+
+    size_t dim = 1ULL << block_qubits.size();
+    std::vector<Complex> next_unitary(dim * dim, Complex(0, 0));
+    
+    std::vector<int> local_targets;
+    for (int q : g.target_qubits) {
+        auto it = std::find(block_qubits.begin(), block_qubits.end(), q);
+        local_targets.push_back(std::distance(block_qubits.begin(), it));
+    }
+    
+    auto m = extract_matrix(g);
+    if (m.empty()) return;
+
+    if (g.type == CompiledGate::SINGLE_QUBIT) {
+        int t = local_targets[0];
+        size_t mask = 1ULL << t;
+        
+        for (size_t col = 0; col < dim; ++col) {
+            for (size_t row = 0; row < dim; ++row) {
+                if (!(row & mask)) {
+                    size_t r0 = row;
+                    size_t r1 = row | mask;
+                    Complex v0 = unitary[r0 * dim + col];
+                    Complex v1 = unitary[r1 * dim + col];
+                    next_unitary[r0 * dim + col] = m[0] * v0 + m[1] * v1;
+                    next_unitary[r1 * dim + col] = m[2] * v0 + m[3] * v1;
+                }
+            }
+        }
+    } else if (g.type == CompiledGate::TWO_QUBIT || (g.type == CompiledGate::FUSED_BLOCK && g.target_qubits.size() == 2)) {
+        int c = local_targets[0];
+        int t = local_targets[1];
+        size_t c_mask = 1ULL << c;
+        size_t t_mask = 1ULL << t;
+        
+        for (size_t col = 0; col < dim; ++col) {
+            for (size_t row = 0; row < dim; ++row) {
+                if (!(row & c_mask) && !(row & t_mask)) {
+                    size_t r00 = row;
+                    size_t r01 = row | t_mask;
+                    size_t r10 = row | c_mask;
+                    size_t r11 = row | c_mask | t_mask;
+                    
+                    Complex v00 = unitary[r00 * dim + col];
+                    Complex v01 = unitary[r01 * dim + col];
+                    Complex v10 = unitary[r10 * dim + col];
+                    Complex v11 = unitary[r11 * dim + col];
+                    
+                    next_unitary[r00 * dim + col] = m[0]*v00 + m[1]*v01 + m[2]*v10 + m[3]*v11;
+                    next_unitary[r01 * dim + col] = m[4]*v00 + m[5]*v01 + m[6]*v10 + m[7]*v11;
+                    next_unitary[r10 * dim + col] = m[8]*v00 + m[9]*v01 + m[10]*v10 + m[11]*v11;
+                    next_unitary[r11 * dim + col] = m[12]*v00 + m[13]*v01 + m[14]*v10 + m[15]*v11;
+                }
+            }
+        }
+    }
+    
+    unitary = std::move(next_unitary);
+}
+
 std::vector<CompiledGate>
 QuantumJIT::fuse_tensor_network(const std::vector<CompiledGate> &gates) {
   if (gates.empty())
@@ -340,26 +422,15 @@ QuantumJIT::fuse_tensor_network(const std::vector<CompiledGate> &gates) {
   std::vector<int> current_block_qubits;
   std::vector<Complex> current_unitary;
   int current_dim = 1;
-  const int TENSOR_LIMIT =
-      4; // Max qubits to fuse into a dense matrix (e.g. 16x16)
-
-  // Helper to extract a matrix as a std::vector<Complex>
-  auto extract_matrix = [](const CompiledGate &g) -> std::vector<Complex> {
-    if (g.type == CompiledGate::SINGLE_QUBIT) {
-      return {g.single_matrix[0], g.single_matrix[1], g.single_matrix[2],
-              g.single_matrix[3]};
-    } else if (g.type == CompiledGate::TWO_QUBIT) {
-      return std::vector<Complex>(g.two_matrix.begin(), g.two_matrix.end());
-    }
-    return {};
-  };
+  const int TENSOR_LIMIT = 4;
 
   for (const auto &g : gates) {
-    // If it's a giant fused block already or something unsupported, flush
-    if (g.type == CompiledGate::FUSED_BLOCK) {
+    if (g.type == CompiledGate::FUSED_BLOCK && g.target_qubits.size() > 2) {
       if (!current_block_qubits.empty()) {
         CompiledGate block;
-        block.type = CompiledGate::FUSED_BLOCK;
+        block.type = (current_block_qubits.size() == 1) ? CompiledGate::SINGLE_QUBIT 
+                   : (current_block_qubits.size() == 2) ? CompiledGate::TWO_QUBIT 
+                   : CompiledGate::FUSED_BLOCK;
         block.target_qubits = current_block_qubits;
         block.fused_unitary = current_unitary;
         block.fused_size = current_dim;
@@ -372,80 +443,46 @@ QuantumJIT::fuse_tensor_network(const std::vector<CompiledGate> &gates) {
       continue;
     }
 
-    // Determine overlapping qubits
     bool overlaps = false;
-    bool subset = true;
-
-    for (int q : g.target_qubits) {
-      if (std::find(current_block_qubits.begin(), current_block_qubits.end(),
-                    q) != current_block_qubits.end()) {
-        overlaps = true;
-      } else {
-        subset = false;
-      }
-    }
-
-    // In a full implementation, we would construct identity expansions and
-    // kronecker multiply For this demonstration step of the architecture
-    // weakpoints, we'll dummy-build the network structure and only append
-    // blocks that explicitly fit memory profiles.
-
-    // Check if adding this would breach tensor fusion limits
     std::vector<int> proposed_qubits = current_block_qubits;
     for (int q : g.target_qubits) {
-      if (std::find(proposed_qubits.begin(), proposed_qubits.end(), q) ==
-          proposed_qubits.end()) {
+      if (std::find(current_block_qubits.begin(), current_block_qubits.end(), q) != current_block_qubits.end()) {
+        overlaps = true;
+      } else {
         proposed_qubits.push_back(q);
       }
     }
 
-    if (proposed_qubits.size() > TENSOR_LIMIT ||
-        (!overlaps && !current_block_qubits.empty())) {
-      // Limit reached or Disjoint gate: flush current block
+    if (proposed_qubits.size() > TENSOR_LIMIT || (!overlaps && !current_block_qubits.empty())) {
       if (!current_block_qubits.empty()) {
         CompiledGate block;
-        block.type =
-            (current_block_qubits.size() <= 2 && current_unitary.size() <= 16)
-                ? (current_block_qubits.size() == 1 ? CompiledGate::SINGLE_QUBIT
-                                                    : CompiledGate::TWO_QUBIT)
-                : CompiledGate::FUSED_BLOCK;
-
+        block.type = (current_block_qubits.size() == 1) ? CompiledGate::SINGLE_QUBIT 
+                   : (current_block_qubits.size() == 2) ? CompiledGate::TWO_QUBIT 
+                   : CompiledGate::FUSED_BLOCK;
         block.target_qubits = current_block_qubits;
         block.fused_unitary = current_unitary;
         block.fused_size = current_dim;
         fused_circuit.push_back(block);
       }
 
-      // Start new block
       current_block_qubits = g.target_qubits;
-      current_unitary = extract_matrix(g);
-      current_dim = g.type == CompiledGate::SINGLE_QUBIT ? 2 : 4;
+      std::sort(current_block_qubits.begin(), current_block_qubits.end());
+      current_dim = 1 << current_block_qubits.size();
+      current_unitary.clear();
+      apply_gate_to_unitary(current_unitary, current_block_qubits, g);
     } else {
-      // Merge into current block
-      if (current_block_qubits.empty()) {
-        current_block_qubits = g.target_qubits;
-        current_unitary = extract_matrix(g);
-        current_dim = g.type == CompiledGate::SINGLE_QUBIT ? 2 : 4;
-      } else {
-        // Basic dummy accumulation logic for the tensor fusion framework
-        current_block_qubits = proposed_qubits;
-        current_dim = 1 << proposed_qubits.size();
-
-        // Full tensor contraction omitted for scope snippet. Expanding unitary:
-        current_unitary.resize(current_dim * current_dim, 0.0);
-        for (int i = 0; i < current_dim; i++)
-          current_unitary[i * current_dim + i] = 1.0;
-      }
+      current_block_qubits = proposed_qubits;
+      std::sort(current_block_qubits.begin(), current_block_qubits.end());
+      current_dim = 1 << current_block_qubits.size();
+      apply_gate_to_unitary(current_unitary, current_block_qubits, g);
     }
   }
 
   if (!current_block_qubits.empty()) {
     CompiledGate block;
-    block.type =
-        (current_block_qubits.size() <= 2 && current_unitary.size() <= 16)
-            ? (current_block_qubits.size() == 1 ? CompiledGate::SINGLE_QUBIT
-                                                : CompiledGate::TWO_QUBIT)
-            : CompiledGate::FUSED_BLOCK;
+    block.type = (current_block_qubits.size() == 1) ? CompiledGate::SINGLE_QUBIT 
+               : (current_block_qubits.size() == 2) ? CompiledGate::TWO_QUBIT 
+               : CompiledGate::FUSED_BLOCK;
     block.target_qubits = current_block_qubits;
     block.fused_unitary = current_unitary;
     block.fused_size = current_dim;

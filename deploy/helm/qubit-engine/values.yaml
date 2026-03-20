@@ -71,6 +71,46 @@ externalSecrets:
   # AWS/GCP Secret Manager Key Name
   remoteKey: "prod/qubit-engine/backend"
 
+# --- New Services ---
+scheduler:
+  replicaCount: 1
+  image:
+    repository: docker-scheduler
+    tag: latest
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+registry:
+  replicaCount: 1
+  image:
+    repository: docker-registry
+    tag: latest
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+cache:
+  replicaCount: 1
+  image:
+    repository: docker-cache
+    tag: latest
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
 serviceAccount:
   create: true
   annotations:

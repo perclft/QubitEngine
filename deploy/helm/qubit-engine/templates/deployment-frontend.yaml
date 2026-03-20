@@ -27,7 +27,7 @@ spec:
           imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: 80
+              containerPort: 3000
               protocol: TCP
           # No secrets needed here, mostly public static assets.
           livenessProbe:
@@ -38,6 +38,15 @@ spec:
             httpGet:
               path: /
               port: http
+          env:
+            - name: ENGINE_ADDR
+              value: "{{ include "qubit-engine.fullname" . }}-backend-headless:50051"
+            - name: SCHEDULER_ADDR
+              value: "{{ include "qubit-engine.fullname" . }}-scheduler:50053"
+            - name: REGISTRY_ADDR
+              value: "{{ include "qubit-engine.fullname" . }}-registry:50052"
+            - name: QUBIT_ENGINE_AUTH_TOKEN
+              value: "default-secret-token" # In prod this would be a secretRef
           resources:
-            {{- toYaml .Values.backend.resources | nindent 12 }} 
+            {{- toYaml .Values.backend.resources | nindent 12 }}
             # Reusing default resources for simplicity, would tune in prod
