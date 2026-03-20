@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+
 	"log/slog"
 	"strings"
 	"sync"
@@ -53,7 +53,7 @@ func (s *SchedulerServer) ConnectEngine(ctx context.Context) error {
 }
 
 func (s *SchedulerServer) StartWorkers(ctx context.Context) {
-	log.Println("Go Scheduler workers disabled to prevent bounded starvation. Awaiting C++ nodes to pull jobs.")
+	slog.Info("Go Scheduler workers disabled to prevent bounded starvation. Awaiting C++ nodes to pull jobs.")
 }
 
 func (s *SchedulerServer) SubmitJob(ctx context.Context, req *pb.JobRequest) (*pb.JobHandle, error) {
@@ -108,8 +108,7 @@ func (s *SchedulerServer) SubmitJob(ctx context.Context, req *pb.JobRequest) (*p
 	queueLen, _ := s.rdb.ZCard(ctx, "queue:jobs").Result()
 	estimatedWait := int32(queueLen) * 2
 
-	log.Printf("📥 Job submitted: %s (qubits=%d, ops=%d, priority=%d)",
-		jobID, job.NumQubits, job.NumOps, job.Priority)
+	slog.Info("Job submitted", "job_id", jobID, "qubits", job.NumQubits, "ops", job.NumOps, "priority", job.Priority)
 
 	return &pb.JobHandle{
 		JobId:                jobID,
@@ -280,7 +279,7 @@ func (s *SchedulerServer) StreamJobResults(handle *pb.JobHandle, stream pb.Quant
 		return status.Errorf(codes.NotFound, "job not found: %s", jobID)
 	}
 
-	log.Printf("📡 Client streaming results for job: %s", jobID)
+	slog.Info("Client streaming results for job", "job_id", jobID)
 	redisKey := "stream:results:" + jobID
 	lastID := "0"
 

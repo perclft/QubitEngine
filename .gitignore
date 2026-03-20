@@ -42,3 +42,6 @@ vcpkg/
 
 # Rust Build Artifacts
 cli-rs/target/
+
+# Compiled Python Extensions
+*.pyd

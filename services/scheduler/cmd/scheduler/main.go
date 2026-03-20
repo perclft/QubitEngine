@@ -46,6 +46,17 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
+	// --- Auth Token Configuration ---
+	skipAuth := os.Getenv("QUBIT_ENGINE_SKIP_AUTH") == "1"
+	authToken := os.Getenv("QUBIT_ENGINE_AUTH_TOKEN")
+	if !skipAuth && authToken == "" {
+		slog.Error("QUBIT_ENGINE_AUTH_TOKEN must be set. To disable auth for development, set QUBIT_ENGINE_SKIP_AUTH=1")
+		os.Exit(1)
+	}
+	if skipAuth {
+		slog.Warn("Authentication is DISABLED (QUBIT_ENGINE_SKIP_AUTH=1). Do not use in production.")
+	}
+
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     *redisAddr,
 		Password: "",
@@ -84,28 +95,11 @@ func main() {
 		}
 	}()
 
-	authInterceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	validateToken := func(ctx context.Context) error {
+		if skipAuth {
+			return nil
+		}
 		md, ok := metadata.FromIncomingContext(ctx)
-		if !ok {
-			return nil, status.Errorf(codes.Unauthenticated, "metadata is not provided")
-		}
-		authHeader, ok := md["authorization"]
-		if !ok || len(authHeader) == 0 {
-			return nil, status.Errorf(codes.Unauthenticated, "authorization token is not provided")
-		}
-		token := strings.TrimPrefix(authHeader[0], "Bearer ")
-		expectedToken := os.Getenv("QUBIT_ENGINE_AUTH_TOKEN")
-		if expectedToken == "" {
-			expectedToken = "default-secret-token"
-		}
-		if token != expectedToken {
-			return nil, status.Errorf(codes.Unauthenticated, "invalid authorization token")
-		}
-		return handler(ctx, req)
-	}
-
-	streamAuthInterceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		md, ok := metadata.FromIncomingContext(ss.Context())
 		if !ok {
 			return status.Errorf(codes.Unauthenticated, "metadata is not provided")
 		}
@@ -114,12 +108,22 @@ func main() {
 			return status.Errorf(codes.Unauthenticated, "authorization token is not provided")
 		}
 		token := strings.TrimPrefix(authHeader[0], "Bearer ")
-		expectedToken := os.Getenv("QUBIT_ENGINE_AUTH_TOKEN")
-		if expectedToken == "" {
-			expectedToken = "default-secret-token"
-		}
-		if token != expectedToken {
+		if token != authToken {
 			return status.Errorf(codes.Unauthenticated, "invalid authorization token")
+		}
+		return nil
+	}
+
+	authInterceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if err := validateToken(ctx); err != nil {
+			return nil, err
+		}
+		return handler(ctx, req)
+	}
+
+	streamAuthInterceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if err := validateToken(ss.Context()); err != nil {
+			return err
 		}
 		return handler(srv, ss)
 	}

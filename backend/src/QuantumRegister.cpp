@@ -2,6 +2,11 @@
 #include "QuantumMetrics.hpp"
 #include "CircuitOptimizer.hpp"
 #include "ConfigManager.hpp"
+#define _USE_MATH_DEFINES
+#include <cmath>
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 #include "Exceptions.hpp"
 #include "backends/CpuBackend.hpp"
 #include "backends/CudaBackend.hpp"
@@ -28,7 +33,8 @@ QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
   }
 
   // Phase 4: Tensor Network Acceleration
-  if (n >= 25 && !use_local) {
+  int mps_threshold = ConfigManager::Instance().getMpsThreshold();
+  if (n >= static_cast<size_t>(mps_threshold) && !use_local) {
     // Emulate using MPS for circuits >= 25 qubits to showcase memory
     // compression
     backend = std::make_unique<MPSBackend>(static_cast<int>(n));
@@ -246,60 +252,43 @@ void QuantumRegister::mapTo1DTopology() {
 // --- Replay Logic (Kept purely on proxy as it uses public API) ---
 
 void QuantumRegister::applyRegisteredGate(const RecordedGate &gate) {
-  if (gate.type == RecordedGate::H)
-    applyHadamard(gate.qubits[0]);
-  else if (gate.type == RecordedGate::X)
-    applyX(gate.qubits[0]);
-  else if (gate.type == RecordedGate::Y)
-    applyY(gate.qubits[0]);
-  else if (gate.type == RecordedGate::Z)
-    applyZ(gate.qubits[0]);
-  else if (gate.type == RecordedGate::CNOT)
-    applyCNOT(gate.qubits[0], gate.qubits[1]);
-  else if (gate.type == RecordedGate::RY)
-    applyRotationY(gate.qubits[0], gate.params[0]);
-  else if (gate.type == RecordedGate::RZ)
-    applyRotationZ(gate.qubits[0], gate.params[0]);
-  else if (gate.type == RecordedGate::RX)
-    applyRotationX(gate.qubits[0], gate.params[0]);
-  else if (gate.type == RecordedGate::SWAP)
-    applySWAP(gate.qubits[0], gate.qubits[1]);
-  else if (gate.type == RecordedGate::CZ)
-    applyCZ(gate.qubits[0], gate.qubits[1]);
+  switch (gate.type) {
+  case RecordedGate::H:      applyHadamard(gate.qubits[0]); break;
+  case RecordedGate::X:      applyX(gate.qubits[0]); break;
+  case RecordedGate::Y:      applyY(gate.qubits[0]); break;
+  case RecordedGate::Z:      applyZ(gate.qubits[0]); break;
+  case RecordedGate::CNOT:   applyCNOT(gate.qubits[0], gate.qubits[1]); break;
+  case RecordedGate::RX:     applyRotationX(gate.qubits[0], gate.params[0]); break;
+  case RecordedGate::RY:     applyRotationY(gate.qubits[0], gate.params[0]); break;
+  case RecordedGate::RZ:     applyRotationZ(gate.qubits[0], gate.params[0]); break;
+  case RecordedGate::SWAP:   applySWAP(gate.qubits[0], gate.qubits[1]); break;
+  case RecordedGate::CZ:     applyCZ(gate.qubits[0], gate.qubits[1]); break;
+  case RecordedGate::TOFFOLI: applyToffoli(gate.qubits[0], gate.qubits[1], gate.qubits[2]); break;
+  case RecordedGate::PHASE_S: applyPhaseS(gate.qubits[0]); break;
+  case RecordedGate::PHASE_T: applyPhaseT(gate.qubits[0]); break;
+  case RecordedGate::MEASURE: break; // Measurements are not replayed
+  }
 }
 
 void QuantumRegister::applyRegisteredGateInverse(const RecordedGate &gate) {
-  if (gate.type == RecordedGate::H)
-    applyHadamard(gate.qubits[0]); // H is self-inverse
-  else if (gate.type == RecordedGate::X)
-    applyX(gate.qubits[0]); // X is self-inverse
-  else if (gate.type == RecordedGate::Y)
-    applyY(gate.qubits[0]); // Y is self-inverse
-  else if (gate.type == RecordedGate::Z)
-    applyZ(gate.qubits[0]); // Z is self-inverse
-  else if (gate.type == RecordedGate::CNOT)
-    applyCNOT(gate.qubits[0], gate.qubits[1]); // CNOT is self-inverse
-  else if (gate.type == RecordedGate::RY)
-    applyRotationY(gate.qubits[0], -gate.params[0]);
-  else if (gate.type == RecordedGate::RZ)
-    applyRotationZ(gate.qubits[0], -gate.params[0]);
-  else if (gate.type == RecordedGate::RX)
-    applyRotationX(gate.qubits[0], -gate.params[0]);
-  else if (gate.type == RecordedGate::SWAP)
-    applySWAP(gate.qubits[0], gate.qubits[1]); // SWAP is self-inverse
-  else if (gate.type == RecordedGate::CZ)
-    applyCZ(gate.qubits[0], gate.qubits[1]); // CZ is self-inverse
-  else if (gate.type == RecordedGate::TOFFOLI)
-    applyToffoli(gate.qubits[0], gate.qubits[1], gate.qubits[2]); // Toffoli is self-inverse
-  else if (gate.type == RecordedGate::PHASE_S) {
-    // S† = S^3 (apply S three times to get S-dagger)
-    applyPhaseS(gate.qubits[0]);
-    applyPhaseS(gate.qubits[0]);
-    applyPhaseS(gate.qubits[0]);
-  } else if (gate.type == RecordedGate::PHASE_T) {
-    // T† = T^7 (apply T seven times to get T-dagger)
-    for (int i = 0; i < 7; ++i)
-      applyPhaseT(gate.qubits[0]);
+  switch (gate.type) {
+  // Self-inverse gates
+  case RecordedGate::H:       applyHadamard(gate.qubits[0]); break;
+  case RecordedGate::X:       applyX(gate.qubits[0]); break;
+  case RecordedGate::Y:       applyY(gate.qubits[0]); break;
+  case RecordedGate::Z:       applyZ(gate.qubits[0]); break;
+  case RecordedGate::CNOT:    applyCNOT(gate.qubits[0], gate.qubits[1]); break;
+  case RecordedGate::SWAP:    applySWAP(gate.qubits[0], gate.qubits[1]); break;
+  case RecordedGate::CZ:      applyCZ(gate.qubits[0], gate.qubits[1]); break;
+  case RecordedGate::TOFFOLI: applyToffoli(gate.qubits[0], gate.qubits[1], gate.qubits[2]); break;
+  // Rotation inverses (negate angle)
+  case RecordedGate::RX:      applyRotationX(gate.qubits[0], -gate.params[0]); break;
+  case RecordedGate::RY:      applyRotationY(gate.qubits[0], -gate.params[0]); break;
+  case RecordedGate::RZ:      applyRotationZ(gate.qubits[0], -gate.params[0]); break;
+  // Phase gate inverses: S† = RZ(-π/2), T† = RZ(-π/4)
+  case RecordedGate::PHASE_S: applyRotationZ(gate.qubits[0], -M_PI / 2.0); break;
+  case RecordedGate::PHASE_T: applyRotationZ(gate.qubits[0], -M_PI / 4.0); break;
+  case RecordedGate::MEASURE: break; // Measurements cannot be inverted
   }
 }
 

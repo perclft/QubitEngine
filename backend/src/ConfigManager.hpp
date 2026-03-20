@@ -12,6 +12,7 @@ public:
   std::optional<std::string> getCloudUrl() const;
   bool forceLocalExecution() const;
   std::optional<std::string> getTopologyPath() const;
+  int getMpsThreshold() const;
 
 private:
   ConfigManager() = default;

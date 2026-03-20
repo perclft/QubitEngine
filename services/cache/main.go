@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -82,8 +82,7 @@ func (s *CacheServer) CacheResult(ctx context.Context, req *pb.CacheRequest) (*p
 		return nil, status.Errorf(codes.Internal, "failed to cache: %v", err)
 	}
 
-	log.Printf("💾 Cached result: %s (qubits=%d, ops=%d, TTL=%v)",
-		req.CircuitHash[:16], req.NumQubits, req.NumOperations, ttl)
+	slog.Info("Cached result", "hash", req.CircuitHash[:16], "qubits", req.NumQubits, "ops", req.NumOperations, "ttl", ttl)
 
 	return &pb.CacheResponse{
 		Success:  true,
@@ -121,7 +120,7 @@ func (s *CacheServer) GetCachedResult(ctx context.Context, req *pb.CacheLookup) 
 	updatedData, _ := proto.Marshal(&entry)
 	s.rdb.Set(ctx, cacheKey, updatedData, 0) // Keep existing TTL
 
-	log.Printf("✅ Cache HIT: %s (hits=%d)", req.CircuitHash[:16], entry.HitCount)
+	slog.Info("Cache HIT", "hash", req.CircuitHash[:16], "hits", entry.HitCount)
 
 	return &pb.CacheHit{
 		Found:     true,
@@ -145,7 +144,7 @@ func (s *CacheServer) InvalidateCache(ctx context.Context, req *pb.CacheLookup) 
 	}
 
 	if deleted > 0 {
-		log.Printf("🗑️ Cache invalidated: %s", req.CircuitHash[:16])
+		slog.Info("Cache invalidated", "hash", req.CircuitHash[:16])
 		return &pb.CacheResponse{Success: true, Message: "Cache invalidated"}, nil
 	}
 
@@ -157,9 +156,20 @@ func (s *CacheServer) InvalidateCache(ctx context.Context, req *pb.CacheLookup) 
 // ------------------------------------------------------------------
 
 func (s *CacheServer) GetCacheStats(ctx context.Context, req *pb.CacheEmpty) (*pb.CacheStats, error) {
-	// Count cache entries
-	keys, _ := s.rdb.Keys(ctx, "cache:*").Result()
-	totalEntries := int64(len(keys))
+	// Count cache entries using SCAN (non-blocking, unlike KEYS)
+	var totalEntries int64
+	var cursor uint64
+	for {
+		keys, nextCursor, err := s.rdb.Scan(ctx, cursor, "cache:*", 100).Result()
+		if err != nil {
+			break
+		}
+		totalEntries += int64(len(keys))
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
 
 	// Get memory info
 	info, _ := s.rdb.Info(ctx, "memory").Result()
@@ -225,9 +235,10 @@ func main() {
 
 	ctx := context.Background()
 	if err := rdb.Ping(ctx).Err(); err != nil {
-		log.Fatalf("Failed to connect to Redis: %v", err)
+		slog.Error("Failed to connect to Redis", "error", err)
+		os.Exit(1)
 	}
-	log.Println("Connected to Redis (DB 1 - Cache)")
+	slog.Info("Connected to Redis (DB 1 - Cache)")
 
 	// Create server
 	defaultTTL := time.Duration(*ttlMinutes) * time.Minute
@@ -236,15 +247,14 @@ func main() {
 	// Start gRPC server
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		slog.Error("Failed to listen", "error", err)
+		os.Exit(1)
 	}
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterResultCacheServer(grpcServer, server)
 
-	log.Printf("📦 Result Cache starting on port %d", *port)
-	log.Printf("   Redis: %s (DB 1)", *redisAddr)
-	log.Printf("   Default TTL: %v", defaultTTL)
+	slog.Info("Result Cache starting", "port", *port, "redis", *redisAddr, "ttl", defaultTTL)
 
 	// Graceful shutdown on SIGINT/SIGTERM
 	quit := make(chan os.Signal, 1)
@@ -252,13 +262,14 @@ func main() {
 
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
-			log.Fatalf("Failed to serve: %v", err)
+			slog.Error("Failed to serve", "error", err)
+		os.Exit(1)
 		}
 	}()
 
 	sig := <-quit
-	log.Printf("Shutdown signal received: %v", sig)
+	slog.Info("Shutdown signal received", "signal", sig)
 	grpcServer.GracefulStop()
 	rdb.Close()
-	log.Println("Cache service shut down gracefully")
+	slog.Info("Cache service shut down gracefully")
 }

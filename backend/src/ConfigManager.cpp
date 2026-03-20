@@ -29,4 +29,14 @@ std::optional<std::string> ConfigManager::getTopologyPath() const {
   return std::nullopt;
 }
 
+int ConfigManager::getMpsThreshold() const {
+  if (const char* env_p = std::getenv("QUBIT_MPS_THRESHOLD")) {
+    try {
+      int val = std::stoi(env_p);
+      if (val > 0) return val;
+    } catch (...) {}
+  }
+  return 25; // Default threshold
+}
+
 } // namespace qubit_engine

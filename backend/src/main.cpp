@@ -220,7 +220,58 @@ void RunServer() {
 #include <mpi.h> // Phase 23: OpenMPI
 #endif
 
-// ... (existing code)
+// Shared worker loop: polls Redis for jobs, executes them, handles errors
+// and dead letter queue. Used by both MPI worker nodes and local thread pool.
+static void runWorkerLoop(sw::redis::Redis &redis, const std::string &worker_id) {
+  while (!shutdown_requested) {
+#ifdef MPI_ENABLED
+    // MPI Probe for distributed tensor/networking (non-blocking)
+    int flag = 0;
+    MPI_Status mpi_status;
+    MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &mpi_status);
+#endif
+
+    // Blocking Pop from Queue with 1 second timeout
+    auto job = redis.bzpopmax("queue:jobs", 1);
+    if (!job) continue;
+
+    std::string job_id = std::get<1>(*job);
+    spdlog::info("{} pulled job ID: {}", worker_id, job_id);
+
+    // Ack: Move to processing
+    auto now = std::chrono::system_clock::now().time_since_epoch().count();
+    redis.hset("jobs:processing", job_id, std::to_string(now));
+
+    try {
+      executeJob(redis, job_id, worker_id);
+      redis.hdel("jobs:processing", job_id);
+      spdlog::info("{} successfully processed and ACKed job: {}", worker_id, job_id);
+    } catch (const std::exception &ex) {
+      redis.hdel("jobs:processing", job_id);
+      redis.lpush("queue:deadletter", job_id);
+      redis.set("job:state:" + job_id, "4"); // FAILED
+      redis.set("job:completed_at:" + job_id, std::to_string(unixSecondsNow()));
+      redis.set("job:error:" + job_id, ex.what());
+      spdlog::error("{} failed job {}: {}", worker_id, job_id, ex.what());
+    } catch (...) {
+      redis.hdel("jobs:processing", job_id);
+      redis.lpush("queue:deadletter", job_id);
+      redis.set("job:state:" + job_id, "4"); // FAILED
+      redis.set("job:completed_at:" + job_id, std::to_string(unixSecondsNow()));
+      redis.set("job:error:" + job_id, "unknown execution failure");
+      spdlog::error("{} failed job {} (unknown exception)", worker_id, job_id);
+    }
+  }
+}
+
+// Build a worker ID string from hostname + suffix
+static std::string buildWorkerId(const std::string &suffix) {
+  char hostname[1024];
+  if (gethostname(hostname, 1024) == 0) {
+    return std::string(hostname) + ":" + suffix;
+  }
+  return suffix;
+}
 
 int main(int argc, char **argv) {
   // Suggestion 16: Start Prometheus metrics server
@@ -240,62 +291,12 @@ int main(int argc, char **argv) {
     spdlog::info("MPI Initialized with size: {}", world_size);
     RunServer();
   } else {
-    // Worker nodes wait for instructions (or just run loop if architected that
-    // way) For now, let's just have rank 0 run the server and others wait or
-    // exit. In a real distributed kernel, the server would dispatch commands to
-    // workers. We'll keep them alive to receive MPI calls.
-    // Go Scheduler Decoupling: C++ Worker nodes now poll Redis directly instead
-    // of waiting on gRPC This removes the heavy 1,000-thread gRPC bottleneck
-    // from Go completely.
     try {
       const char* redis_url = std::getenv("REDIS_ADDR") ? std::getenv("REDIS_ADDR") : "tcp://redis:6379";
       sw::redis::Redis redis(redis_url);
-      spdlog::info("Worker Node {} connected to Redis.", world_rank);
-
-      while (!shutdown_requested) {
-        // MPI Probe for distributed tensor/networking (non-blocking)
-        int flag = 0;
-        MPI_Status status;
-        MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
-        if (flag) {
-        }
-
-        // Blocking Pop from Queue with 1 second timeout
-        auto job = redis.bzpopmax("queue:jobs", 1);
-        if (job) {
-          std::string job_id = std::get<1>(*job);
-          spdlog::info("Worker Node {} pulled job ID: {}", world_rank, job_id);
-          
-          // Ack: Move to processing
-          auto now = std::chrono::system_clock::now().time_since_epoch().count();
-          redis.hset("jobs:processing", job_id, std::to_string(now));
-          
-          try {
-             char hostname[1024];
-             std::string wid = "mpi-worker-" + std::to_string(world_rank);
-             if (gethostname(hostname, 1024) == 0) {
-               wid = std::string(hostname) + ":" + wid;
-             }
-             executeJob(redis, job_id, wid);
-             redis.hdel("jobs:processing", job_id);
-             spdlog::info("Worker Node {} successfully processed and ACKed job: {}", world_rank, job_id);
-          } catch (const std::exception& ex) {
-             redis.hdel("jobs:processing", job_id);
-             redis.lpush("queue:deadletter", job_id);
-             redis.set("job:state:" + job_id, "4"); // FAILED
-             redis.set("job:completed_at:" + job_id, std::to_string(unixSecondsNow()));
-             redis.set("job:error:" + job_id, ex.what());
-             spdlog::error("Worker Node {} failed job {}: {}", world_rank, job_id, ex.what());
-          } catch (...) {
-             redis.hdel("jobs:processing", job_id);
-             redis.lpush("queue:deadletter", job_id);
-             redis.set("job:state:" + job_id, "4"); // FAILED
-             redis.set("job:completed_at:" + job_id, std::to_string(unixSecondsNow()));
-             redis.set("job:error:" + job_id, "unknown execution failure");
-             spdlog::error("Worker Node {} failed job {} (unknown exception)", world_rank, job_id);
-          }
-        }
-      }
+      std::string wid = buildWorkerId("mpi-worker-" + std::to_string(world_rank));
+      spdlog::info("{} connected to Redis.", wid);
+      runWorkerLoop(redis, wid);
     } catch (const sw::redis::Error &err) {
       spdlog::error("Redis Error: {}", err.what());
     }
@@ -313,45 +314,11 @@ int main(int argc, char **argv) {
       try {
         const char* redis_url = std::getenv("REDIS_ADDR") ? std::getenv("REDIS_ADDR") : "tcp://redis:6379";
         sw::redis::Redis redis(redis_url);
-        spdlog::info("Local Worker {} connected to Redis.", i);
-
-        while (!shutdown_requested) {
-          auto job = redis.bzpopmax("queue:jobs", 1);
-          if (job) {
-            std::string job_id = std::get<1>(*job);
-            spdlog::info("Local Worker {} pulled job ID: {}", i, job_id);
-            
-            auto now = std::chrono::system_clock::now().time_since_epoch().count();
-            redis.hset("jobs:processing", job_id, std::to_string(now));
-            
-            try {
-               char hostname[1024];
-               std::string wid = "worker-" + std::to_string(i);
-               if (gethostname(hostname, 1024) == 0) {
-                 wid = std::string(hostname) + ":" + wid;
-               }
-               executeJob(redis, job_id, wid);
-               redis.hdel("jobs:processing", job_id);
-               spdlog::info("Local Worker {} successfully processed and ACKed job: {}", i, job_id);
-            } catch (const std::exception& ex) {
-               redis.hdel("jobs:processing", job_id);
-               redis.lpush("queue:deadletter", job_id);
-               redis.set("job:state:" + job_id, "4"); // FAILED
-               redis.set("job:completed_at:" + job_id, std::to_string(unixSecondsNow()));
-               redis.set("job:error:" + job_id, ex.what());
-               spdlog::error("Local Worker {} failed job {}: {}", i, job_id, ex.what());
-            } catch (...) {
-               redis.hdel("jobs:processing", job_id);
-               redis.lpush("queue:deadletter", job_id);
-               redis.set("job:state:" + job_id, "4"); // FAILED
-               redis.set("job:completed_at:" + job_id, std::to_string(unixSecondsNow()));
-               redis.set("job:error:" + job_id, "unknown execution failure");
-               spdlog::error("Local Worker {} failed job {} (unknown exception)", i, job_id);
-            }
-          }
-        }
+        std::string wid = buildWorkerId("worker-" + std::to_string(i));
+        spdlog::info("{} connected to Redis.", wid);
+        runWorkerLoop(redis, wid);
       } catch (const sw::redis::Error &err) {
-        spdlog::error("Redis Error in Worker Thread {}: {}", i, err.what());
+        spdlog::error("Redis Error in {}: {}", "worker-" + std::to_string(i), err.what());
       }
     });
   }

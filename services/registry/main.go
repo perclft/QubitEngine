@@ -157,22 +157,33 @@ func (s *RegistryServer) LoadCircuit(ctx context.Context, req *pb.LoadCircuitReq
 
 // ListCircuits returns circuits matching the given filters
 func (s *RegistryServer) ListCircuits(ctx context.Context, req *pb.ListCircuitsRequest) (*pb.CircuitList, error) {
-	query := `SELECT id, name, description, author, domain, tags, num_qubits, num_operations, version, is_public, fork_count, run_count, created_at, updated_at FROM circuits WHERE 1=1`
+	// Build WHERE clause for filtering
+	whereClause := " WHERE 1=1"
+	countArgs := []interface{}{}
 	args := []interface{}{}
 	argIdx := 1
 
 	if req.Domain != "" {
-		query += fmt.Sprintf(" AND domain = $%d", argIdx)
+		whereClause += fmt.Sprintf(" AND domain = $%d", argIdx)
+		countArgs = append(countArgs, req.Domain)
 		args = append(args, req.Domain)
 		argIdx++
 	}
 	if req.Author != "" {
-		query += fmt.Sprintf(" AND author = $%d", argIdx)
+		whereClause += fmt.Sprintf(" AND author = $%d", argIdx)
+		countArgs = append(countArgs, req.Author)
 		args = append(args, req.Author)
 		argIdx++
 	}
 	if req.PublicOnly {
-		query += " AND is_public = true"
+		whereClause += " AND is_public = true"
+	}
+
+	// Get total count of matching rows
+	var totalCount int32
+	countQuery := "SELECT COUNT(*) FROM circuits" + whereClause
+	if err := s.db.QueryRowContext(ctx, countQuery, countArgs...).Scan(&totalCount); err != nil {
+		return nil, status.Errorf(codes.Internal, "count query failed: %v", err)
 	}
 
 	// Pagination
@@ -186,6 +197,7 @@ func (s *RegistryServer) ListCircuits(ctx context.Context, req *pb.ListCircuitsR
 	}
 	offset := (page - 1) * pageSize
 
+	query := `SELECT id, name, description, author, domain, tags, num_qubits, num_operations, version, is_public, fork_count, run_count, created_at, updated_at FROM circuits` + whereClause
 	query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT %d OFFSET %d", pageSize, offset)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -217,7 +229,7 @@ func (s *RegistryServer) ListCircuits(ctx context.Context, req *pb.ListCircuitsR
 
 	return &pb.CircuitList{
 		Circuits:   circuits,
-		TotalCount: int32(len(circuits)),
+		TotalCount: totalCount,
 		Page:       int32(page),
 		PageSize:   int32(pageSize),
 	}, nil
