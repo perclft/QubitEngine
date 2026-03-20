@@ -292,7 +292,7 @@ jobs:
 
       - name: Install Dependencies
         working-directory: web
-        run: npm ci
+        run: npm install
 
       - name: Lint
         working-directory: web
