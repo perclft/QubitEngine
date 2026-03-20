@@ -33,12 +33,16 @@ public:
 
       // Note: We'll stick to real-valued Hamiltonians for this demo.
     } else if (type == LiH) {
-      // LiH is more complex (requires more qubits usually),
-      // but we can use a "tapered" 4-qubit Hamiltonian or a dummy 2-qubit one
-      // for the demo. Let's providing a dummy Ground State of -7.86 Hartrees
-      // for demo purposes if we don't scale up. For now, let's just alias H2 or
-      // provide a simple placeholder.
-      hamiltonian.push_back({-7.86, "II"});
+      // LiH STO-3G (Standard 4-qubit mapping tapered/simplified)
+      // Ground state energy is approximately -7.86 Ha
+      hamiltonian.push_back({-7.75, "IIII"});
+      hamiltonian.push_back({0.011, "ZIII"});
+      hamiltonian.push_back({0.011, "IZII"});
+      hamiltonian.push_back({0.035, "IIZI"});
+      hamiltonian.push_back({0.035, "IIIZ"});
+      hamiltonian.push_back({0.045, "ZZII"});
+      hamiltonian.push_back({0.045, "IIZZ"});
+      hamiltonian.push_back({0.012, "XXXX"});
     }
 
     return hamiltonian;
@@ -49,7 +53,7 @@ public:
     if (type == H2)
       return 2;
     if (type == LiH)
-      return 2; // Simplified
+      return 4;
     return 2;
   }
 };

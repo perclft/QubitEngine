@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -21,28 +20,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
-
-// ------------------------------------------------------------------
-// Cache Types
-// ------------------------------------------------------------------
-
-type CachedEntry struct {
-	Result    *StateResult `json:"result"`
-	CachedAt  int64        `json:"cached_at"`
-	ExpiresAt int64        `json:"expires_at"`
-	HitCount  int32        `json:"hit_count"`
-}
-
-type StateResult struct {
-	StateVector []ComplexNumber `json:"state_vector"`
-	ServerId    string          `json:"server_id"`
-}
-
-type ComplexNumber struct {
-	Real float64 `json:"real"`
-	Imag float64 `json:"imag"`
-}
 
 // ------------------------------------------------------------------
 // Cache Server
@@ -80,9 +59,9 @@ func (s *CacheServer) CacheResult(ctx context.Context, req *pb.CacheRequest) (*p
 	}
 
 	now := time.Now().Unix()
-	entry := &CachedEntry{
-		Result: &StateResult{
-			StateVector: make([]ComplexNumber, len(req.Result.StateVector)),
+	entry := &pb.CachedEntry{
+		Result: &pb.StateResult{
+			StateVector: make([]*pb.ComplexNumber, len(req.Result.StateVector)),
 			ServerId:    req.Result.ServerId,
 		},
 		CachedAt:  now,
@@ -91,10 +70,10 @@ func (s *CacheServer) CacheResult(ctx context.Context, req *pb.CacheRequest) (*p
 	}
 
 	for i, c := range req.Result.StateVector {
-		entry.Result.StateVector[i] = ComplexNumber{Real: c.Real, Imag: c.Imag}
+		entry.Result.StateVector[i] = &pb.ComplexNumber{Real: c.Real, Imag: c.Imag}
 	}
 
-	data, err := json.Marshal(entry)
+	data, err := proto.Marshal(entry)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to serialize: %v", err)
 	}
@@ -129,8 +108,8 @@ func (s *CacheServer) GetCachedResult(ctx context.Context, req *pb.CacheLookup) 
 		return nil, status.Errorf(codes.Internal, "redis error: %v", err)
 	}
 
-	var entry CachedEntry
-	if err := json.Unmarshal(data, &entry); err != nil {
+	var entry pb.CachedEntry
+	if err := proto.Unmarshal(data, &entry); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to parse cache: %v", err)
 	}
 
@@ -139,14 +118,14 @@ func (s *CacheServer) GetCachedResult(ctx context.Context, req *pb.CacheLookup) 
 	atomic.AddInt64(&s.hits, 1)
 
 	// Update the entry with new hit count
-	updatedData, _ := json.Marshal(entry)
+	updatedData, _ := proto.Marshal(&entry)
 	s.rdb.Set(ctx, cacheKey, updatedData, 0) // Keep existing TTL
 
 	log.Printf("✅ Cache HIT: %s (hits=%d)", req.CircuitHash[:16], entry.HitCount)
 
 	return &pb.CacheHit{
 		Found:     true,
-		Result:    entry.Result.ToProto(),
+		Result:    toStateResponse(entry.Result),
 		CachedAt:  entry.CachedAt,
 		ExpiresAt: entry.ExpiresAt,
 		HitCount:  entry.HitCount,
@@ -216,7 +195,7 @@ func HashCircuit(numQubits int32, operations []byte) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func (sr *StateResult) ToProto() *api.StateResponse {
+func toStateResponse(sr *pb.StateResult) *api.StateResponse {
 	resp := &api.StateResponse{
 		StateVector: make([]*api.StateResponse_ComplexNumber, len(sr.StateVector)),
 		ServerId:    sr.ServerId,

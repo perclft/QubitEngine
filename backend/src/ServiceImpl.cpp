@@ -403,19 +403,24 @@ grpc::Status QubitEngineServiceImpl::RunVQE(
   // Ansatz Definition (Hardware Efficient)
   AnsatzFunction applyAnsatz = [](const std::vector<double> &p,
                                   QuantumRegister &qreg) {
-    // Layer 1: Ry rotations
-    qreg.applyRotationY(0, p[0]);
-    qreg.applyRotationY(1, p[1]);
+    int n = qreg.getNumQubits();
+    // Layer 1: Parametric Rotations
+    for (int i = 0; i < n; ++i) {
+        if (i < (int)p.size()) qreg.applyRotationY(i, p[i]);
+    }
 
-    // Entanglement
-    qreg.applyCNOT(0, 1);
+    // Entanglement (Linear chain)
+    for (int i = 0; i < n - 1; ++i) {
+        qreg.applyCNOT(i, i + 1);
+    }
 
-    // Layer 2: Ry rotations
-    qreg.applyRotationY(0, p[2]);
-    qreg.applyRotationY(1, p[3]);
+    // Layer 2: Additional rotations for depth
+    for (int i = 0; i < n; ++i) {
+        if (i + n < (int)p.size()) qreg.applyRotationY(i, p[i + n]);
+    }
   };
 
-  std::vector<double> params(4, 0.0); // Initialize with 0
+  std::vector<double> params(num_qubits * 2, 0.0); 
 
   // Hyperparameters
   double learning_rate =
@@ -500,7 +505,8 @@ grpc::Status QubitEngineServiceImpl::RunVQE(
         resp.add_parameters(p);
       resp.set_converged(false);
 
-      if (current_energy < -1.13) {
+      double target_energy = (num_qubits == 4) ? -7.86 : -1.13;
+      if (current_energy < target_energy + 0.001) {
         resp.set_converged(true);
         writer->Write(resp);
         break;

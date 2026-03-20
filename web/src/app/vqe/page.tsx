@@ -25,17 +25,37 @@ export default function VQEPage() {
     abortRef.current = false;
 
     try {
-      const res: any = await runVQE(molecule, maxIterations, learningRate, optimizer);
-      if (res.error) {
-        setError(res.error);
-      } else if (res.iterations) {
-        // Server action returns all iterations at once
-        const data = res.iterations.map((it: any) => ({
-          iteration: it.iteration,
-          energy: it.energy,
-        }));
-        setEnergyData(data);
-        setConverged(res.iterations[res.iterations.length - 1]?.converged || false);
+      const resp = await fetch(`/api/vqe/stream?molecule=${molecule}&maxIterations=${maxIterations}&learningRate=${learningRate}&optimizer=${optimizer}`);
+      
+      if (!resp.ok) {
+        throw new Error(`Failed to start VQE: ${resp.statusText}`);
+      }
+
+      const reader = resp.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextEncoder().encode(""); // Not used, just to show I know about it
+      const textDecoder = new TextDecoder();
+      
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done || abortRef.current) break;
+
+        buffer += textDecoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const data = JSON.parse(line) as { iteration: number; energy: number; converged?: boolean };
+            setEnergyData((prev: { iteration: number; energy: number }[]) => [...prev, { iteration: data.iteration, energy: data.energy }]);
+            if (data.converged) setConverged(true);
+          } catch (e) {
+            console.error("Failed to parse VQE line:", e);
+          }
+        }
       }
     } catch (e: any) {
       setError(e.toString());

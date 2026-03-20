@@ -46,11 +46,16 @@ impl TopologyState {
         self.min_y = min_y - pad_y;
         self.max_y = max_y + pad_y;
         
+        let span_x = (max_x - min_x).max(1.0);
+        let span_y = (max_y - min_y).max(1.0);
+        let offset_x = span_x * 0.03;
+        let offset_y = span_y * -0.015;
+
         self.label_cache = self
             .nodes
             .iter()
             .enumerate()
-            .map(|(i, &(x, y))| (x + 3.0, y - 1.0, format!("Q{}", i)))
+            .map(|(i, &(x, y))| (x + offset_x, y + offset_y, format!("Q{}", i)))
             .collect();
         self.dirty = false;
     }

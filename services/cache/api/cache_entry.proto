@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package qubit_engine.cache;
+
+option go_package = "github.com/perclft/QubitEngine/services/cache/generated";
+
+message ComplexNumber {
+    double real = 1;
+    double imag = 2;
+}
+
+message StateResult {
+    repeated ComplexNumber state_vector = 1;
+    string server_id = 2;
+}
+
+message CachedEntry {
+    StateResult result = 1;
+    int64 cached_at = 2;
+    int64 expires_at = 3;
+    int32 hit_count = 4;
+}
