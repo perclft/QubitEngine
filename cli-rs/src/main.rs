@@ -8,7 +8,7 @@ use ratatui::{
     Terminal,
     backend::{Backend, CrosstermBackend},
 };
-use std::{collections::VecDeque, error::Error, fs, io};
+use std::{error::Error, fs, io};
 
 mod framework;
 mod grpc;
@@ -64,16 +64,13 @@ impl RouterComponent {
         let mut circuits = Vec::new();
         if let Ok(entries) = fs::read_dir(&circuits_dir) {
             for entry in entries.flatten() {
-                if let Ok(file_type) = entry.file_type() {
-                    if file_type.is_file() {
-                        if let Some(ext) = entry.path().extension() {
-                            if ext == "json" {
-                                if let Some(name) = entry.path().file_name() {
-                                    circuits.push(name.to_string_lossy().into_owned());
-                                }
-                            }
-                        }
-                    }
+                if let Ok(file_type) = entry.file_type()
+                    && file_type.is_file()
+                    && let Some(ext) = entry.path().extension()
+                    && ext == "json"
+                    && let Some(name) = entry.path().file_name()
+                {
+                    circuits.push(name.to_string_lossy().into_owned());
                 }
             }
         }
@@ -139,8 +136,8 @@ impl Component for RouterComponent {
                     self.last_terminal_size = (*w, *h);
                     self.topology.dirty = true;
                 }
-                if let Event::Key(key) = crossterm_event {
-                    if key.kind == event::KeyEventKind::Press {
+                if let Event::Key(key) = crossterm_event
+                    && key.kind == event::KeyEventKind::Press {
                         match key.code {
                             // FSM view routing via numeric keys
                             KeyCode::Char('1') => {
@@ -265,7 +262,6 @@ impl Component for RouterComponent {
                             _ => {}
                         }
                     }
-                }
             }
             // Broadcast gRPC events — all data handlers update regardless of active view
             AppEvent::Grpc(grpc_event) => {
@@ -391,15 +387,14 @@ where
             }
 
             // Check for exit
-            if let AppEvent::Input(crossterm::event::Event::Key(key)) = event {
-                if key.code == crossterm::event::KeyCode::Char('q')
-                    || key.code == crossterm::event::KeyCode::Esc
-                {
-                    if let Some(task) = root_component.current_task.take() {
-                        task.abort();
-                    }
-                    break;
+            if let AppEvent::Input(crossterm::event::Event::Key(key)) = event
+                && (key.code == crossterm::event::KeyCode::Char('q')
+                    || key.code == crossterm::event::KeyCode::Esc)
+            {
+                if let Some(task) = root_component.current_task.take() {
+                    task.abort();
                 }
+                break;
             }
         }
     }

@@ -235,6 +235,7 @@ pub async fn run_vqe(server_addr: String, tx: mpsc::Sender<AppEvent>) {
         )))
         .await;
 
+    #[allow(deprecated)]
     let mut req = tonic::Request::new(crate::api::VqeRequest {
         molecule: 0, // H2
         max_iterations: 100,
