@@ -19,8 +19,18 @@ import (
 	pb "github.com/perclft/QubitEngine/services/cache/generated"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
 // ------------------------------------------------------------------
@@ -220,11 +230,39 @@ func toStateResponse(sr *pb.StateResult) *api.StateResponse {
 // Main
 // ------------------------------------------------------------------
 
+func initTracer() (*sdktrace.TracerProvider, error) {
+	ctx := context.Background()
+	exp, err := otlptracegrpc.New(ctx, otlptracegrpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exp),
+		sdktrace.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String("qubit-cache"),
+		)),
+	)
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	return tp, nil
+}
+
 func main() {
 	redisAddr := flag.String("redis-addr", "localhost:6379", "Redis address")
 	port := flag.Int("port", 50054, "gRPC port")
 	ttlMinutes := flag.Int("default-ttl", 60, "Default cache TTL in minutes")
 	flag.Parse()
+
+	// Initialize OpenTelemetry
+	tp, err := initTracer()
+	if err != nil {
+		slog.Error("Failed to initialize tracer", "error", err)
+	} else {
+		defer tp.Shutdown(context.Background())
+		slog.Info("OpenTelemetry tracer initialized")
+	}
 
 	// Connect to Redis
 	rdb := redis.NewClient(&redis.Options{
@@ -251,8 +289,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+	)
 	pb.RegisterResultCacheServer(grpcServer, server)
+
+	// Register health check service
+	healthServer := health.NewServer()
+	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
+	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
 
 	slog.Info("Result Cache starting", "port", *port, "redis", *redisAddr, "ttl", defaultTTL)
 

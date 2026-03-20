@@ -72,6 +72,20 @@ jobs:
           cd build
           ctest --output-on-failure --timeout 300
 
+      - name: Run Benchmarks
+        env:
+          QUBIT_ENGINE_SKIP_AUTH: "1"
+        run: |
+          export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/build/vcpkg_installed/x64-linux/lib:$LD_LIBRARY_PATH
+          ./bin/benchmark > benchmark_results.txt
+          cat benchmark_results.txt
+
+      - name: Upload Benchmark Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-linux
+          path: benchmark_results.txt
+
   build-mac:
     runs-on: macos-14 # M1 ARM64 runner
     env:

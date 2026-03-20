@@ -16,13 +16,11 @@ services:
     depends_on:
       - postgres
 
-  # 4. PostgreSQL (Circuit Registry Backend)
+  # 2. PostgreSQL (Circuit Registry Backend)
   postgres:
     image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: qubit
-      POSTGRES_PASSWORD: quantum
-      POSTGRES_DB: quantumcloud
+    env_file:
+      - ../../.env
     ports:
       - "5432:5432"
     volumes:
@@ -35,19 +33,15 @@ services:
       timeout: 5s
       retries: 5
 
-  # 5. Circuit Registry Service
+  # 3. Circuit Registry Service
   registry:
     build:
       context: ../..
       dockerfile: services/registry/Dockerfile
     ports:
       - "50052:50052"
-    environment:
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=qubit
-      - DB_PASS=quantum
-      - DB_NAME=quantumcloud
+    env_file:
+      - ../../.env
     command: ["-db-host", "postgres"]
     networks:
       - qubit-net
@@ -55,7 +49,7 @@ services:
       postgres:
         condition: service_healthy
 
-  # 6. Redis (Job Queue)
+  # 4. Redis (Job Queue)
   redis:
     image: redis:7-alpine
     ports:
@@ -68,13 +62,17 @@ services:
       timeout: 5s
       retries: 5
 
-  # 7. Job Scheduler Service
+  # 5. Job Scheduler Service
   scheduler:
     build:
       context: ../..
       dockerfile: services/scheduler/Dockerfile
     ports:
       - "50053:50053"
+    environment:
+      - QUBIT_ENGINE_SKIP_AUTH=1
+    env_file:
+      - ../../.env
     command: ["-redis-addr", "redis:6379", "-engine-addr", "engine:50051"]
     networks:
       - qubit-net
@@ -84,7 +82,7 @@ services:
       engine:
         condition: service_started
 
-  # 8. Result Cache Service
+  # 6. Result Cache Service
   cache:
     build:
       context: ../..
@@ -97,6 +95,34 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+
+  # 7. Web Frontend (Next.js)
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.web
+    ports:
+      - "3000:3000"
+    environment:
+      - SCHEDULER_GRPC_ADDR=scheduler:50053
+      - ENGINE_GRPC_ADDR=engine:50051
+    networks:
+      - qubit-net
+    depends_on:
+      - scheduler
+      - engine
+
+  # 8. Jaeger (Distributed Tracing)
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC
+      - "4318:4318"     # OTLP HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - qubit-net
 
 networks:
   qubit-net:

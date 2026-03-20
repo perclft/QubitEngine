@@ -131,7 +131,15 @@ pub async fn run_circuit(server_addr: String, circuit_path: String, tx: mpsc::Se
         use_shm: false,
     });
 
-    let token = std::env::var("QUBIT_ENGINE_AUTH_TOKEN").unwrap_or_else(|_| "default-secret-token".to_string());
+    let token = match std::env::var("QUBIT_ENGINE_AUTH_TOKEN") {
+        Ok(t) => t,
+        Err(_) => {
+            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(
+                "QUBIT_ENGINE_AUTH_TOKEN not set. Export it before connecting.".to_string(),
+            ))).await;
+            return;
+        }
+    };
     if let Ok(meta_value) = format!("Bearer {}", token).parse() {
         req.metadata_mut().insert("authorization", meta_value);
     }
@@ -244,7 +252,15 @@ pub async fn run_vqe(server_addr: String, tx: mpsc::Sender<AppEvent>) {
         observables: vec![], // Added missing observables
     });
 
-    let token = std::env::var("QUBIT_ENGINE_AUTH_TOKEN").unwrap_or_else(|_| "default-secret-token".to_string());
+    let token = match std::env::var("QUBIT_ENGINE_AUTH_TOKEN") {
+        Ok(t) => t,
+        Err(_) => {
+            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(
+                "QUBIT_ENGINE_AUTH_TOKEN not set. Export it before connecting.".to_string(),
+            ))).await;
+            return;
+        }
+    };
     if let Ok(meta_value) = format!("Bearer {}", token).parse() {
         req.metadata_mut().insert("authorization", meta_value);
     }
@@ -299,7 +315,15 @@ pub async fn get_topology(server_addr: String, tx: mpsc::Sender<AppEvent>) {
 
     let mut req = tonic::Request::new(crate::api::HardwareTopologyRequest {});
 
-    let token = std::env::var("QUBIT_ENGINE_AUTH_TOKEN").unwrap_or_else(|_| "default-secret-token".to_string());
+    let token = match std::env::var("QUBIT_ENGINE_AUTH_TOKEN") {
+        Ok(t) => t,
+        Err(_) => {
+            let _ = tx.send(AppEvent::Grpc(GrpcEvent::Error(
+                "QUBIT_ENGINE_AUTH_TOKEN not set. Export it before connecting.".to_string(),
+            ))).await;
+            return;
+        }
+    };
     if let Ok(meta_value) = format!("Bearer {}", token).parse() {
         req.metadata_mut().insert("authorization", meta_value);
     }

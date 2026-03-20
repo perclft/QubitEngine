@@ -1,0 +1,39 @@
+name: Publish Python Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-n-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine cmake
+
+      - name: Build binary wheel
+        run: |
+          # Note: This will build the C++ extension if needed, 
+          # but for PyPI we usually want manylinux wheels.
+          # This is a simplified version for CI.
+          cd python
+          python -m build
+
+      - name: Publish to PyPI
+        if: startsWith(github.ref, 'refs/tags')
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          twine upload python/dist/*

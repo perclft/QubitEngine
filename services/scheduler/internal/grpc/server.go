@@ -31,7 +31,20 @@ type SchedulerServer struct {
 	engineConn   *google_grpc.ClientConn
 	engineClient pb.QuantumComputeClient
 	workerCount  int
+	limiters     sync.Map // map[string]*userLimiter
 }
+
+type userLimiter struct {
+	tokens float64
+	last   time.Time
+}
+
+const (
+	maxQubits     = 32
+	maxOperations = 10000
+	refillRate    = 0.1 // tokens per second (1 every 10s)
+	burstSize     = 5.0
+)
 
 func NewSchedulerServer(rdb *redis.Client, engineAddr string) *SchedulerServer {
 	return &SchedulerServer{
@@ -57,6 +70,41 @@ func (s *SchedulerServer) StartWorkers(ctx context.Context) {
 }
 
 func (s *SchedulerServer) SubmitJob(ctx context.Context, req *pb.JobRequest) (*pb.JobHandle, error) {
+	// 1. Rate Limiting
+	if req.UserId != "" {
+		lim, _ := s.limiters.LoadOrStore(req.UserId, &userLimiter{tokens: burstSize, last: time.Now()})
+		l := lim.(*userLimiter)
+		
+		s.mu.Lock()
+		now_lim := time.Now()
+		dt := now_lim.Sub(l.last).Seconds()
+		l.tokens += dt * refillRate
+		if l.tokens > burstSize {
+			l.tokens = burstSize
+		}
+		l.last = now_lim
+		
+		if l.tokens < 1.0 {
+			s.mu.Unlock()
+			return nil, status.Errorf(codes.ResourceExhausted, "rate limit exceeded for user %s", req.UserId)
+		}
+		l.tokens -= 1.0
+		s.mu.Unlock()
+	}
+
+	// 2. Input Validation
+	if req.Circuit == nil {
+		return nil, status.Error(codes.InvalidArgument, "circuit is required")
+	}
+
+	if req.Circuit.NumQubits > maxQubits {
+		return nil, status.Errorf(codes.InvalidArgument, "numQubits %d exceeds maximum allowed (%d)", req.Circuit.NumQubits, maxQubits)
+	}
+
+	if len(req.Circuit.Operations) > maxOperations {
+		return nil, status.Errorf(codes.InvalidArgument, "too many operations: %d (max %d)", len(req.Circuit.Operations), maxOperations)
+	}
+
 	jobID := uuid.New().String()
 	now := time.Now().Unix()
 
