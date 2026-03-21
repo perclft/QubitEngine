@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import * as grpc from '@grpc/grpc-js';
 import { QuantumSchedulerClient } from '../../../api/scheduler';
 
-const SCHEDULER_ADDR = process.env.SCHEDULER_ADDR || '127.0.0.1:50053';
+const SCHEDULER_ADDR = process.env.SCHEDULER_GRPC_ADDR || process.env.SCHEDULER_ADDR || '127.0.0.1:50053';
 
 export async function GET() {
   const encoder = new TextEncoder();

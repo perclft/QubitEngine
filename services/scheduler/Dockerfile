@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 WORKDIR /build
 RUN apk add --no-cache git
 
@@ -10,6 +10,7 @@ COPY go.mod go.sum ./
 COPY services/scheduler/ services/scheduler/
 
 WORKDIR /build/services/scheduler
+ENV GOTOOLCHAIN=auto
 RUN go mod download 2>/dev/null || go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build -o scheduler ./cmd/scheduler/main.go
 

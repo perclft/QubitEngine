@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /build
 
@@ -12,6 +12,7 @@ COPY go.mod go.sum ./
 COPY services/cache/ services/cache/
 
 WORKDIR /build/services/cache
+ENV GOTOOLCHAIN=auto
 RUN go mod download 2>/dev/null || go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build -o cache ./main.go
 

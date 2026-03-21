@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"github.com/improbable-eng/grpc-web/go/grpcweb"
 
@@ -133,22 +134,60 @@ func main() {
 		}
 	}()
 
+	checkRateLimit := func(ctx context.Context, token string) error {
+		var key string
+		if token != "" {
+			key = "rl:token:" + token + ":" + time.Now().Format("200601021504")
+		} else {
+			p, ok := peer.FromContext(ctx)
+			if ok && p.Addr != nil {
+				// We strip port from remote IP addr string for rate limiting
+				addrStr := p.Addr.String()
+				if host, _, err := net.SplitHostPort(addrStr); err == nil {
+					key = "rl:ip:" + host + ":" + time.Now().Format("200601021504")
+				} else {
+					key = "rl:ip:" + addrStr + ":" + time.Now().Format("200601021504")
+				}
+			} else {
+				key = "rl:unknown:" + time.Now().Format("200601021504")
+			}
+		}
+
+		val, err := rdb.Incr(ctx, key).Result()
+		if err != nil {
+			return status.Errorf(codes.Internal, "rate limiter error: %v", err)
+		}
+		if val == 1 {
+			rdb.Expire(ctx, key, 60*time.Second)
+		}
+		if val > 120 { // 120 requests per minute
+			return status.Errorf(codes.ResourceExhausted, "rate limit exceeded (120 req/min)")
+		}
+		return nil
+	}
+
 	validateToken := func(ctx context.Context) error {
-		if skipAuth {
-			return nil
+		var token string
+		if !skipAuth {
+			md, ok := metadata.FromIncomingContext(ctx)
+			if !ok {
+				return status.Errorf(codes.Unauthenticated, "metadata is not provided")
+			}
+			authHeader, ok := md["authorization"]
+			if !ok || len(authHeader) == 0 {
+				return status.Errorf(codes.Unauthenticated, "authorization token is not provided")
+			}
+			token = strings.TrimPrefix(authHeader[0], "Bearer ")
+			if token != authToken {
+				return status.Errorf(codes.Unauthenticated, "invalid authorization token")
+			}
 		}
-		md, ok := metadata.FromIncomingContext(ctx)
-		if !ok {
-			return status.Errorf(codes.Unauthenticated, "metadata is not provided")
+
+		// Apply Rate Limiting
+		if err := checkRateLimit(ctx, token); err != nil {
+			return err
 		}
-		authHeader, ok := md["authorization"]
-		if !ok || len(authHeader) == 0 {
-			return status.Errorf(codes.Unauthenticated, "authorization token is not provided")
-		}
-		token := strings.TrimPrefix(authHeader[0], "Bearer ")
-		if token != authToken {
-			return status.Errorf(codes.Unauthenticated, "invalid authorization token")
-		}
+
 		return nil
 	}
 

@@ -21,7 +21,22 @@ namespace qubit_engine {
 namespace ipc {
 
 #ifdef _WIN32
-static std::unordered_map<void*, HANDLE> active_handles;
+struct SharedMemorySegmentRAII {
+    HANDLE hMapFile;
+    void* pBuf;
+
+    SharedMemorySegmentRAII(HANDLE h, void* p) : hMapFile(h), pBuf(p) {}
+    ~SharedMemorySegmentRAII() {
+        if (pBuf) UnmapViewOfFile(pBuf);
+        if (hMapFile) CloseHandle(hMapFile);
+    }
+    
+    // Disable copy for RAII
+    SharedMemorySegmentRAII(const SharedMemorySegmentRAII&) = delete;
+    SharedMemorySegmentRAII& operator=(const SharedMemorySegmentRAII&) = delete;
+};
+
+static std::unordered_map<void*, std::shared_ptr<SharedMemorySegmentRAII>> active_handles;
 static std::mutex handle_mutex;
 #endif
 
@@ -48,10 +63,10 @@ void *SharedMemory::createSegment(const std::string &descriptor,
                              std::to_string(GetLastError()));
   }
 
-  // Store the handle to keep it alive and prevent leaks
+  // Store the RAII object to manage lifetime automatically
   {
     std::lock_guard<std::mutex> lock(handle_mutex);
-    active_handles[pBuf] = hMapFile;
+    active_handles[pBuf] = std::make_shared<SharedMemorySegmentRAII>(hMapFile, pBuf);
   }
   return pBuf;
 #else
@@ -98,7 +113,7 @@ void *SharedMemory::openSegment(const std::string &descriptor,
 
   {
     std::lock_guard<std::mutex> lock(handle_mutex);
-    active_handles[pBuf] = hMapFile;
+    active_handles[pBuf] = std::make_shared<SharedMemorySegmentRAII>(hMapFile, pBuf);
   }
 
   return pBuf;
@@ -122,12 +137,11 @@ void *SharedMemory::openSegment(const std::string &descriptor,
 void SharedMemory::closeSegment(const std::string &descriptor, void *ptr,
                                 size_t sizeBytes) {
 #ifdef _WIN32
-  UnmapViewOfFile(ptr);
   {
     std::lock_guard<std::mutex> lock(handle_mutex);
     auto it = active_handles.find(ptr);
     if (it != active_handles.end()) {
-      CloseHandle(it->second);
+      // Destruction of the RAII object handles unmapping and closing
       active_handles.erase(it);
     }
   }

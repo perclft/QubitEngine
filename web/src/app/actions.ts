@@ -35,29 +35,28 @@ export interface JobListResult {
 let _computeClient: QuantumComputeClient | null = null;
 let _schedulerClient: QuantumSchedulerClient | null = null;
 
-const ENGINE_ADDR = process.env.ENGINE_ADDR || '127.0.0.1:50051';
-const SCHEDULER_ADDR = process.env.SCHEDULER_ADDR || '127.0.0.1:50053';
-const REGISTRY_ADDR = process.env.REGISTRY_ADDR || '127.0.0.1:50052';
-
 let _registryClient: CircuitRegistryClient | null = null;
 
 const getClient = () => {
   if (!_computeClient) {
-    _computeClient = new QuantumComputeClient(ENGINE_ADDR, grpc.credentials.createInsecure());
+    const addr = process.env.ENGINE_GRPC_ADDR || process.env.ENGINE_ADDR || '127.0.0.1:50051';
+    _computeClient = new QuantumComputeClient(addr, grpc.credentials.createInsecure());
   }
   return _computeClient;
 };
 
 const getSchedulerClient = () => {
   if (!_schedulerClient) {
-    _schedulerClient = new QuantumSchedulerClient(SCHEDULER_ADDR, grpc.credentials.createInsecure());
+    const addr = process.env.SCHEDULER_GRPC_ADDR || process.env.SCHEDULER_ADDR || '127.0.0.1:50053';
+    _schedulerClient = new QuantumSchedulerClient(addr, grpc.credentials.createInsecure());
   }
   return _schedulerClient;
 };
 
 const getRegistryClient = () => {
   if (!_registryClient) {
-    _registryClient = new CircuitRegistryClient(REGISTRY_ADDR, grpc.credentials.createInsecure());
+    const addr = process.env.REGISTRY_GRPC_ADDR || process.env.REGISTRY_ADDR || '127.0.0.1:50052';
+    _registryClient = new CircuitRegistryClient(addr, grpc.credentials.createInsecure());
   }
   return _registryClient;
 };

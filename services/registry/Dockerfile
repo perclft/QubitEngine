@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /build
 
@@ -14,6 +14,7 @@ COPY services/registry/ services/registry/
 
 # Build
 WORKDIR /build/services/registry
+ENV GOTOOLCHAIN=auto
 RUN go mod download 2>/dev/null || go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build -o registry ./main.go
 

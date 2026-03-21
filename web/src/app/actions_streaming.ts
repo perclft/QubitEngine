@@ -1,10 +1,9 @@
 import * as grpc from '@grpc/grpc-js';
 import { QuantumComputeClient } from '../api/quantum';
 
-const ENGINE_ADDR = process.env.ENGINE_ADDR || '127.0.0.1:50051';
-
 const getClient = () => {
-    return new QuantumComputeClient(ENGINE_ADDR, grpc.credentials.createInsecure());
+    const addr = process.env.ENGINE_GRPC_ADDR || process.env.ENGINE_ADDR || '127.0.0.1:50051';
+    return new QuantumComputeClient(addr, grpc.credentials.createInsecure());
 };
 
 const getMetadata = () => {

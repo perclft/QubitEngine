@@ -201,3 +201,77 @@ func TestSchedulerIntegration(t *testing.T) {
 
 	t.Log("✅ Integration Test Passed!")
 }
+
+func TestRateLimiting(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("failed to start miniredis: %v", err)
+	}
+	defer mr.Close()
+
+	engineLis, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer engineLis.Close()
+
+	s := grpc.NewServer()
+	mock := &mockEngine{}
+	pb.RegisterQuantumComputeServer(s, mock)
+	go s.Serve(engineLis)
+
+	tmpDir, _ := os.MkdirTemp("", "scheduler-rl")
+	defer os.RemoveAll(tmpDir)
+
+	binName := "scheduler"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	binPath := filepath.Join(tmpDir, binName)
+	rootDir, _ := filepath.Abs("../../")
+	cmdBuild := exec.Command("go", "build", "-o", binPath, "./cmd/scheduler")
+	cmdBuild.Dir = rootDir
+	if out, err := cmdBuild.CombinedOutput(); err != nil {
+		t.Fatalf("failed to build scheduler: %v\n%s", err, out)
+	}
+
+	schedulerPort := 50056
+	cmdRun := exec.Command(binPath,
+		"-port", fmt.Sprintf("%d", schedulerPort),
+		"-redis-addr", mr.Addr(),
+		"-engine-addr", engineLis.Addr().String(),
+	)
+	cmdRun.Env = append(os.Environ(), "QUBIT_ENGINE_AUTH_TOKEN="+testAuthToken)
+	cmdRun.Start()
+	defer cmdRun.Process.Kill()
+	time.Sleep(2 * time.Second)
+
+	conn, _ := grpc.Dial(fmt.Sprintf("localhost:%d", schedulerPort),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithPerRPCCredentials(tokenAuth{token: testAuthToken}),
+	)
+	defer conn.Close()
+
+	client := pb.NewQuantumSchedulerClient(conn)
+
+	// Hit rate limit
+	var lastErr error
+	for i := 0; i < 150; i++ {
+		circuit := &pb.CircuitRequest{NumQubits: 2}
+		submitReq := &pb.JobRequest{
+			Circuit:  circuit,
+			Priority: pb.JobPriority_PRIORITY_NORMAL,
+			Shots:    1,
+			UserId:   "test-user",
+		}
+		_, err := client.SubmitJob(context.Background(), submitReq)
+		if err != nil {
+			lastErr = err
+			break
+		}
+	}
+
+	if lastErr == nil {
+		t.Fatal("Expected rate limit error, got none.")
+	}
+
+	t.Log("✅ Rate Limiting Test Passed!")
+}
+

@@ -106,6 +106,7 @@ services:
     environment:
       - SCHEDULER_GRPC_ADDR=scheduler:50053
       - ENGINE_GRPC_ADDR=engine:50051
+      - REGISTRY_GRPC_ADDR=registry:50052
     networks:
       - qubit-net
     depends_on:
