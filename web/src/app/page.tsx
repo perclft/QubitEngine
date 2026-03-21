@@ -7,6 +7,7 @@ import { Activity, Server, Compass } from "lucide-react";
 import { WavefunctionChart } from "../components/WavefunctionChart";
 import { TopologyGraph } from "../components/TopologyGraph";
 import { ClusterMetrics } from "../components/ClusterMetrics";
+import { BlochSphere } from "../components/BlochSphere";
 import { ExecutionResult, TopologyData } from "../components/types";
 
 export default function DashboardPage() {
@@ -113,8 +114,23 @@ export default function DashboardPage() {
         </div>
 
         {/* State Distribution */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-6">
           <WavefunctionChart result={result} error={error} />
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6">
+              <h3 className="text-xs font-medium text-slate-500 uppercase tracking-widest mb-4">
+                Qubit 0 State
+              </h3>
+              <BlochSphere animating={isRunning} theta={result ? Math.PI/2 : 0} phi={result ? 0 : 0} />
+            </div>
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6">
+              <h3 className="text-xs font-medium text-slate-500 uppercase tracking-widest mb-4">
+                Qubit 1 State
+              </h3>
+              <BlochSphere animating={isRunning} theta={result ? Math.PI/2 : 0} phi={result ? 0 : 0} />
+            </div>
+          </div>
         </div>
       </div>
 

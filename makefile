@@ -5,7 +5,7 @@ PROTO_DIR = api/proto
 GO_OUT_DIR = api/generated
 ENGINE_IMAGE = qubit-engine:latest
 
-.PHONY: all clean proto build-engine build-tui docker-build deploy test docs
+.PHONY: all clean proto build-engine build-tui build-services build-web all-fullstack docker-build deploy test docs
 
 # Generate API documentation
 docs:
@@ -15,6 +15,8 @@ docs:
 
 
 all: proto build-engine
+
+all-fullstack: all build-tui build-services build-web
 
 # Generate Go protobuf stubs
 proto:
@@ -36,6 +38,18 @@ build-tui:
 	@echo "Building Rust TUI..."
 	cd cli-rs && cargo build --release
 
+# Build Go Microservices
+build-services:
+	@echo "Building Go Microservices..."
+	cd services/scheduler && $(GO) build -o scheduler .
+	cd services/registry && $(GO) build -o registry .
+	cd services/cache && $(GO) build -o cache .
+
+# Build Web Frontend
+build-web:
+	@echo "Building Next.js Web Frontend..."
+	cd web && npm install && npm run build
+
 # Run C++ unit tests
 test:
 	@echo "Running C++ Unit Tests..."
@@ -56,3 +70,7 @@ clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf backend/build
 	cd cli-rs && cargo clean
+	rm -f services/scheduler/scheduler
+	rm -f services/registry/registry
+	rm -f services/cache/cache
+	rm -rf web/.next web/node_modules
