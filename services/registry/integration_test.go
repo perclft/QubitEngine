@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	api "github.com/perclft/QubitEngine/api/generated"
@@ -129,12 +130,12 @@ func TestListCircuits(t *testing.T) {
 		AddRow("id1", "Circuit 1", "Desc 1", "author1", "domain1", "[]", 2, 1, 1, true, 0, 0, time.Now(), time.Now()).
 		AddRow("id2", "Circuit 2", "Desc 2", "author2", "domain2", "[]", 4, 2, 1, true, 0, 0, time.Now(), time.Now())
 
-	mock.ExpectQuery("SELECT (.+) FROM circuits ORDER BY created_at DESC LIMIT 2 OFFSET 0").
+	mock.ExpectQuery("SELECT (.+) FROM circuits WHERE 1=1 ORDER BY created_at DESC LIMIT 2 OFFSET 0").
 		WillReturnRows(rows)
 
-	req := &pb.ListJobsRequest{
-		Limit:  2,
-		Offset: 0,
+	req := &pb.ListCircuitsRequest{
+		PageSize: 2,
+		Page:     0,
 	}
 
 	res, err := server.ListCircuits(ctx, req)
