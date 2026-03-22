@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"log/slog"
-	"strings"
+	"runtime"
 	"sync"
 	"time"
 
@@ -153,6 +153,12 @@ func (s *SchedulerServer) SubmitJob(ctx context.Context, req *pb.JobRequest) (*p
 		return nil, status.Errorf(codes.Internal, "failed to queue job: %v", err)
 	}
 
+	// Secondary index for O(log n) ListJobs lookups
+	s.rdb.ZAdd(ctx, "index:jobs:all", &redis.Z{
+		Score:  float64(now),
+		Member: jobID,
+	})
+
 	queueLen, _ := s.rdb.ZCard(ctx, "queue:jobs").Result()
 	estimatedWait := int32(queueLen) * 2
 
@@ -257,27 +263,15 @@ func (s *SchedulerServer) saveJob(ctx context.Context, job *models.Job) {
 }
 
 func (s *SchedulerServer) ListJobs(ctx context.Context, req *pb.ListJobsRequest) (*pb.JobList, error) {
-	var allKeys []string
-	var cursor uint64
-	for {
-		keys, nextCursor, err := s.rdb.Scan(ctx, cursor, "job:*", 100).Result()
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to scan jobs: %v", err)
-		}
-		allKeys = append(allKeys, keys...)
-		cursor = nextCursor
-		if cursor == 0 {
-			break
-		}
+	// Use secondary sorted-set index instead of SCAN for O(log n) lookups
+	allIDs, err := s.rdb.ZRevRange(ctx, "index:jobs:all", 0, -1).Result()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to list jobs: %v", err)
 	}
 
 	var jobs []*pb.JobStatus
-	for _, key := range allKeys {
-		if strings.Count(key, ":") > 1 {
-			continue
-		}
-
-		jobBytes, err := s.rdb.Get(ctx, key).Bytes()
+	for _, jobID := range allIDs {
+		jobBytes, err := s.rdb.Get(ctx, "job:"+jobID).Bytes()
 		if err != nil {
 			continue
 		}
@@ -376,19 +370,33 @@ func (s *SchedulerServer) StreamJobResults(handle *pb.JobHandle, stream pb.Quant
 	}
 }
 
-func (s *SchedulerServer) GetClusterMetrics(ctx context.Context, req *emptypb.Empty) (*pb.ClusterMetricsResponse, error) {
+// collectMetrics gathers real system and queue metrics from the Go runtime and Redis.
+func (s *SchedulerServer) collectMetrics(ctx context.Context) *pb.ClusterMetricsResponse {
 	queueLen, _ := s.rdb.ZCard(ctx, "queue:jobs").Result()
-	
-	// Real system stats would derive these metrics
+	runningCount, _ := s.rdb.HLen(ctx, "jobs:processing").Result()
+
+	// Real memory usage from Go runtime
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+	// HeapInuse / HeapSys gives proportion of heap actually in use
+	memPercent := 0.0
+	if memStats.HeapSys > 0 {
+		memPercent = float64(memStats.HeapInuse) / float64(memStats.HeapSys) * 100.0
+	}
+
 	return &pb.ClusterMetricsResponse{
 		ActiveWorkers:      int32(s.workerCount),
 		QueueDepth:         int32(queueLen),
-		MemoryUsagePercent: 42.5,
+		MemoryUsagePercent: memPercent,
 		JobsByState: map[int32]int32{
 			int32(models.StateQueued):  int32(queueLen),
-			int32(models.StateRunning): 0,
+			int32(models.StateRunning): int32(runningCount),
 		},
-	}, nil
+	}
+}
+
+func (s *SchedulerServer) GetClusterMetrics(ctx context.Context, req *emptypb.Empty) (*pb.ClusterMetricsResponse, error) {
+	return s.collectMetrics(ctx), nil
 }
 
 func (s *SchedulerServer) StreamClusterMetrics(req *emptypb.Empty, stream pb.QuantumScheduler_StreamClusterMetricsServer) error {
@@ -400,19 +408,7 @@ func (s *SchedulerServer) StreamClusterMetrics(req *emptypb.Empty, stream pb.Qua
 		case <-stream.Context().Done():
 			return nil
 		case <-ticker.C:
-			queueLen, _ := s.rdb.ZCard(stream.Context(), "queue:jobs").Result()
-			
-			metrics := &pb.ClusterMetricsResponse{
-				ActiveWorkers:      int32(s.workerCount),
-				QueueDepth:         int32(queueLen),
-				MemoryUsagePercent: 42.5,
-				JobsByState: map[int32]int32{
-					int32(models.StateQueued):  int32(queueLen),
-					int32(models.StateRunning): 0,
-				},
-			}
-			
-			if err := stream.Send(metrics); err != nil {
+			if err := stream.Send(s.collectMetrics(stream.Context())); err != nil {
 				return err
 			}
 		}

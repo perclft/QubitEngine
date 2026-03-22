@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -305,13 +306,29 @@ func initTracer() (*sdktrace.TracerProvider, error) {
 	return tp, nil
 }
 
+func getEnvOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func getEnvIntOrDefault(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return fallback
+}
+
 func main() {
-	dbHost := flag.String("db-host", "localhost", "PostgreSQL host")
-	dbPort := flag.Int("db-port", 5432, "PostgreSQL port")
-	dbUser := flag.String("db-user", "qubit", "PostgreSQL user")
-	dbPass := flag.String("db-pass", "quantum", "PostgreSQL password")
-	dbName := flag.String("db-name", "quantumcloud", "PostgreSQL database")
-	grpcPort := flag.Int("port", 50052, "gRPC port")
+	dbHost := flag.String("db-host", getEnvOrDefault("DB_HOST", "localhost"), "PostgreSQL host")
+	dbPort := flag.Int("db-port", getEnvIntOrDefault("DB_PORT", 5432), "PostgreSQL port")
+	dbUser := flag.String("db-user", getEnvOrDefault("DB_USER", "qubit"), "PostgreSQL user")
+	dbPass := flag.String("db-pass", getEnvOrDefault("DB_PASS", ""), "PostgreSQL password")
+	dbName := flag.String("db-name", getEnvOrDefault("DB_NAME", "quantumcloud"), "PostgreSQL database")
+	grpcPort := flag.Int("port", getEnvIntOrDefault("GRPC_PORT", 50052), "gRPC port")
 	flag.Parse()
 
 	// Initialize OpenTelemetry

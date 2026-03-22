@@ -13,6 +13,14 @@
 #endif
 #include <complex>
 
+#ifdef MPI_ENABLED
+// Ensure MPI type tags match the actual Precision type.
+// All MPI_Sendrecv calls use MPI_DOUBLE; changing Precision to float
+// requires switching to MPI_FLOAT.
+static_assert(sizeof(qubit_engine::Precision) == sizeof(double),
+              "MPI calls assume double precision — update MPI type tags if Precision changes");
+#endif
+
 // Intel SIMD intrinsics - only available on x86/x64, not ARM
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) ||             \
     defined(_M_IX86)
@@ -227,8 +235,8 @@ void CpuBackend::applyHadamard(size_t target) {
     int partner = local_rank ^ rank_bit;
     std::vector<Complex> recv_buf(local_dim);
 
-    MPI_Sendrecv(state.data(), local_dim * 2, MPI_FLOAT, partner, 0,
-                 recv_buf.data(), local_dim * 2, MPI_FLOAT, partner, 0,
+    MPI_Sendrecv(state.data(), local_dim * 2, MPI_DOUBLE, partner, 0,
+                 recv_buf.data(), local_dim * 2, MPI_DOUBLE, partner, 0,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
     if (is_one) {
@@ -276,8 +284,8 @@ void CpuBackend::applyX(size_t target) {
     size_t rank_bit = stride / local_dim;
     int partner = local_rank ^ rank_bit;
     std::vector<Complex> recv_buf(local_dim);
-    MPI_Sendrecv(state.data(), local_dim * 2, MPI_FLOAT, partner, 0,
-                 recv_buf.data(), local_dim * 2, MPI_FLOAT, partner, 0,
+    MPI_Sendrecv(state.data(), local_dim * 2, MPI_DOUBLE, partner, 0,
+                 recv_buf.data(), local_dim * 2, MPI_DOUBLE, partner, 0,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     state.assign(recv_buf.begin(), recv_buf.end());
 #else
@@ -381,8 +389,8 @@ void CpuBackend::applyCNOT(size_t control, size_t target) {
     std::vector<Complex> recv_buf(local_dim);
 
     // This is basically a conditional swap with partner rank
-    MPI_Sendrecv(state.data(), local_dim * 2, MPI_FLOAT, partner, 0,
-                 recv_buf.data(), local_dim * 2, MPI_FLOAT, partner, 0,
+    MPI_Sendrecv(state.data(), local_dim * 2, MPI_DOUBLE, partner, 0,
+                 recv_buf.data(), local_dim * 2, MPI_DOUBLE, partner, 0,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
 #ifdef _OPENMP
@@ -408,8 +416,8 @@ void CpuBackend::applyCNOT(size_t control, size_t target) {
       // Control is 1, so we flip the global target
       int partner = local_rank ^ t_rank_bit;
       std::vector<Complex> recv_buf(local_dim);
-      MPI_Sendrecv(state.data(), local_dim * 2, MPI_FLOAT, partner, 0,
-                   recv_buf.data(), local_dim * 2, MPI_FLOAT, partner, 0,
+      MPI_Sendrecv(state.data(), local_dim * 2, MPI_DOUBLE, partner, 0,
+                   recv_buf.data(), local_dim * 2, MPI_DOUBLE, partner, 0,
                    MPI_COMM_WORLD, MPI_STATUS_IGNORE);
       state.assign(recv_buf.begin(), recv_buf.end());
     }

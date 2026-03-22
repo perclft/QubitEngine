@@ -9,6 +9,7 @@
 #include <grpcpp/grpcpp.h>
 #include <iostream>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 #include <string>
 #include <sw/redis++/redis++.h>
@@ -28,91 +29,42 @@ static inline int64_t unixSecondsNow() {
       .count();
 }
 
-static std::string jsonEscape(const std::string &s) {
-  std::string out;
-  out.reserve(s.size() + 16);
-  for (unsigned char c : s) {
-    switch (c) {
-    case '\\':
-      out += "\\\\";
-      break;
-    case '"':
-      out += "\\\"";
-      break;
-    case '\n':
-      out += "\\n";
-      break;
-    case '\r':
-      out += "\\r";
-      break;
-    case '\t':
-      out += "\\t";
-      break;
-    default:
-      if (c < 0x20) {
-        // Minimal escaping for control chars
-        char buf[7];
-        std::snprintf(buf, sizeof(buf), "\\u%04x", (unsigned)c);
-        out += buf;
-      } else {
-        out.push_back((char)c);
-      }
-    }
-  }
-  return out;
-}
-
-static void applyGateForJob(qubit_engine::QuantumRegister &qreg,
-                            const qubit_engine::GateOperation &op,
-                            std::unordered_map<int32_t, bool> &measurements) {
-  qubit_engine::dispatchGate(qreg, op, &measurements, nullptr);
-}
-
 static std::string buildJobResultJson(const std::string &job_id, int32_t shot,
                                       const std::string &worker_id,
                                       const std::vector<qubit_engine::Complex>
                                           &state_vec,
                                       const std::unordered_map<int32_t, bool>
                                           &measurements) {
-  std::string json;
-  json.reserve(256 + state_vec.size() * 24);
-  json += "{";
-  json += "\"job_id\":\"" + jsonEscape(job_id) + "\",";
-  json += "\"shot_number\":" + std::to_string(shot) + ",";
+  nlohmann::json state_array = nlohmann::json::array();
+  for (const auto &c : state_vec) {
+    state_array.push_back({{"real", c.real()}, {"imag", c.imag()}});
+  }
 
-  json += "\"state\":{";
-  json += "\"state_vector\":[";
-  for (size_t i = 0; i < state_vec.size(); ++i) {
-    const auto &c = state_vec[i];
-    json += "{\"real\":" + std::to_string(c.real()) +
-            ",\"imag\":" + std::to_string(c.imag()) + "}";
-    if (i + 1 < state_vec.size())
-      json += ",";
-  }
-  json += "],";
-  json += "\"classical_results\":{";
-  bool first = true;
+  nlohmann::json classical;
+  nlohmann::json meas;
   for (const auto &kv : measurements) {
-    if (!first)
-      json += ",";
-    first = false;
-    json += "\"" + std::to_string(kv.first) + "\":" + (kv.second ? "true" : "false");
+    classical[std::to_string(kv.first)] = kv.second;
+    meas[std::to_string(kv.first)] = kv.second;
   }
-  json += "},";
-  json += "\"server_id\":\"" + jsonEscape(worker_id) + "\"";
-  json += "},";
 
-  json += "\"measurements\":{";
-  first = true;
-  for (const auto &kv : measurements) {
-    if (!first)
-      json += ",";
-    first = false;
-    json += "\"" + std::to_string(kv.first) + "\":" + (kv.second ? "true" : "false");
-  }
-  json += "}";
-  json += "}";
-  return json;
+  nlohmann::json j = {
+    {"job_id", job_id},
+    {"shot_number", shot},
+    {"state", {
+      {"state_vector", state_array},
+      {"classical_results", classical},
+      {"server_id", worker_id}
+    }},
+    {"measurements", meas}
+  };
+
+  return j.dump();
+}
+
+static void applyGateForJob(qubit_engine::QuantumRegister &qreg,
+                            const qubit_engine::GateOperation &op,
+                            std::unordered_map<int32_t, bool> &measurements) {
+  qubit_engine::dispatchGate(qreg, op, &measurements, nullptr);
 }
 
 static void executeJob(sw::redis::Redis &redis, const std::string &job_id,
@@ -307,6 +259,10 @@ int main(int argc, char **argv) {
   // Single-node execution: The server still runs gRPC for development testing
   // Spin a resilient local polling thread pool
   int num_workers = 4;
+  if (const char* env_workers = std::getenv("WORKER_COUNT")) {
+    num_workers = std::max(1, std::atoi(env_workers));
+  }
+  spdlog::info("Starting {} Redis worker threads", num_workers);
   std::vector<std::thread> workers;
   
   for (int i = 0; i < num_workers; ++i) {

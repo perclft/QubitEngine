@@ -7,6 +7,14 @@ using namespace qubit_engine;
 
 class ServiceTest : public ::testing::Test {
 protected:
+  void SetUp() override {
+#ifdef _WIN32
+    _putenv_s("QUBIT_ENGINE_SKIP_AUTH", "1");
+#else
+    setenv("QUBIT_ENGINE_SKIP_AUTH", "1", 1);
+#endif
+  }
+
   QubitEngineServiceImpl service;
   grpc::ServerContext context;
 };
