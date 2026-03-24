@@ -33,7 +33,7 @@ func main() {
 	
 	// The cluster might take a few seconds to boot up entirely.
 	for i := 0; i < 15; i++ {
-		conn, err = grpc.Dial("localhost:50051", 
+		conn, err = grpc.Dial("localhost:50053", 
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithPerRPCCredentials(tokenAuth{token: "qubit_engine_auth_token"}),
 			grpc.WithBlock(),
