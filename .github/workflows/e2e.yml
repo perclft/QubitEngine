@@ -17,6 +17,9 @@ jobs:
         with:
           go-version: '1.22'
           
+      - name: Create .env file
+        run: cp .env.example .env
+
       - name: Start Docker Compose Stack
         run: docker compose -f deploy/docker/docker-compose.yaml up -d --build
         

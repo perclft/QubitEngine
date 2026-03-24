@@ -14,12 +14,21 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/go-redis/redis/v8"
+	"github.com/perclft/QubitEngine/api/auth"
 	pb "github.com/perclft/QubitEngine/api/generated"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-const testAuthToken = "test-e2e-token"
+var testAuthToken string
+
+func init() {
+	var err error
+	testAuthToken, err = auth.GenerateToken("test-user", 3600*time.Second)
+	if err != nil {
+		panic(fmt.Sprintf("failed to generate test token: %v", err))
+	}
+}
 
 // tokenAuth implements grpc.PerRPCCredentials to inject the auth header.
 type tokenAuth struct {
