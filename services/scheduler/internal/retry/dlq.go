@@ -3,7 +3,6 @@ package retry
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"time"
 
@@ -69,7 +68,6 @@ func (r *DLQRetryer) processDLQ(ctx context.Context) {
 
 			slog.Info("Retrying job from DLQ", "job_id", job.JobID, "retry", job.RetryCount+1)
 			job.RetryCount++
-			newJSON, _ := json.Marshal(job)
 
 			// Atomic move: remove from DLQ and push to main queue
 			pipe := r.rdb.Pipeline()

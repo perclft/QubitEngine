@@ -1,5 +1,5 @@
 # Dependencies
-node_modules/
+**/node_modules/
 .npm/
 
 # Build outputs
@@ -8,6 +8,7 @@ out/
 dist/
 build/
 bin/
+backend/build/
 
 # IDE and OS
 .vscode/

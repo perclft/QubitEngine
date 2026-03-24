@@ -9,9 +9,7 @@ ENGINE_IMAGE = qubit-engine:latest
 
 # Generate API documentation
 docs:
-	@echo "Ensuring API Documentation is up to date..."
-	@ls docs/api_reference.md > /dev/null || (echo "Warning: API Reference missing!")
-	@echo "Documentation available at docs/api_reference.md"
+	@bash scripts/generate_docs.sh
 
 
 all: proto build-engine

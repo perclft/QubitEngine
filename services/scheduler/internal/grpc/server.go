@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	pb "github.com/perclft/QubitEngine/api/generated"
 	"github.com/perclft/QubitEngine/services/scheduler/pkg/models"
+	"github.com/sony/gobreaker"
 	google_grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -32,6 +33,22 @@ type SchedulerServer struct {
 	engineClient pb.QuantumComputeClient
 	workerCount  int
 	limiters     sync.Map // map[string]*userLimiter
+	cb           *gobreaker.CircuitBreaker
+	engineToken  string
+}
+
+type tokenAuth struct {
+	token string
+}
+
+func (t tokenAuth) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return map[string]string{
+		"authorization": "Bearer " + t.token,
+	}, nil
+}
+
+func (t tokenAuth) RequireTransportSecurity() bool {
+	return false
 }
 
 type userLimiter struct {
@@ -46,17 +63,28 @@ const (
 	burstSize     = 5.0
 )
 
-func NewSchedulerServer(rdb *redis.Client, engineAddr string) *SchedulerServer {
+func NewSchedulerServer(rdb *redis.Client, engineAddr string, engineToken string) *SchedulerServer {
+	cb := gobreaker.NewCircuitBreaker(gobreaker.Settings{
+		Name:        "Redis",
+		MaxRequests: 5,
+		Interval:    10 * time.Second,
+		Timeout:     5 * time.Second,
+	})
 	return &SchedulerServer{
 		rdb:          rdb,
 		engineAddr:   engineAddr,
 		workerCancel: make(map[string]context.CancelFunc),
 		workerCount:  4,
+		cb:           cb,
+		engineToken:  engineToken,
 	}
 }
 
 func (s *SchedulerServer) ConnectEngine(ctx context.Context) error {
-	conn, err := google_grpc.Dial(s.engineAddr, google_grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := google_grpc.Dial(s.engineAddr,
+		google_grpc.WithTransportCredentials(insecure.NewCredentials()),
+		google_grpc.WithPerRPCCredentials(tokenAuth{token: s.engineToken}),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to connect to engine: %w", err)
 	}
@@ -126,38 +154,46 @@ func (s *SchedulerServer) SubmitJob(ctx context.Context, req *pb.JobRequest) (*p
 		job.CircuitJSON = string(circuitBytes)
 	}
 
-	jobBytes, _ := json.Marshal(job)
-	if err := s.rdb.Set(ctx, "job:"+jobID, jobBytes, 24*time.Hour).Err(); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to store job: %v", err)
-	}
-
-	if req.Circuit != nil {
-		b, err := proto.Marshal(req.Circuit)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to marshal circuit proto: %v", err)
+	_, err := s.cb.Execute(func() (interface{}, error) {
+		jobBytes, _ := json.Marshal(job)
+		if err := s.rdb.Set(ctx, "job:"+jobID, jobBytes, 24*time.Hour).Err(); err != nil {
+			return nil, err
 		}
-		if err := s.rdb.Set(ctx, "job:circuitpb:"+jobID, b, 24*time.Hour).Err(); err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to store circuit proto: %v", err)
+
+		if req.Circuit != nil {
+			b, err := proto.Marshal(req.Circuit)
+			if err != nil {
+				return nil, err
+			}
+			if err := s.rdb.Set(ctx, "job:circuitpb:"+jobID, b, 24*time.Hour).Err(); err != nil {
+				return nil, err
+			}
 		}
-	}
 
-	if err := s.rdb.Set(ctx, "job:shots:"+jobID, fmt.Sprintf("%d", req.Shots), 24*time.Hour).Err(); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to store shots: %v", err)
-	}
+		if err := s.rdb.Set(ctx, "job:shots:"+jobID, fmt.Sprintf("%d", req.Shots), 24*time.Hour).Err(); err != nil {
+			return nil, err
+		}
 
-	score := float64(int64(job.Priority)*1000000 - now)
-	if err := s.rdb.ZAdd(ctx, "queue:jobs", &redis.Z{
-		Score:  score,
-		Member: jobID,
-	}).Err(); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to queue job: %v", err)
-	}
+		score := float64(int64(job.Priority)*1000000 - now)
+		if err := s.rdb.ZAdd(ctx, "queue:jobs", &redis.Z{
+			Score:  score,
+			Member: jobID,
+		}).Err(); err != nil {
+			return nil, err
+		}
 
-	// Secondary index for O(log n) ListJobs lookups
-	s.rdb.ZAdd(ctx, "index:jobs:all", &redis.Z{
-		Score:  float64(now),
-		Member: jobID,
+		// Secondary index for O(log n) ListJobs lookups
+		s.rdb.ZAdd(ctx, "index:jobs:all", &redis.Z{
+			Score:  float64(now),
+			Member: jobID,
+		})
+		
+		return nil, nil
 	})
+
+	if err != nil {
+		return nil, status.Errorf(codes.Unavailable, "redis temporarily unavailable: %v", err)
+	}
 
 	queueLen, _ := s.rdb.ZCard(ctx, "queue:jobs").Result()
 	estimatedWait := int32(queueLen) * 2
@@ -372,8 +408,25 @@ func (s *SchedulerServer) StreamJobResults(handle *pb.JobHandle, stream pb.Quant
 
 // collectMetrics gathers real system and queue metrics from the Go runtime and Redis.
 func (s *SchedulerServer) collectMetrics(ctx context.Context) *pb.ClusterMetricsResponse {
-	queueLen, _ := s.rdb.ZCard(ctx, "queue:jobs").Result()
-	runningCount, _ := s.rdb.HLen(ctx, "jobs:processing").Result()
+	var queueLen, runningCount int64
+
+	v, err := s.cb.Execute(func() (interface{}, error) {
+		qLen, err := s.rdb.ZCard(ctx, "queue:jobs").Result()
+		if err != nil {
+			return nil, err
+		}
+		rCount, err := s.rdb.HLen(ctx, "jobs:processing").Result()
+		if err != nil {
+			return nil, err
+		}
+		return []int64{qLen, rCount}, nil
+	})
+	
+	if err == nil {
+		counts := v.([]int64)
+		queueLen = counts[0]
+		runningCount = counts[1]
+	}
 
 	// Real memory usage from Go runtime
 	var memStats runtime.MemStats

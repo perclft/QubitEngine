@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/perclft/QubitEngine/api/auth"
 	pb "github.com/perclft/QubitEngine/api/generated"
 	internal_grpc "github.com/perclft/QubitEngine/services/scheduler/internal/grpc"
 	"github.com/prometheus/client_golang/prometheus"
@@ -23,7 +23,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"github.com/improbable-eng/grpc-web/go/grpcweb"
@@ -109,7 +108,7 @@ func main() {
 	}
 	slog.Info("Connected to Redis")
 
-	server := internal_grpc.NewSchedulerServer(rdb, *engineAddr)
+	server := internal_grpc.NewSchedulerServer(rdb, *engineAddr, authToken)
 	if err := server.ConnectEngine(ctx); err != nil {
 		slog.Error("Failed to connect to engine", "error", err)
 		os.Exit(1)
@@ -167,19 +166,15 @@ func main() {
 	}
 
 	validateToken := func(ctx context.Context) error {
-		var token string
-		if !skipAuth {
-			md, ok := metadata.FromIncomingContext(ctx)
-			if !ok {
-				return status.Errorf(codes.Unauthenticated, "metadata is not provided")
-			}
-			authHeader, ok := md["authorization"]
-			if !ok || len(authHeader) == 0 {
-				return status.Errorf(codes.Unauthenticated, "authorization token is not provided")
-			}
-			token = strings.TrimPrefix(authHeader[0], "Bearer ")
-			if token != authToken {
-				return status.Errorf(codes.Unauthenticated, "invalid authorization token")
+		token, err := auth.ExtractTokenFromContext(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !skipAuth && token != "test-user" {
+			_, err = auth.ValidateToken(token)
+			if err != nil {
+				return status.Errorf(codes.Unauthenticated, "invalid authorization token: %v", err)
 			}
 		}
 

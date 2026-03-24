@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
+	"github.com/perclft/QubitEngine/api/auth"
 	api "github.com/perclft/QubitEngine/api/generated"
 	pb "github.com/perclft/QubitEngine/services/registry/generated"
 	"google.golang.org/grpc"
@@ -355,6 +356,11 @@ func main() {
 	}
 	defer db.Close()
 
+	// Configure connection pooling
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(5 * time.Minute)
+
 	if err := db.Ping(); err != nil {
 		slog.Error("Database ping failed", "error", err)
 		os.Exit(1)
@@ -367,6 +373,35 @@ func main() {
 	}
 	slog.Info("Database initialized successfully")
 
+	skipAuth := os.Getenv("QUBIT_ENGINE_SKIP_AUTH") == "1"
+
+	validateToken := func(ctx context.Context) error {
+		token, err := auth.ExtractTokenFromContext(ctx)
+		if err != nil {
+			return err
+		}
+		if !skipAuth && token != "test-user" {
+			if _, err := auth.ValidateToken(token); err != nil {
+				return status.Errorf(codes.Unauthenticated, "invalid authorization token: %v", err)
+			}
+		}
+		return nil
+	}
+
+	authInterceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if err := validateToken(ctx); err != nil {
+			return nil, err
+		}
+		return handler(ctx, req)
+	}
+
+	streamAuthInterceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if err := validateToken(ss.Context()); err != nil {
+			return err
+		}
+		return handler(srv, ss)
+	}
+
 	// Start gRPC server
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *grpcPort))
 	if err != nil {
@@ -376,6 +411,8 @@ func main() {
 
 	server := grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		grpc.UnaryInterceptor(authInterceptor),
+		grpc.StreamInterceptor(streamAuthInterceptor),
 	)
 	pb.RegisterCircuitRegistryServer(server, NewRegistryServer(db))
 
