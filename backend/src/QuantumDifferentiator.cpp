@@ -104,7 +104,8 @@ std::vector<double> QuantumDifferentiator::calculateGradients(
 #endif
 
   // SCALAR FALLBACK / SINGLE NODE EXECUTION
-  for (size_t i = 0; i < num_params; ++i) {
+#pragma omp parallel for
+  for (int i = 0; i < static_cast<int>(num_params); ++i) {
     std::vector<double> params_plus = current_params;
     params_plus[i] += SHIFT;
     double energy_plus =

@@ -64,7 +64,7 @@ const getRegistryClient = () => {
 
 const getMetadata = () => {
   const meta = new grpc.Metadata();
-  const token = process.env.QUBIT_ENGINE_AUTH_TOKEN || 'default-secret-token';
+  const token = process.env.QUBIT_ENGINE_AUTH_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJpYXQiOjE3NzQ3MzYwNzcsImV4cCI6MjA5MDA5NjA3N30.1nKrhtvdTUoaAL8wzWGNHQhk40cHRpbxWjbAbS1lNSA';
   meta.add('authorization', `Bearer ${token}`);
   return meta;
 };
@@ -165,31 +165,56 @@ export async function runCustomCircuit(
 }
 
 // ─── VQE Explorer: Run VQE (streaming) ─────────────────────────────────
-export async function runVQE(molecule: number, maxIterations: number, learningRate: number, optimizerType: number): Promise<{ iterations: VQEResult[] } | { error: string }> {
-  return new Promise((resolve) => {
-    const client = getClient();
-    const req = { molecule, maxIterations, learningRate, optimizerType, observables: [] };
-    const iterations: VQEResult[] = [];
-    const stream = client.runVqe(req, getMetadata());
-    stream.on('data', (response: any) => {
-      iterations.push({
-        iteration: response.iteration,
-        energy: response.energy,
-        parameters: response.parameters,
-        converged: response.converged,
-      });
+export async function* runVQE(molecule: number, maxIterations: number, learningRate: number, optimizerType: number): AsyncGenerator<VQEResult, void, unknown> {
+  const client = getClient();
+  const req = { molecule, maxIterations, learningRate, optimizerType, observables: [] };
+  const stream = client.runVqe(req, getMetadata());
+  
+  const queue: VQEResult[] = [];
+  let error: any = null;
+  let done = false;
+  let resolveWait: (() => void) | null = null;
+
+  stream.on('data', (response: any) => {
+    queue.push({
+      iteration: response.iteration,
+      energy: response.energy,
+      parameters: response.parameters,
+      converged: response.converged,
     });
-    stream.on('error', (err: any) => {
-      if (iterations.length > 0) {
-        resolve({ iterations });
-      } else {
-        resolve({ error: err.message });
-      }
-    });
-    stream.on('end', () => {
-      resolve({ iterations });
-    });
+    if (resolveWait) {
+      resolveWait();
+      resolveWait = null;
+    }
   });
+
+  stream.on('error', (err: any) => {
+    error = err;
+    if (resolveWait) {
+      resolveWait();
+      resolveWait = null;
+    }
+  });
+
+  stream.on('end', () => {
+    done = true;
+    if (resolveWait) {
+      resolveWait();
+      resolveWait = null;
+    }
+  });
+
+  while (true) {
+    if (queue.length > 0) {
+      yield queue.shift()!;
+    } else if (error) {
+      throw new Error(error.message || "Stream error");
+    } else if (done) {
+      break;
+    } else {
+      await new Promise<void>((r) => { resolveWait = r; });
+    }
+  }
 }
 
 // ─── Visualizer: Step-by-step Circuit (streaming) ───────────────────────

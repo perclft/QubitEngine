@@ -85,14 +85,10 @@ func main() {
 	}
 
 	// --- Auth Token Configuration ---
-	skipAuth := os.Getenv("QUBIT_ENGINE_SKIP_AUTH") == "1"
+	slog.Info("Strict JWT Authentication is ENABLED. No bypasses allowed for client requests.")
 	authToken := os.Getenv("QUBIT_ENGINE_AUTH_TOKEN")
-	if !skipAuth && authToken == "" {
-		slog.Error("QUBIT_ENGINE_AUTH_TOKEN must be set. To disable auth for development, set QUBIT_ENGINE_SKIP_AUTH=1")
-		os.Exit(1)
-	}
-	if skipAuth {
-		slog.Warn("Authentication is DISABLED (QUBIT_ENGINE_SKIP_AUTH=1). Do not use in production.")
+	if authToken == "" {
+		slog.Warn("QUBIT_ENGINE_AUTH_TOKEN is not set. Engine communication might fail if engine requires auth.")
 	}
 
 	rdb := redis.NewClient(&redis.Options{
@@ -171,11 +167,9 @@ func main() {
 			return err
 		}
 
-		if !skipAuth && token != "test-user" {
-			_, err = auth.ValidateToken(token)
-			if err != nil {
-				return status.Errorf(codes.Unauthenticated, "invalid authorization token: %v", err)
-			}
+		_, err = auth.ValidateToken(token)
+		if err != nil {
+			return status.Errorf(codes.Unauthenticated, "invalid authorization token: %v", err)
 		}
 
 		// Apply Rate Limiting

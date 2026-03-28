@@ -67,8 +67,6 @@ services:
       dockerfile: services/scheduler/Dockerfile
     ports:
       - "50053:50053"
-    environment:
-      - QUBIT_ENGINE_SKIP_AUTH=1
     env_file:
       - ../../.env
     command: ["-redis-addr", "redis:6379", "-engine-addr", "engine:50051"]

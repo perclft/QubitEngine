@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/perclft/QubitEngine/api/auth"
 	pb "github.com/perclft/QubitEngine/api/generated"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -31,11 +32,16 @@ func main() {
 	var conn *grpc.ClientConn
 	var err error
 	
+	token, err := auth.GenerateToken("test-user", 24*time.Hour)
+	if err != nil {
+		log.Fatalf("Failed to generate token: %v", err)
+	}
+	
 	// The cluster might take a few seconds to boot up entirely.
 	for i := 0; i < 15; i++ {
 		conn, err = grpc.Dial("localhost:50053", 
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithPerRPCCredentials(tokenAuth{token: "qubit_engine_auth_token"}),
+			grpc.WithPerRPCCredentials(tokenAuth{token: token}),
 			grpc.WithBlock(),
 		)
 		if err == nil {

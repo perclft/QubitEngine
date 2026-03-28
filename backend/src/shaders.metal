@@ -228,9 +228,6 @@ kernel void phases_kernel(device Complex* state [[buffer(0)]],
     state[k] = res_b;
 }
 
-// Phase T Kernel (Z rotation by PI/4)
-// T = [1 0; 0 e^i*pi/4]
-// e^i*pi/4 = cos(pi/4) + i*sin(pi/4) = 1/sqrt(2) + i/sqrt(2)
 kernel void phaset_kernel(device Complex* state [[buffer(0)]],
                           constant uint& stride [[buffer(1)]],
                           uint id [[thread_position_in_grid]]) {
@@ -250,4 +247,87 @@ kernel void phaset_kernel(device Complex* state [[buffer(0)]],
     res_b.imag = (b.real + b.imag) * INV_SQRT_2;
     
     state[k] = res_b;
+}
+
+// Partial Reduction Kernel for Probability of |0> on a specific qubit
+kernel void measure_prob0_kernel(device Complex* state [[buffer(0)]],
+                                 constant uint& stride [[buffer(1)]],
+                                 device float* partial_sums [[buffer(2)]],
+                                 uint id [[thread_position_in_grid]],
+                                 uint tid [[thread_position_in_threadgroup]],
+                                 uint gid [[threadgroup_position_in_grid]],
+                                 uint threads_per_group [[threads_per_threadgroup]],
+                                 uint total_threads [[threads_per_grid]]) {
+    threadgroup float local_sum[1024];
+
+    float prob = 0.0f;
+    if (id < total_threads) {
+        if ((id & stride) == 0) {
+            prob = state[id].real * state[id].real + state[id].imag * state[id].imag;
+        }
+    }
+    local_sum[tid] = prob;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Reduction
+    for (uint s = threads_per_group / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            local_sum[tid] += local_sum[tid + s];
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+    
+    if (tid == 0) {
+        partial_sums[gid] = local_sum[0];
+    }
+}
+
+// Normalization and Projection Kernel
+kernel void project_state_kernel(device Complex* state [[buffer(0)]],
+                                 constant uint& stride [[buffer(1)]],
+                                 constant uint& outcome [[buffer(2)]],
+                                 constant float& norm [[buffer(3)]],
+                                 uint id [[thread_position_in_grid]],
+                                 uint total_threads [[threads_per_grid]]) {
+    if (id < total_threads) {
+        bool is_one = (id & stride) != 0;
+        if ((outcome == 0 && is_one) || (outcome == 1 && !is_one)) {
+            state[id].real = 0.0f;
+            state[id].imag = 0.0f;
+        } else {
+            state[id].real /= norm;
+            state[id].imag /= norm;
+        }
+    }
+}
+
+// Expectation Z Kernel (for generic diagonal observables or simple Z reduction)
+kernel void expectation_z_kernel(device Complex* state [[buffer(0)]],
+                                 constant uint& stride [[buffer(1)]],
+                                 device float* partial_sums [[buffer(2)]],
+                                 uint id [[thread_position_in_grid]],
+                                 uint tid [[thread_position_in_threadgroup]],
+                                 uint gid [[threadgroup_position_in_grid]],
+                                 uint threads_per_group [[threads_per_threadgroup]],
+                                 uint total_threads [[threads_per_grid]]) {
+    threadgroup float local_sum[1024];
+    float val = 0.0f;
+    if (id < total_threads) {
+        float prob = state[id].real * state[id].real + state[id].imag * state[id].imag;
+        if (id & stride) val = -prob;
+        else val = prob;
+    }
+    local_sum[tid] = val;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    for (uint s = threads_per_group / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            local_sum[tid] += local_sum[tid + s];
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+    
+    if (tid == 0) {
+        partial_sums[gid] = local_sum[0];
+    }
 }

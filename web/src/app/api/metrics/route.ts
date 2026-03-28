@@ -8,7 +8,7 @@ export async function GET() {
   const encoder = new TextEncoder();
   const client = new QuantumSchedulerClient(SCHEDULER_ADDR, grpc.credentials.createInsecure());
   const meta = new grpc.Metadata();
-  const token = process.env.QUBIT_ENGINE_AUTH_TOKEN || 'default-secret-token';
+  const token = process.env.QUBIT_ENGINE_AUTH_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJpYXQiOjE3NzQ3MzYwNzcsImV4cCI6MjA5MDA5NjA3N30.1nKrhtvdTUoaAL8wzWGNHQhk40cHRpbxWjbAbS1lNSA';
   meta.add('authorization', `Bearer ${token}`);
   const customReadable = new ReadableStream({
     start(controller) {

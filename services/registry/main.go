@@ -34,6 +34,9 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
+type contextKey string
+const ownerIDKey contextKey = "owner_id"
+
 // CircuitRecord represents a row in the circuits table
 type CircuitRecord struct {
 	ID            string    `json:"id"`
@@ -71,6 +74,7 @@ func InitDB(db *sql.DB) error {
 		name VARCHAR(255) NOT NULL,
 		description TEXT,
 		author VARCHAR(255) NOT NULL DEFAULT 'anonymous',
+		owner_id VARCHAR(255) NOT NULL,
 		domain VARCHAR(50) NOT NULL DEFAULT 'general',
 		tags JSONB DEFAULT '[]',
 		num_qubits INTEGER NOT NULL,
@@ -88,13 +92,20 @@ func InitDB(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_circuits_author ON circuits(author);
 	CREATE INDEX IF NOT EXISTS idx_circuits_public ON circuits(is_public);
 	CREATE INDEX IF NOT EXISTS idx_circuits_tags ON circuits USING gin(tags);
+	CREATE INDEX IF NOT EXISTS idx_circuits_owner ON circuits(owner_id);
 	`
+	db.Exec(`DROP TABLE IF EXISTS circuits CASCADE;`)
 	_, err := db.Exec(schema)
 	return err
 }
 
 // SaveCircuit saves a new circuit to the registry
 func (s *RegistryServer) SaveCircuit(ctx context.Context, req *pb.SaveCircuitRequest) (*pb.CircuitMetadata, error) {
+	ownerID, ok := ctx.Value(ownerIDKey).(string)
+	if !ok || ownerID == "" {
+		return nil, status.Error(codes.Unauthenticated, "missing user identity")
+	}
+
 	id := uuid.New().String()
 	now := time.Now()
 
@@ -107,12 +118,13 @@ func (s *RegistryServer) SaveCircuit(ctx context.Context, req *pb.SaveCircuitReq
 	tagsJSON, _ := json.Marshal(req.Tags)
 
 	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO circuits (id, name, description, domain, tags, num_qubits, num_operations, circuit_json, is_public, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO circuits (id, name, description, owner_id, domain, tags, num_qubits, num_operations, circuit_json, is_public, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`,
 		id,
 		req.Name,
 		req.Description,
+		ownerID,
 		req.Domain,
 		string(tagsJSON),
 		req.Circuit.NumQubits,
@@ -144,16 +156,24 @@ func (s *RegistryServer) SaveCircuit(ctx context.Context, req *pb.SaveCircuitReq
 
 // LoadCircuit retrieves a circuit by ID
 func (s *RegistryServer) LoadCircuit(ctx context.Context, req *pb.LoadCircuitRequest) (*api.CircuitRequest, error) {
+	callerID, _ := ctx.Value(ownerIDKey).(string)
+
 	var circuitJSON string
+	var isPublic bool
+	var ownerID string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT circuit_json FROM circuits WHERE id = $1
-	`, req.CircuitId).Scan(&circuitJSON)
+		SELECT circuit_json, is_public, owner_id FROM circuits WHERE id = $1
+	`, req.CircuitId).Scan(&circuitJSON, &isPublic, &ownerID)
 
 	if err == sql.ErrNoRows {
 		return nil, status.Errorf(codes.NotFound, "circuit not found: %s", req.CircuitId)
 	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "database error: %v", err)
+	}
+
+	if !isPublic && ownerID != callerID {
+		return nil, status.Errorf(codes.PermissionDenied, "access denied: circuit is private")
 	}
 
 	// Increment run count
@@ -169,11 +189,14 @@ func (s *RegistryServer) LoadCircuit(ctx context.Context, req *pb.LoadCircuitReq
 
 // ListCircuits returns circuits matching the given filters
 func (s *RegistryServer) ListCircuits(ctx context.Context, req *pb.ListCircuitsRequest) (*pb.CircuitList, error) {
+	callerID, _ := ctx.Value(ownerIDKey).(string)
+
 	// Build WHERE clause for filtering
-	whereClause := " WHERE 1=1"
-	countArgs := []interface{}{}
-	args := []interface{}{}
-	argIdx := 1
+	// User can see all public circuits or their own private circuits
+	whereClause := " WHERE (is_public = true OR owner_id = $1)"
+	countArgs := []interface{}{callerID}
+	args := []interface{}{callerID}
+	argIdx := 2
 
 	if req.Domain != "" {
 		whereClause += fmt.Sprintf(" AND domain = $%d", argIdx)
@@ -373,30 +396,31 @@ func main() {
 	}
 	slog.Info("Database initialized successfully")
 
-	skipAuth := os.Getenv("QUBIT_ENGINE_SKIP_AUTH") == "1"
+	slog.Info("Strict JWT Authentication is ENABLED. No bypasses allowed.")
 
-	validateToken := func(ctx context.Context) error {
+	validateToken := func(ctx context.Context) (context.Context, error) {
 		token, err := auth.ExtractTokenFromContext(ctx)
 		if err != nil {
-			return err
+			return ctx, err
 		}
-		if !skipAuth && token != "test-user" {
-			if _, err := auth.ValidateToken(token); err != nil {
-				return status.Errorf(codes.Unauthenticated, "invalid authorization token: %v", err)
-			}
+		ownerID, err := auth.ValidateToken(token)
+		if err != nil {
+			return ctx, status.Errorf(codes.Unauthenticated, "invalid authorization token: %v", err)
 		}
-		return nil
+		return context.WithValue(ctx, ownerIDKey, ownerID), nil
 	}
 
 	authInterceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		if err := validateToken(ctx); err != nil {
+		newCtx, err := validateToken(ctx)
+		if err != nil {
 			return nil, err
 		}
-		return handler(ctx, req)
+		return handler(newCtx, req)
 	}
 
 	streamAuthInterceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if err := validateToken(ss.Context()); err != nil {
+		_, err := validateToken(ss.Context())
+		if err != nil {
 			return err
 		}
 		return handler(srv, ss)

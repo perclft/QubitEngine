@@ -50,11 +50,6 @@ func ValidateToken(tokenString string) (string, error) {
 }
 
 func ExtractTokenFromContext(ctx context.Context) (string, error) {
-	// Skip auth for testing
-	if skip := os.Getenv("QUBIT_ENGINE_SKIP_AUTH"); skip == "1" {
-		return "test-user", nil
-	}
-
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return "", status.Errorf(codes.Unauthenticated, "missing metadata")

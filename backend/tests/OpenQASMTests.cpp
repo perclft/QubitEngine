@@ -93,6 +93,21 @@ TEST(QASMParserTest, ParsePiParameter) {
   EXPECT_NEAR(circuit.gates[0].params[0], M_PI, 1e-10);
 }
 
+TEST(QASMParserTest, ParseMathExpression) {
+  QASMParser parser;
+  std::string code = R"(
+    OPENQASM 3.0;
+    qubit[1] q;
+    rz(pi/2 + 0.1 * 2) q[0];
+  )";
+
+  auto circuit = parser.parse(code);
+
+  ASSERT_EQ(circuit.gates.size(), 1);
+  ASSERT_EQ(circuit.gates[0].params.size(), 1);
+  EXPECT_NEAR(circuit.gates[0].params[0], M_PI/2 + 0.2, 1e-10);
+}
+
 TEST(QASMParserTest, SkipsComments) {
   QASMParser parser;
   std::string code = R"(

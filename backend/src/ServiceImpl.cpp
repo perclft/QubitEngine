@@ -4,6 +4,7 @@
 #include "ConfigManager.hpp"
 #include <atomic>
 #include "QuantumRegister.hpp"
+#include "QuantumJIT.hpp"
 #include "Exceptions.hpp"
 #include "ipc/SharedMemory.hpp"
 #include <cmath>
@@ -248,10 +249,42 @@ QubitEngineServiceImpl::RunCircuit(grpc::ServerContext *context,
           ops.push_back(request->operations(i));
         }
 
+        qubit_engine::jit::QuantumJIT jit_compiler(qubit_engine::jit::QuantumJIT::O2);
+
         auto compile_chunk =
-            [](const std::vector<qubit_engine::GateOperation> &ch) {
-              // Pre-compilation / routing logic goes here (mock delay for
-              // structure)
+            [&jit_compiler, n](const std::vector<qubit_engine::GateOperation> &ch) {
+              std::vector<std::pair<std::string, std::vector<int>>> str_gates;
+              std::vector<double> params;
+              for (const auto& op : ch) {
+                  std::string name;
+                  std::vector<int> qbs = { static_cast<int>(op.target_qubit()) };
+                  
+                  switch(op.type()) {
+                      case qubit_engine::GateOperation::HADAMARD: name = "H"; break;
+                      case qubit_engine::GateOperation::PAULI_X: name = "X"; break;
+                      case qubit_engine::GateOperation::PAULI_Y: name = "Y"; break;
+                      case qubit_engine::GateOperation::PAULI_Z: name = "Z"; break;
+                      case qubit_engine::GateOperation::CNOT: name = "CX"; qbs.push_back(op.control_qubit()); break;
+                      case qubit_engine::GateOperation::CZ: name = "CZ"; qbs.push_back(op.control_qubit()); break;
+                      case qubit_engine::GateOperation::SWAP: name = "SWAP"; qbs.push_back(op.second_target_qubit()); break;
+                      case qubit_engine::GateOperation::ROTATION_X: name = "RX"; break;
+                      case qubit_engine::GateOperation::ROTATION_Y: name = "RY"; break;
+                      case qubit_engine::GateOperation::ROTATION_Z: name = "RZ"; break;
+                      case qubit_engine::GateOperation::PHASE_S: name = "S"; break;
+                      case qubit_engine::GateOperation::PHASE_T: name = "T"; break;
+                      default: name = "U"; break;
+                  }
+                  
+                  str_gates.push_back({name, qbs});
+                  params.push_back(op.angle());
+              }
+              
+              // Perform JIT compilation pass
+              auto ir = jit_compiler.compile(n, str_gates, params);
+              spdlog::info("JIT Compilation pass completed. Expected Speedup: {:.2f}x", ir.stats.expected_speedup);
+              
+              // Backend applyDenseUnitary is not yet supported globally. 
+              // Return logical chunk for standard dispatch.
               return ch;
             };
 

@@ -85,6 +85,26 @@ jobs:
         with:
           name: benchmark-results-linux
           path: benchmark_results.txt
+          
+      - name: Check Benchmark Regression
+        run: |
+          python3 -c "
+          import re, sys
+          with open('benchmark_results.txt', 'r') as f:
+              results = f.read()
+          match = re.search(r'Effective Bandwidth:\s+([\d.]+)', results)
+          if not match:
+              print('Could not find benchmark bandwidth')
+              sys.exit(1)
+          bw = float(match.group(1))
+          with open('benchmarks/baseline.txt', 'r') as f:
+              baseline = float(f.read().strip())
+          print(f'Baseline: {baseline} GB/s, Current: {bw} GB/s')
+          if bw < baseline * 0.5: # 50% tolerance due to github runner variability
+              print('Regression detected!')
+              sys.exit(1)
+          print('Benchmark passed.')
+          "
 
   build-mac:
     runs-on: macos-14 # M1 ARM64 runner
@@ -315,3 +335,37 @@ jobs:
       - name: Build
         working-directory: web
         run: npm run build
+
+  e2e-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          
+      - name: Create .env file
+        run: cp .env.example .env
+
+      - name: Start Docker Compose Stack
+        run: docker compose -f deploy/docker/docker-compose.yaml up -d --build
+        
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for services to initialize..."
+          sleep 20
+          docker compose -f deploy/docker/docker-compose.yaml ps
+          
+      - name: Verify Web Frontend is up
+        run: |
+          curl --retry 5 --retry-connrefused --retry-delay 5 -s -o /dev/null -w "%{http_code}" http://localhost:3000 | grep -q '200'
+
+      - name: Verify Scheduler gRPC is up
+        run: |
+          cd services/scheduler && go run tests/e2e_ping/main.go
+          
+      - name: Docker Compose Logs (on failure)
+        if: failure()
+        run: docker compose -f deploy/docker/docker-compose.yaml logs

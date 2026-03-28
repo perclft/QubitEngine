@@ -1,7 +1,7 @@
 #include "OpenQASM.hpp"
 
-#include <regex>
 #include <sstream>
+#include <cctype>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -11,6 +11,95 @@ namespace qubit_engine {
 namespace qasm {
 
 // --- QASMParser ---
+
+namespace {
+
+// Helper to check if char is a valid identifier start
+bool is_id_start(char c) {
+  return std::isalpha(c) || c == '_';
+}
+
+// Helper for identifier body
+bool is_id_char(char c) {
+  return std::isalnum(c) || c == '_';
+}
+
+// Recursive descent math parser
+class MathParser {
+public:
+  MathParser(const std::string& str) : text(str), pos(0) {
+    skip_whitespace();
+  }
+
+  double parse_expression() {
+    double val = parse_term();
+    while (true) {
+      if (match('+')) val += parse_term();
+      else if (match('-')) val -= parse_term();
+      else break;
+    }
+    return val;
+  }
+
+private:
+  std::string text;
+  size_t pos;
+
+  void skip_whitespace() {
+    while (pos < text.size() && std::isspace(text[pos])) pos++;
+  }
+
+  bool match(char c) {
+    if (pos < text.size() && text[pos] == c) {
+      pos++;
+      skip_whitespace();
+      return true;
+    }
+    return false;
+  }
+
+  double parse_term() {
+    double val = parse_factor();
+    while (true) {
+      if (match('*')) val *= parse_factor();
+      else if (match('/')) val /= parse_factor();
+      else break;
+    }
+    return val;
+  }
+
+  double parse_factor() {
+    if (match('+')) return parse_factor();
+    if (match('-')) return -parse_factor();
+    if (match('(')) {
+      double val = parse_expression();
+      match(')'); // Expect closing paren
+      return val;
+    }
+
+    // Try parsing 'pi'
+    if (pos + 1 < text.size() && text[pos] == 'p' && text[pos+1] == 'i') {
+      pos += 2;
+      skip_whitespace();
+      return M_PI;
+    }
+
+    // Try parsing number
+    size_t end;
+    double val = 0.0;
+    try {
+      val = std::stod(text.substr(pos), &end);
+      pos += end;
+      skip_whitespace();
+    } catch (...) {
+      // Return 0 on parsing failure
+      val = 0.0;
+    }
+    return val;
+  }
+};
+
+} // namespace
 
 QASMCircuit QASMParser::parse(const std::string &qasm_code) {
   QASMCircuit circuit;
@@ -23,35 +112,58 @@ QASMCircuit QASMParser::parse(const std::string &qasm_code) {
 
   while (std::getline(stream, line)) {
     line = trim(line);
-    if (line.empty() || line[0] == '/')
+    if (line.empty() || line[0] == '/' && line[1] == '/')
       continue;
 
-    if (line.find("OPENQASM") != std::string::npos) {
-      // Version declaration
-      std::regex version_re("OPENQASM\\s+([\\d.]+)");
-      std::smatch match;
-      if (std::regex_search(line, match, version_re)) {
-        circuit.version = match[1];
+    // manual tokenizer for the line
+    size_t i = 0;
+    auto skip_ws = [&]() { while(i < line.size() && std::isspace(line[i])) i++; };
+    auto read_id = [&]() {
+      size_t start = i;
+      while(i < line.size() && is_id_char(line[i])) i++;
+      return line.substr(start, i - start);
+    };
+
+    skip_ws();
+    if (i >= line.size()) continue;
+
+    std::string kw = read_id();
+    
+    if (kw == "OPENQASM") {
+      skip_ws();
+      size_t start = i;
+      while(i < line.size() && (std::isdigit(line[i]) || line[i] == '.')) i++;
+      if (start < i) {
+        circuit.version = line.substr(start, i - start);
       }
-    } else if (line.find("qubit") != std::string::npos) {
-      // Qubit declaration: qubit[4] q;
-      std::regex qubit_re("qubit\\[(\\d+)\\]\\s+(\\w+)");
-      std::smatch match;
-      if (std::regex_search(line, match, qubit_re)) {
-        int size = std::stoi(match[1]);
-        std::string name = match[2];
-        for (int i = 0; i < size; i++) {
-          circuit.qubit_map[name + "[" + std::to_string(i) + "]"] =
-              circuit.num_qubits++;
+    } else if (kw == "qubit" || kw == "qreg") {
+      skip_ws();
+      if (i < line.size() && line[i] == '[') {
+        i++;
+        skip_ws();
+        size_t start = i;
+        while(i < line.size() && std::isdigit(line[i])) i++;
+        int size = std::stoi(line.substr(start, i - start));
+        skip_ws();
+        if (i < line.size() && line[i] == ']') i++;
+        skip_ws();
+        std::string name = read_id();
+        for (int q = 0; q < size; q++) {
+          circuit.qubit_map[name + "[" + std::to_string(q) + "]"] = circuit.num_qubits++;
         }
       }
-    } else if (line.find("bit") != std::string::npos) {
-      // Classical bit declaration
-      std::regex bit_re("bit\\[(\\d+)\\]");
-      std::smatch match;
-      if (std::regex_search(line, match, bit_re)) {
-        circuit.num_classical = std::stoi(match[1]);
+    } else if (kw == "bit" || kw == "creg") {
+      skip_ws();
+      if (i < line.size() && line[i] == '[') {
+        i++;
+        skip_ws();
+        size_t start = i;
+        while(i < line.size() && std::isdigit(line[i])) i++;
+        int size = std::stoi(line.substr(start, i - start));
+        circuit.num_classical = size;
       }
+    } else if (kw == "include") {
+      // ignore
     } else {
       // Gate instruction
       QASMGate gate = parse_gate(line, circuit.qubit_map);
@@ -73,44 +185,79 @@ std::string QASMParser::trim(const std::string &s) {
 QASMGate QASMParser::parse_gate(const std::string &line,
                                 const std::map<std::string, int> &qubit_map) {
   QASMGate gate;
+  size_t i = 0;
+  auto skip_ws = [&]() { while(i < line.size() && std::isspace(line[i])) i++; };
+  
+  skip_ws();
+  if (i >= line.size()) return gate;
 
-  // Match gate with optional parameters: gate_name(params) qubit1, qubit2
-  std::regex gate_re("(\\w+)(?:\\(([^)]+)\\))?\\s+(.+)");
-  std::smatch match;
+  // Read gate name
+  size_t start = i;
+  while(i < line.size() && is_id_char(line[i])) i++;
+  gate.name = line.substr(start, i - start);
 
-  if (!std::regex_match(line, match, gate_re)) {
-    return gate;
-  }
-
-  gate.name = match[1];
-
-  // Parse parameters
-  if (match[2].matched) {
-    std::string params_str = match[2];
-    std::regex param_re("([\\d.e+-]+|pi)");
-    std::sregex_iterator it(params_str.begin(), params_str.end(), param_re);
-    std::sregex_iterator end;
-    for (; it != end; ++it) {
-      std::string p = (*it)[1];
-      if (p == "pi") {
-        gate.params.push_back(M_PI);
-      } else {
-        gate.params.push_back(std::stod(p));
+  skip_ws();
+  
+  // Parse parameters if '('
+  if (i < line.size() && line[i] == '(') {
+    i++; // Skip '('
+    size_t end_paren = line.find(')', i);
+    if (end_paren != std::string::npos) {
+      std::string params_str = line.substr(i, end_paren - i);
+      i = end_paren + 1;
+      
+      // Tokenize by comma and parse each math expression
+      size_t p_start = 0;
+      while (p_start < params_str.size()) {
+        size_t comma = params_str.find(',', p_start);
+        std::string expr;
+        if (comma == std::string::npos) {
+          expr = params_str.substr(p_start);
+          p_start = params_str.size();
+        } else {
+          expr = params_str.substr(p_start, comma - p_start);
+          p_start = comma + 1;
+        }
+        MathParser p(expr);
+        gate.params.push_back(p.parse_expression());
       }
     }
   }
 
-  // Parse qubits
-  std::string qubits_str = match[3];
-  std::regex qubit_ref_re("(\\w+\\[\\d+\\])");
-  std::sregex_iterator qit(qubits_str.begin(), qubits_str.end(), qubit_ref_re);
-  std::sregex_iterator qend;
-  for (; qit != qend; ++qit) {
-    std::string qubit_name = (*qit)[1];
-    auto it = qubit_map.find(qubit_name);
-    if (it != qubit_map.end()) {
-      gate.qubits.push_back(it->second);
+  // Parse qubits (e.g. q[0], q[1])
+  while (i < line.size() && line[i] != ';') {
+    skip_ws();
+    if (i >= line.size() || line[i] == ';') break;
+
+    if (line[i] == ',') {
+      i++;
+      continue;
     }
+
+    // Read qubit register name
+    start = i;
+    while(i < line.size() && is_id_char(line[i])) i++;
+    std::string q_name = line.substr(start, i - start);
+    
+    skip_ws();
+    if (i < line.size() && line[i] == '[') {
+      i++;
+      skip_ws();
+      start = i;
+      while(i < line.size() && std::isdigit(line[i])) i++;
+      std::string idx = line.substr(start, i - start);
+      skip_ws();
+      if (i < line.size() && line[i] == ']') i++;
+      
+      std::string full_q_name = q_name + "[" + idx + "]";
+      auto it = qubit_map.find(full_q_name);
+      if (it != qubit_map.end()) {
+        gate.qubits.push_back(it->second);
+      }
+    }
+    
+    skip_ws();
+    if (i < line.size() && line[i] == ',') i++; // Skip comma
   }
 
   return gate;
