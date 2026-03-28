@@ -390,6 +390,7 @@ add_executable(tests
     tests/GPUQuantumRegisterTests.cpp
     tests/MPSBackendTests.cpp
     tests/StabilizerBackendTests.cpp
+    tests/SecurityIntegrationTests.cpp
 )
 
 # Service tests need gRPC generated headers + ServiceImpl sources

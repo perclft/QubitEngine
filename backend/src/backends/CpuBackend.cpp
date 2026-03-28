@@ -467,6 +467,7 @@ void CpuBackend::applyPhaseS(size_t target) {
 void CpuBackend::applyPhaseT(size_t target) {
   size_t local_dim = state.size();
   size_t stride = 1ULL << target;
+  // T-gate phase: e^{iπ/4} = cos(π/4) + i*sin(π/4) = 1/√2 + i/√2
   Complex phase(1.0f / std::sqrt(2.0f), 1.0f / std::sqrt(2.0f));
 
   if (stride < local_dim) {
@@ -726,6 +727,62 @@ double CpuBackend::expectationValue(const std::string &pauli_string) {
 
 std::vector<Complex> CpuBackend::getStateVector() const {
   return std::vector<Complex>(state.begin(), state.end());
+}
+
+void CpuBackend::applyDenseUnitary(const std::vector<size_t> &targets,
+                                   const std::vector<Complex> &matrix) {
+  if (targets.size() == 1) {
+    size_t t0 = targets[0];
+    size_t stride = 1ULL << t0;
+    size_t dim = 1ULL << num_qubits;
+
+#pragma omp parallel for
+    for (size_t i = 0; i < dim; i += 2 * stride) {
+      for (size_t j = 0; j < stride; ++j) {
+        size_t idx0 = i + j;
+        size_t idx1 = i + j + stride;
+        Complex a = state[idx0];
+        Complex b = state[idx1];
+        state[idx0] = matrix[0] * a + matrix[1] * b;
+        state[idx1] = matrix[2] * a + matrix[3] * b;
+      }
+    }
+  } else if (targets.size() == 2) {
+    size_t t1 = targets[0];
+    size_t t2 = targets[1];
+    // Ensure t1 < t2 for consistent iteration if needed, or just use masks
+    size_t low = std::min(t1, t2);
+    size_t high = std::max(t1, t2);
+    size_t dim = 1ULL << num_qubits;
+
+#pragma omp parallel for
+    for (size_t i = 0; i < dim; ++i) {
+      if (!(i & (1ULL << low)) && !(i & (1ULL << high))) {
+        size_t i00 = i;
+        size_t i01 = i | (1ULL << low);
+        size_t i10 = i | (1ULL << high);
+        size_t i11 = i | (1ULL << low) | (1ULL << high);
+
+        // Note: matrix mapping depends on targets order
+        // For targets {t1, t2}, basis is |t2 t1>: 00, 01, 10, 11
+        // indices: i00, i_(t1_set), i_(t2_set), i_(both_set)
+        // If targets={t1, t2}, then:
+        // index 0 -> |00>, index 1 -> |01>, index 2 -> |10>, index 3 -> |11>
+        // where rightmost bit is targets[0].
+        Complex v00 = state[i00];
+        Complex v01 = state[i01];
+        Complex v10 = state[i10];
+        Complex v11 = state[i11];
+
+        state[i00] = matrix[0] * v00 + matrix[1] * v01 + matrix[2] * v10 + matrix[3] * v11;
+        state[i01] = matrix[4] * v00 + matrix[5] * v01 + matrix[6] * v10 + matrix[7] * v11;
+        state[i10] = matrix[8] * v00 + matrix[9] * v01 + matrix[10] * v10 + matrix[11] * v11;
+        state[i11] = matrix[12] * v00 + matrix[13] * v01 + matrix[14] * v10 + matrix[15] * v11;
+      }
+    }
+  } else {
+    throw std::runtime_error("applyDenseUnitary only implemented for 1 or 2 qubits in CPU backend currently.");
+  }
 }
 
 } // namespace qubit_engine

@@ -1,10 +1,15 @@
 #include "MetalBackend.hpp"
-
+#include "Types.hpp"
 #ifdef __APPLE__
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
-#include <cmath>
+#include <string>
+#include <vector>
+#include <memory>
+#include <complex>
 #include <iostream>
+#include <random>
+#include <cmath>
 
 // Metal GPU struct uses float; C++ Complex uses double.
 // We must convert explicitly during upload/download.
@@ -122,9 +127,14 @@ void MetalBackend::buildPipelines(void *libPtr) {
   ryPipeline_ = createPipe(@"ry_kernel");
   rzPipeline_ = createPipe(@"rz_kernel");
   cnotPipeline_ = createPipe(@"cnot_kernel");
+  toffoliPipeline_ = createPipe(@"toffoli_kernel");
   measureProb0Pipeline_ = createPipe(@"measure_prob0_kernel");
   projectStatePipeline_ = createPipe(@"project_state_kernel");
   expectationZPipeline_ = createPipe(@"expectation_z_kernel");
+  computeProbabilitiesPipeline_ = createPipe(@"compute_probabilities_kernel");
+  diagonalExpectationPipeline_ = createPipe(@"diagonal_expectation_kernel");
+  denseUnitary1qPipeline_ = createPipe(@"dense_unitary_1q_kernel");
+  denseUnitary2qPipeline_ = createPipe(@"dense_unitary_2q_kernel");
 }
 
 // --- Memory Management ---
@@ -323,31 +333,82 @@ void MetalBackend::applyPhaseT(size_t target) {
 }
 
 void MetalBackend::applyToffoli(size_t c1, size_t c2, size_t target) {
-  // Stilling stubbed for now until logic verified
+  if (c1 == target || c2 == target || c1 == c2)
+    throw std::invalid_argument("Control and target qubits must be distinct.");
+    
+  uint32_t t_stride = 1 << target;
+  uint32_t c1_stride = 1 << c1;
+  uint32_t c2_stride = 1 << c2;
+  size_t dim = 1ULL << num_qubits_;
+  
+  dispatchHelper(commandQueue_, toffoliPipeline_, gpuBuffer_, dim,
+                 {&t_stride, &c1_stride, &c2_stride}, {4, 4, 4});
 }
+
+void MetalBackend::applyDenseUnitary(const std::vector<size_t> &targets,
+                                   const std::vector<Complex> &matrix) {
+  size_t dim = 1ULL << num_qubits_;
+  if (targets.size() == 1) {
+    uint32_t stride = 1 << targets[0];
+    std::vector<MetalComplex> m(4);
+    for (int i = 0; i < 4; ++i) {
+        m[i].real = (float)matrix[i].real();
+        m[i].imag = (float)matrix[i].imag();
+    }
+    id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
+    id<MTLBuffer> mBuf = [device newBufferWithBytes:m.data() length:4*sizeof(MetalComplex) options:MTLResourceStorageModeShared];
+    id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)commandQueue_;
+    id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmdBuf computeCommandEncoder];
+    id<MTLComputePipelineState> pso = (__bridge id<MTLComputePipelineState>)denseUnitary1qPipeline_;
+    [enc setComputePipelineState:pso];
+    [enc setBuffer:(__bridge id<MTLBuffer>)gpuBuffer_ offset:0 atIndex:0];
+    [enc setBytes:&stride length:sizeof(uint32_t) atIndex:1];
+    [enc setBuffer:mBuf offset:0 atIndex:2];
+    [enc dispatchThreads:MTLSizeMake(dim/2, 1, 1) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
+    [enc endEncoding];
+    [cmdBuf commit];
+    if (lastCommandBuffer_) CFRelease(lastCommandBuffer_);
+    lastCommandBuffer_ = (void*)CFBridgingRetain(cmdBuf);
+  } else if (targets.size() == 2) {
+    uint32_t s_low = (uint32_t)targets[0];
+    uint32_t s_high = (uint32_t)targets[1];
+    if (s_low > s_high) std::swap(s_low, s_high);
+    std::vector<MetalComplex> m(16);
+    for (int i = 0; i < 16; ++i) {
+        m[i].real = (float)matrix[i].real();
+        m[i].imag = (float)matrix[i].imag();
+    }
+    id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
+    id<MTLBuffer> mBuf = [device newBufferWithBytes:m.data() length:16*sizeof(MetalComplex) options:MTLResourceStorageModeShared];
+    id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)commandQueue_;
+    id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmdBuf computeCommandEncoder];
+    id<MTLComputePipelineState> pso = (__bridge id<MTLComputePipelineState>)denseUnitary2qPipeline_;
+    [enc setComputePipelineState:pso];
+    [enc setBuffer:(__bridge id<MTLBuffer>)gpuBuffer_ offset:0 atIndex:0];
+    [enc setBytes:&s_low length:sizeof(uint32_t) atIndex:1];
+    [enc setBytes:&s_high length:sizeof(uint32_t) atIndex:2];
+    [enc setBuffer:mBuf offset:0 atIndex:3];
+    [enc dispatchThreads:MTLSizeMake(dim/4, 1, 1) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
+    [enc endEncoding];
+    [cmdBuf commit];
+    if (lastCommandBuffer_) CFRelease(lastCommandBuffer_);
+    lastCommandBuffer_ = (void*)CFBridgingRetain(cmdBuf);
+  }
+}
+
 void MetalBackend::applyDepolarizingNoise(Precision p) {}
 
 int MetalBackend::measure(size_t target) {
   uint32_t stride = 1 << target;
   size_t dim = 1ULL << num_qubits_;
-  
-  // Allocate partial sums buffer on CPU mapped memory
-  size_t maxThreads = 256;
   size_t totalThreads = dim;
+  size_t maxThreads = 256;
   size_t numGroups = (totalThreads + maxThreads - 1) / maxThreads;
   
   id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
-  id<MTLBuffer> partialSumsBuf = [device newBufferWithLength:numGroups * sizeof(float)
-                                                     options:MTLResourceStorageModeShared];
-                                                     
-  void* sumsBufPtr = (void*)CFBridgingRetain(partialSumsBuf);
-
-  // Dispatch reduction kernel
-  dispatchHelper(commandQueue_, measureProb0Pipeline_, gpuBuffer_, dim * 2, {&stride, &sumsBufPtr},
-                 {sizeof(uint32_t), sizeof(void*)}); // dim*2 because dispatchHelper divides by 2? No, dispatchHelper uses totalThreads = dim/2. 
-  // Wait, dispatchHelper sets totalThreads = dim/2 for normal pairs. 
-  // But our reduction kernel expects total_threads to be `dim`, and total block is `dim`. 
-  // Let's manually do dispatch so we can handle threads correctly without dispatchHelper.
+  id<MTLBuffer> partialSumsBuf = [device newBufferWithLength:numGroups * sizeof(float) options:MTLResourceStorageModeShared];
   id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)commandQueue_;
   id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
   id<MTLComputeCommandEncoder> enc = [cmdBuf computeCommandEncoder];
@@ -357,102 +418,91 @@ int MetalBackend::measure(size_t target) {
   [enc setBuffer:(__bridge id<MTLBuffer>)gpuBuffer_ offset:0 atIndex:0];
   [enc setBytes:&stride length:sizeof(uint32_t) atIndex:1];
   [enc setBuffer:partialSumsBuf offset:0 atIndex:2];
-
-  MTLSize threadsPerGroup = MTLSizeMake(maxThreads, 1, 1);
-  MTLSize gridSize = MTLSizeMake(totalThreads, 1, 1);
-
-  [enc dispatchThreads:gridSize threadsPerThreadgroup:threadsPerGroup];
+  [enc dispatchThreads:MTLSizeMake(totalThreads, 1, 1) threadsPerThreadgroup:MTLSizeMake(maxThreads, 1, 1)];
   [enc endEncoding];
   [cmdBuf commit];
   [cmdBuf waitUntilCompleted];
 
   float* sums = (float*)[partialSumsBuf contents];
   float prob0 = 0.0f;
-  for (size_t i = 0; i < numGroups; ++i) {
-      prob0 += sums[i];
-  }
-
-  CFRelease(sumsBufPtr);
-
-  int outcome = (static_cast<double>(rand()) / RAND_MAX > prob0) ? 1 : 0;
+  for (size_t i = 0; i < numGroups; ++i) prob0 += sums[i];
+  
+  static std::mt19937 gen(std::random_device{}());
+  std::uniform_real_distribution<float> dist(0.0, 1.0);
+  int outcome = (dist(gen) > prob0) ? 1 : 0;
   float norm = (outcome == 0) ? std::sqrt(prob0) : std::sqrt(1.0f - prob0);
-  if (norm < 1e-9f) norm = 1.0f; // Prevent div by 0
+  if (norm < 1e-9f) norm = 1.0f;
   
   uint32_t out_val = outcome;
-
-  // Dispatch projection kernel
   id<MTLCommandBuffer> projCmdBuf = [queue commandBuffer];
   id<MTLComputeCommandEncoder> projEnc = [projCmdBuf computeCommandEncoder];
   id<MTLComputePipelineState> projPso = (__bridge id<MTLComputePipelineState>)projectStatePipeline_;
-
   [projEnc setComputePipelineState:projPso];
   [projEnc setBuffer:(__bridge id<MTLBuffer>)gpuBuffer_ offset:0 atIndex:0];
   [projEnc setBytes:&stride length:sizeof(uint32_t) atIndex:1];
   [projEnc setBytes:&out_val length:sizeof(uint32_t) atIndex:2];
   [projEnc setBytes:&norm length:sizeof(float) atIndex:3];
-
-  [projEnc dispatchThreads:gridSize threadsPerThreadgroup:threadsPerGroup];
+  [projEnc dispatchThreads:MTLSizeMake(totalThreads, 1, 1) threadsPerThreadgroup:MTLSizeMake(maxThreads, 1, 1)];
   [projEnc endEncoding];
   [projCmdBuf commit];
-  
-  if (lastCommandBuffer_) {
-      CFRelease(lastCommandBuffer_);
-  }
+  if (lastCommandBuffer_) CFRelease(lastCommandBuffer_);
   lastCommandBuffer_ = (void*)CFBridgingRetain(projCmdBuf);
 
   return outcome;
 }
 
-std::vector<double> MetalBackend::getProbabilities() { return {}; }
-
-double MetalBackend::expectationValue(const std::string &pauli) {
-  // Simplistic implementation focusing on Z-observable mapping for demonstration
-  // Finds the first Z in the pauli sequence to do reduction over.
-  int target = -1;
-  for (int i = 0; i < num_qubits_; ++i) {
-      if (i < pauli.length() && pauli[i] == 'Z') {
-          target = i;
-          break;
-      }
-  }
-  
-  if (target == -1 || !expectationZPipeline_) return 1.0; 
-
-  uint32_t stride = 1 << target;
+std::vector<double> MetalBackend::getProbabilities() {
   size_t dim = 1ULL << num_qubits_;
-  size_t maxThreads = 256;
-  size_t totalThreads = dim;
-  size_t numGroups = (totalThreads + maxThreads - 1) / maxThreads;
-  
   id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
-  id<MTLBuffer> partialSumsBuf = [device newBufferWithLength:numGroups * sizeof(float)
-                                                     options:MTLResourceStorageModeShared];
-                                                     
+  id<MTLBuffer> probBuf = [device newBufferWithLength:dim * sizeof(float) options:MTLResourceStorageModeShared];
   id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)commandQueue_;
   id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
   id<MTLComputeCommandEncoder> enc = [cmdBuf computeCommandEncoder];
-  id<MTLComputePipelineState> pso = (__bridge id<MTLComputePipelineState>)expectationZPipeline_;
-
+  id<MTLComputePipelineState> pso = (__bridge id<MTLComputePipelineState>)computeProbabilitiesPipeline_;
   [enc setComputePipelineState:pso];
   [enc setBuffer:(__bridge id<MTLBuffer>)gpuBuffer_ offset:0 atIndex:0];
-  [enc setBytes:&stride length:sizeof(uint32_t) atIndex:1];
-  [enc setBuffer:partialSumsBuf offset:0 atIndex:2];
-
-  MTLSize threadsPerGroup = MTLSizeMake(maxThreads, 1, 1);
-  MTLSize gridSize = MTLSizeMake(totalThreads, 1, 1);
-
-  [enc dispatchThreads:gridSize threadsPerThreadgroup:threadsPerGroup];
+  [enc setBuffer:probBuf offset:0 atIndex:1];
+  [enc dispatchThreads:MTLSizeMake(dim, 1, 1) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
   [enc endEncoding];
   [cmdBuf commit];
   [cmdBuf waitUntilCompleted];
+  float* probsPtr = (float*)[probBuf contents];
+  std::vector<double> results(dim);
+  for (size_t i = 0; i < dim; ++i) results[i] = (double)probsPtr[i];
+  return results;
+}
 
-  float* sums = (float*)[partialSumsBuf contents];
-  float expected_z = 0.0f;
-  for (size_t i = 0; i < numGroups; ++i) {
-      expected_z += sums[i];
+double MetalBackend::expectationValue(const std::string &pauli) {
+  uint64_t z_mask = 0;
+  bool is_diagonal = true;
+  for (size_t i = 0; i < pauli.length(); ++i) {
+      if (pauli[i] == 'Z') z_mask |= (1ULL << i);
+      else if (pauli[i] != 'I') { is_diagonal = false; break; }
   }
+  if (!is_diagonal) return 0.0;
 
-  return (double)expected_z;
+  size_t dim = 1ULL << num_qubits_;
+  size_t totalThreads = dim;
+  size_t maxThreads = 256;
+  size_t numGroups = (totalThreads + maxThreads - 1) / maxThreads;
+  id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
+  id<MTLBuffer> partialSumsBuf = [device newBufferWithLength:numGroups * sizeof(float) options:MTLResourceStorageModeShared];
+  id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)commandQueue_;
+  id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
+  id<MTLComputeCommandEncoder> enc = [cmdBuf computeCommandEncoder];
+  id<MTLComputePipelineState> pso = (__bridge id<MTLComputePipelineState>)diagonalExpectationPipeline_;
+  [enc setComputePipelineState:pso];
+  [enc setBuffer:(__bridge id<MTLBuffer>)gpuBuffer_ offset:0 atIndex:0];
+  [enc setBytes:&z_mask length:sizeof(uint64_t) atIndex:1];
+  [enc setBuffer:partialSumsBuf offset:0 atIndex:2];
+  [enc dispatchThreads:MTLSizeMake(totalThreads, 1, 1) threadsPerThreadgroup:MTLSizeMake(maxThreads, 1, 1)];
+  [enc endEncoding];
+  [cmdBuf commit];
+  [cmdBuf waitUntilCompleted];
+  float* sums = (float*)[partialSumsBuf contents];
+  float expected_val = 0.0f;
+  for (size_t i = 0; i < numGroups; ++i) expected_val += sums[i];
+  return (double)expected_val;
 }
 
 } // namespace qubit_engine

@@ -26,6 +26,9 @@ public:
   void applyCZ(size_t control, size_t target) override;
   void applyDepolarizingNoise(Precision p) override;
 
+  void applyDenseUnitary(const std::vector<size_t> &targets,
+                         const std::vector<Complex> &matrix) override;
+
   int measure(size_t target) override;
   std::vector<double> getProbabilities() override;
   double expectationValue(const std::string &pauli) override;
@@ -61,10 +64,15 @@ private:
   void *phaseSPipeline_ = nullptr;
   void *phaseTPipeline_ = nullptr;
   void *cnotPipeline_ = nullptr;
+  void *toffoliPipeline_ = nullptr;
 
   void *measureProb0Pipeline_ = nullptr;
   void *projectStatePipeline_ = nullptr;
   void *expectationZPipeline_ = nullptr;
+  void *computeProbabilitiesPipeline_ = nullptr;
+  void *diagonalExpectationPipeline_ = nullptr;
+  void *denseUnitary1qPipeline_ = nullptr;
+  void *denseUnitary2qPipeline_ = nullptr;
 };
 
 } // namespace qubit_engine

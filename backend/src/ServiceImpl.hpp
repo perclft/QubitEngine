@@ -31,6 +31,9 @@ public:
       const qubit_engine::HardwareTopologyRequest *request,
       qubit_engine::HardwareTopologyResponse *response) override;
 
+  bool ValidateAuth(grpc::ServerContext *context) const;
+  void ValidateAuthInternal(const std::map<std::string, std::string>& metadata) const;
+
 private:
   void applyGate(qubit_engine::QuantumRegister &qreg,
                  const qubit_engine::GateOperation &op,
@@ -40,5 +43,4 @@ private:
                       qubit_engine::CircuitRequest::MeasurementStrategy
                           strategy = qubit_engine::CircuitRequest::FULL_STATE,
                       bool use_shm = false);
-  bool ValidateAuth(grpc::ServerContext *context) const;
 };

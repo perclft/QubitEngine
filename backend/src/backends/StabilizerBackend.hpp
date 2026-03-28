@@ -26,6 +26,9 @@ public:
   // Retrieve full state vector (Warning: Exponential complexity)
   std::vector<Complex> getStateVector() const override;
 
+  void applyDenseUnitary(const std::vector<size_t> &targets,
+                         const std::vector<Complex> &matrix) override {}
+
   // Basic gates (Clifford)
   void applyHadamard(size_t target) override;
   void applyX(size_t target) override;

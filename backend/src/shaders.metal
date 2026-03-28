@@ -209,6 +209,24 @@ kernel void cnot_kernel(device Complex* state [[buffer(0)]],
         state[k] = temp;
     }
 }
+
+// Toffoli (CCNOT) Kernel
+kernel void toffoli_kernel(device Complex* state [[buffer(0)]],
+                           constant uint& target_stride [[buffer(1)]],
+                           constant uint& ctrl1_stride [[buffer(2)]],
+                           constant uint& ctrl2_stride [[buffer(3)]],
+                           uint id [[thread_position_in_grid]]) {
+    uint group = id / target_stride;
+    uint offset = id % target_stride;
+    uint j = 2 * group * target_stride + offset;
+    uint k = j + target_stride;
+    
+    if ((j & ctrl1_stride) && (j & ctrl2_stride)) {
+        Complex temp = state[j];
+        state[j] = state[k];
+        state[k] = temp;
+    }
+}
 // Phase S Kernel (Z rotation by PI/2)
 // S = [1 0; 0 i]
 kernel void phases_kernel(device Complex* state [[buffer(0)]],
@@ -301,7 +319,110 @@ kernel void project_state_kernel(device Complex* state [[buffer(0)]],
     }
 }
 
-// Expectation Z Kernel (for generic diagonal observables or simple Z reduction)
+// Extract probabilities for all basis states
+kernel void compute_probabilities_kernel(device Complex* state [[buffer(0)]],
+                                         device float* probabilities [[buffer(1)]],
+                                         uint id [[thread_position_in_grid]]) {
+    Complex c = state[id];
+    probabilities[id] = c.real * c.real + c.imag * c.imag;
+}
+
+// 1-Qubit Dense Unitary Kernel
+kernel void dense_unitary_1q_kernel(device Complex* state [[buffer(0)]],
+                                    constant uint& stride [[buffer(1)]],
+                                    constant Complex* matrix [[buffer(2)]],
+                                    uint id [[thread_position_in_grid]]) {
+    uint group = id / stride;
+    uint offset = id % stride;
+    uint j = 2 * group * stride + offset;
+    uint k = j + stride;
+
+    Complex a = state[j];
+    Complex b = state[k];
+
+    // res = matrix * [a; b]
+    Complex res_a, res_b;
+    res_a.real = matrix[0].real * a.real - matrix[0].imag * a.imag + matrix[1].real * b.real - matrix[1].imag * b.imag;
+    res_a.imag = matrix[0].real * a.imag + matrix[0].imag * a.real + matrix[1].real * b.imag + matrix[1].imag * b.real;
+    
+    res_b.real = matrix[2].real * a.real - matrix[2].imag * a.imag + matrix[3].real * b.real - matrix[3].imag * b.imag;
+    res_b.imag = matrix[2].real * a.imag + matrix[2].imag * a.real + matrix[3].real * b.imag + matrix[3].imag * b.real;
+
+    state[j] = res_a;
+    state[k] = res_b;
+}
+
+// 2-Qubit Dense Unitary Kernel
+kernel void dense_unitary_2q_kernel(device Complex* state [[buffer(0)]],
+                                    constant uint& stride_low [[buffer(1)]],
+                                    constant uint& stride_high [[buffer(2)]],
+                                    constant Complex* matrix [[buffer(3)]],
+                                    uint id [[thread_position_in_grid]]) {
+    // id iterates dim/4
+    // Logic to find i00, i01, i10, i11 similar to CPU version
+    // For simplicity in this PR, we focus on 1q fusion first but providing the skeleton
+    uint low_mask = (1 << stride_low) - 1;
+    uint mid_mask = (1 << (stride_high - 1)) - 1;
+    
+    uint i = ((id >> (stride_high - 1)) << stride_high) |
+             (((id & mid_mask) >> stride_low) << (stride_low + 1)) |
+             (id & low_mask);
+
+    uint i00 = i;
+    uint i01 = i | (1 << stride_low);
+    uint i10 = i | (1 << stride_high);
+    uint i11 = i | (1 << stride_low) | (1 << stride_high);
+
+    Complex v[4] = { state[i00], state[i01], state[i10], state[i11] };
+    Complex res[4];
+
+    for (int r = 0; r < 4; ++r) {
+        res[r].real = 0; res[r].imag = 0;
+        for (int c = 0; c < 4; ++c) {
+            Complex m = matrix[r * 4 + c];
+            res[r].real += m.real * v[c].real - m.imag * v[c].imag;
+            res[r].imag += m.real * v[c].imag + m.imag * v[c].real;
+        }
+    }
+
+    state[i00] = res[0];
+    state[i01] = res[1];
+    state[i10] = res[2];
+    state[i11] = res[3];
+}
+
+// Kernel for diagonal expectation values (products of Z and I)
+kernel void diagonal_expectation_kernel(device Complex* state [[buffer(0)]],
+                                        constant uint64_t& z_mask [[buffer(1)]],
+                                        device float* partial_sums [[buffer(2)]],
+                                        uint id [[thread_position_in_grid]],
+                                        uint tid [[thread_position_in_threadgroup]],
+                                        uint gid [[threadgroup_position_in_grid]],
+                                        uint threads_per_group [[threads_per_threadgroup]],
+                                        uint total_threads [[threads_per_grid]]) {
+    threadgroup float local_sum[1024];
+    float val = 0.0f;
+    if (id < total_threads) {
+        float prob = state[id].real * state[id].real + state[id].imag * state[id].imag;
+        if (popcount(id & z_mask) % 2) val = -prob;
+        else val = prob;
+    }
+    local_sum[tid] = val;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    for (uint s = threads_per_group / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            local_sum[tid] += local_sum[tid + s];
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+    
+    if (tid == 0) {
+        partial_sums[gid] = local_sum[0];
+    }
+}
+
+// Expectation Z Kernel (simple legacy or targeted)
 kernel void expectation_z_kernel(device Complex* state [[buffer(0)]],
                                  constant uint& stride [[buffer(1)]],
                                  device float* partial_sums [[buffer(2)]],

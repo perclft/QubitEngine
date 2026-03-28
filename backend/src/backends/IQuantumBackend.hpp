@@ -29,6 +29,8 @@ public:
   virtual void applyRotationZ(size_t target, Precision angle) = 0;
   virtual void applySWAP(size_t qubit1, size_t qubit2) = 0;
   virtual void applyCZ(size_t control, size_t target) = 0;
+  virtual void applyDenseUnitary(const std::vector<size_t> &targets,
+                                 const std::vector<Complex> &matrix) = 0;
 
   // --- Noise ---
   virtual void applyDepolarizingNoise(Precision probability) = 0;

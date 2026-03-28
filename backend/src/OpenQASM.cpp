@@ -92,7 +92,9 @@ private:
       pos += end;
       skip_whitespace();
     } catch (...) {
-      // Return 0 on parsing failure
+      // Return 0 on parsing failure and advance character to avoid infinite loop
+      pos++;
+      skip_whitespace();
       val = 0.0;
     }
     return val;
@@ -112,7 +114,7 @@ QASMCircuit QASMParser::parse(const std::string &qasm_code) {
 
   while (std::getline(stream, line)) {
     line = trim(line);
-    if (line.empty() || line[0] == '/' && line[1] == '/')
+    if (line.empty() || (line[0] == '/' && line[1] == '/'))
       continue;
 
     // manual tokenizer for the line
@@ -239,6 +241,13 @@ QASMGate QASMParser::parse_gate(const std::string &line,
     while(i < line.size() && is_id_char(line[i])) i++;
     std::string q_name = line.substr(start, i - start);
     
+    // If no ID char was found and we haven't advanced, we must advance
+    // to avoid an infinite loop on malformed gates
+    if (start == i && i < line.size() && line[i] != '[' && line[i] != ',' && line[i] != ';') {
+        i++;
+        continue;
+    }
+
     skip_ws();
     if (i < line.size() && line[i] == '[') {
       i++;

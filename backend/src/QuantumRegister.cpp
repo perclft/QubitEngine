@@ -1,26 +1,40 @@
 #include "QuantumRegister.hpp"
+#include "Types.hpp"
 #include "QuantumMetrics.hpp"
 #include "CircuitOptimizer.hpp"
 #include "ConfigManager.hpp"
 #define _USE_MATH_DEFINES
 #include <cmath>
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 #include "Exceptions.hpp"
 #include "backends/CpuBackend.hpp"
 #include "backends/CudaBackend.hpp"
 #include "backends/MPSBackend.hpp"
 #include "backends/CloudBackend.hpp"
-#include <fstream>
+#include <cmath>
+#include <cstdint>
+#include <future>
 #include <iostream>
+#include <random>
 #include <string>
 #include <vector>
+#include <memory>
+#include <complex>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace qubit_engine {
 
-// --- Lifecycle ---
 QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
+  // Phase 25: Security Enforcement Check
+  const char* secret = std::getenv("QUBIT_ENGINE_JWT_SECRET");
+  const char* skip = std::getenv("QUBIT_ENGINE_SKIP_AUTH");
+  if (!secret && (!skip || std::string(skip) != "1")) {
+      std::cerr << "WARNING: QUBIT_ENGINE_JWT_SECRET is not set. Simulation security may be compromised." << std::endl;
+      std::cerr << "Set QUBIT_ENGINE_SKIP_AUTH=1 to explicitly disable this warning during development." << std::endl;
+  }
+
   // Check ConfigManager for force local execution override if not explicitly specified
   bool use_local = force_local || ConfigManager::Instance().forceLocalExecution();
 
@@ -191,11 +205,20 @@ void QuantumRegister::applyCZ(size_t control, size_t target) {
   validateQubit(control);
   validateQubit(target);
   if (control == target)
-    throw InvalidArgumentException("Control and target qubits must be distinct");
+    throw InvalidArgumentException("Control and target must be distinct");
   if (recording_enabled)
     tape.push_back({RecordedGate::CZ, {control, target}, {}});
   if (execution_enabled)
     backend->applyCZ(control, target);
+}
+
+void QuantumRegister::applyDenseUnitary(const std::vector<size_t> &targets,
+                                       const std::vector<Complex> &matrix) {
+  for (size_t q : targets) validateQubit(q);
+  // Dense unitaries are usually JIT-produced and not recorded to tape to avoid
+  // bloating it, but they are executed directly.
+  if (execution_enabled)
+    backend->applyDenseUnitary(targets, matrix);
 }
 
 // --- Noise ---

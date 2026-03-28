@@ -29,6 +29,8 @@ public:
   void applyRotationZ(size_t target, Precision angle) override;
   void applySWAP(size_t qubit1, size_t qubit2) override;
   void applyCZ(size_t control, size_t target) override;
+  void applyDenseUnitary(const std::vector<size_t> &targets,
+                         const std::vector<Complex> &matrix) override;
 
   // --- Noise ---
   void applyDepolarizingNoise(Precision probability) override;

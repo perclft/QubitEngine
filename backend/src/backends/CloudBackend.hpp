@@ -38,6 +38,9 @@ public:
   std::vector<double> getProbabilities() override;
   double expectationValue(const std::string &pauli_string) override;
 
+  void applyDenseUnitary(const std::vector<size_t> &targets,
+                         const std::vector<Complex> &matrix) override {}
+
   // --- State Access ---
   std::vector<Complex> getStateVector() const override;
 

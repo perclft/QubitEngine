@@ -64,7 +64,10 @@ const getRegistryClient = () => {
 
 const getMetadata = () => {
   const meta = new grpc.Metadata();
-  const token = process.env.QUBIT_ENGINE_AUTH_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJpYXQiOjE3NzQ3MzYwNzcsImV4cCI6MjA5MDA5NjA3N30.1nKrhtvdTUoaAL8wzWGNHQhk40cHRpbxWjbAbS1lNSA';
+  const token = process.env.QUBIT_ENGINE_AUTH_TOKEN;
+  if (!token) {
+    throw new Error('QUBIT_ENGINE_AUTH_TOKEN is not defined in environment variables');
+  }
   meta.add('authorization', `Bearer ${token}`);
   return meta;
 };
