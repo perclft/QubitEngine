@@ -352,13 +352,13 @@ QubitEngineServiceImpl::RunCircuit(grpc::ServerContext *context,
               } else if (g.type == qubit_engine::jit::CompiledGate::SINGLE_QUBIT) {
                 // For single qubit gates, JIT provides a 2x2 matrix
                 std::vector<size_t> targets = {(size_t)g.target_qubits[0]};
-                std::vector<Complex> matrix(g.single_matrix.begin(), g.single_matrix.end());
+                std::vector<qubit_engine::Complex> matrix(g.single_matrix.begin(), g.single_matrix.end());
                 qreg.applyDenseUnitary(targets, matrix);
               } else if (g.type == qubit_engine::jit::CompiledGate::TWO_QUBIT) {
                 // For two qubit gates, JIT provides a 4x4 matrix
                 std::vector<size_t> targets;
                 for (int t : g.target_qubits) targets.push_back((size_t)t);
-                std::vector<Complex> matrix(g.two_matrix.begin(), g.two_matrix.end());
+                std::vector<qubit_engine::Complex> matrix(g.two_matrix.begin(), g.two_matrix.end());
                 qreg.applyDenseUnitary(targets, matrix);
               }
             }
