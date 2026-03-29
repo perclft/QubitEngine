@@ -29,6 +29,7 @@
 #endif
 #include <spdlog/spdlog.h>
 #include <jwt-cpp/jwt.h>
+#include <jwt-cpp/traits/nlohmann-json/traits.h>
 
 using grpc::ServerContext;
 using grpc::Status;
@@ -211,12 +212,12 @@ void QubitEngineServiceImpl::ValidateAuthInternal(const std::map<std::string, st
     token = token.substr(7);
   }
   
-  auto decoded = jwt::decode(token);
+  auto decoded = jwt::decode<jwt::traits::nlohmann_json>(token);
   const char* env_secret = std::getenv("QUBIT_ENGINE_JWT_SECRET");
   if (!env_secret) throw std::runtime_error("Internal server error: JWT secret misconfigured");
   
   std::string secret = env_secret;
-  auto verifier = jwt::verify()
+  auto verifier = jwt::verify<jwt::traits::nlohmann_json>()
       .allow_algorithm(jwt::algorithm::hs256{secret})
       .with_issuer("qubit-engine");
   
