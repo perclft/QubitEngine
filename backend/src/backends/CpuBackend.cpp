@@ -737,7 +737,7 @@ void CpuBackend::applyDenseUnitary(const std::vector<size_t> &targets,
     size_t dim = 1ULL << num_qubits;
 
 #pragma omp parallel for
-    for (size_t i = 0; i < dim; i += 2 * stride) {
+    for (long long i = 0; i < static_cast<long long>(dim); i += 2 * stride) {
       for (size_t j = 0; j < stride; ++j) {
         size_t idx0 = i + j;
         size_t idx1 = i + j + stride;
@@ -755,7 +755,7 @@ void CpuBackend::applyDenseUnitary(const std::vector<size_t> &targets,
     size_t dim = 1ULL << num_qubits;
 
 #pragma omp parallel for
-    for (size_t i = 0; i < dim; ++i) {
+    for (long long i = 0; i < static_cast<long long>(dim); ++i) {
       if (!(i & m0) && !(i & m1)) {
         size_t i00 = i;
         size_t i01 = i | m0;
