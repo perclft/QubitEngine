@@ -182,23 +182,3 @@
 | 24     | 16,777,216        | 0.25        | [OK]   | 30.2 ms   | 0.06 ms   |
 | 26     | 67,108,864        | 1.00        | [OK]   | 156.1 ms  | 0.09 ms   |
 
-### 6. C++ Memory Wall Benchmark (Bandwidth)
-
-```text
-Unable to determine clock rate from sysctl: hw.cpufrequency: No such file or directory
-This does not affect benchmark measurements, only the metadata output.
-***WARNING*** Failed to set thread affinity. Estimated CPU frequency may be incorrect.
-2026-03-02T10:52:57-08:00
-Running /Users/sahil/projects/QubitEngine/benchmarks/build/memory_benchmark
-Run on (8 X 24 MHz CPU s)
-CPU Caches:
-  L1 Data 64 KiB
-  L1 Instruction 128 KiB
-  L2 Unified 4096 KiB (x8)
-Load Average: 2.63, 3.51, 6.15
-------------------------------------------------------------------------------
-Benchmark                    Time             CPU   Iterations UserCounters...
-------------------------------------------------------------------------------
-BM_ApplyHadamard/20       1.07 ms        0.469 ms         1496 bytes_per_second=66.6051Gi/s
-BM_ApplyHadamard/25       21.6 ms         15.3 ms           45 bytes_per_second=65.5638Gi/s
-BM_ApplyHadamard/28       1115 ms          732 ms            1 bytes_per_second=10.9235Gi/s
