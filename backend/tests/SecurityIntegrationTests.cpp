@@ -12,8 +12,13 @@ using namespace qubit_engine;
 class SecurityIntegrationTest : public ::testing::Test {
 protected:
   void SetUp() override {
+#ifdef _WIN32
+    _putenv_s("QUBIT_ENGINE_JWT_SECRET", "test-secret-123");
+    _putenv_s("QUBIT_ENGINE_SKIP_AUTH", "");
+#else
     setenv("QUBIT_ENGINE_JWT_SECRET", "test-secret-123", 1);
     unsetenv("QUBIT_ENGINE_SKIP_AUTH");
+#endif
   }
 
   std::string generate_valid_token() {
