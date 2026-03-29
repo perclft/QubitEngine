@@ -349,18 +349,21 @@ QubitEngineServiceImpl::RunCircuit(grpc::ServerContext *context,
                 std::vector<size_t> targets;
                 for (int t : g.target_qubits) targets.push_back((size_t)t);
                 qreg.applyDenseUnitary(targets, g.fused_unitary);
-              } else {
-                // Map JIT gate name back to GateOperation for standard applyGate
-                // (This is a simplified mapping for this PR)
-                qubit_engine::GateOperation op;
-                op.set_target_qubit(g.target_qubits[0]);
-                if (g.target_qubits.size() > 1) op.set_control_qubit(g.target_qubits[1]);
-                // ... set type based on g.name ...
-                applyGate(qreg, op, response);
+              } else if (g.type == qubit_engine::jit::CompiledGate::SINGLE_QUBIT) {
+                // For single qubit gates, JIT provides a 2x2 matrix
+                std::vector<size_t> targets = {(size_t)g.target_qubits[0]};
+                std::vector<Complex> matrix(g.single_matrix.begin(), g.single_matrix.end());
+                qreg.applyDenseUnitary(targets, matrix);
+              } else if (g.type == qubit_engine::jit::CompiledGate::TWO_QUBIT) {
+                // For two qubit gates, JIT provides a 4x4 matrix
+                std::vector<size_t> targets;
+                for (int t : g.target_qubits) targets.push_back((size_t)t);
+                std::vector<Complex> matrix(g.two_matrix.begin(), g.two_matrix.end());
+                qreg.applyDenseUnitary(targets, matrix);
               }
             }
           } else {
-            // Fallback: apply original operations if JIT failed or optimization level 0
+            // Fallback: apply original operations if JIT output is empty or unrecognized
             int end = std::min(i + CHUNK_SIZE, num_ops);
             for (int j = i; j < end; ++j) {
               applyGate(qreg, ops[j], response);

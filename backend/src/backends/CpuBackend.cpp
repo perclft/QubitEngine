@@ -748,27 +748,20 @@ void CpuBackend::applyDenseUnitary(const std::vector<size_t> &targets,
       }
     }
   } else if (targets.size() == 2) {
-    size_t t1 = targets[0];
-    size_t t2 = targets[1];
-    // Ensure t1 < t2 for consistent iteration if needed, or just use masks
-    size_t low = std::min(t1, t2);
-    size_t high = std::max(t1, t2);
+    size_t q0 = targets[0];
+    size_t q1 = targets[1];
+    size_t m0 = 1ULL << q0;
+    size_t m1 = 1ULL << q1;
     size_t dim = 1ULL << num_qubits;
 
 #pragma omp parallel for
     for (size_t i = 0; i < dim; ++i) {
-      if (!(i & (1ULL << low)) && !(i & (1ULL << high))) {
+      if (!(i & m0) && !(i & m1)) {
         size_t i00 = i;
-        size_t i01 = i | (1ULL << low);
-        size_t i10 = i | (1ULL << high);
-        size_t i11 = i | (1ULL << low) | (1ULL << high);
+        size_t i01 = i | m0;
+        size_t i10 = i | m1;
+        size_t i11 = i | m0 | m1;
 
-        // Note: matrix mapping depends on targets order
-        // For targets {t1, t2}, basis is |t2 t1>: 00, 01, 10, 11
-        // indices: i00, i_(t1_set), i_(t2_set), i_(both_set)
-        // If targets={t1, t2}, then:
-        // index 0 -> |00>, index 1 -> |01>, index 2 -> |10>, index 3 -> |11>
-        // where rightmost bit is targets[0].
         Complex v00 = state[i00];
         Complex v01 = state[i01];
         Complex v10 = state[i10];

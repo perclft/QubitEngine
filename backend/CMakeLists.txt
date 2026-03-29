@@ -88,6 +88,8 @@ find_package(spdlog CONFIG REQUIRED)
 find_package(Eigen3 CONFIG REQUIRED)
 find_package(redis++ CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+# jwt-cpp is a header-only library used for authentication
+find_package(jwt-cpp CONFIG REQUIRED)
 
 if(TARGET redis++::redis++)
     set(REDIS_LIB redis++::redis++)
@@ -353,6 +355,7 @@ target_link_libraries(qubit_engine
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
     spdlog::spdlog
     ${REDIS_LIB}
+    jwt-cpp::jwt-cpp
 )
 
 # =================================================================
