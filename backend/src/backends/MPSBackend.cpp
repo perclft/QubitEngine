@@ -1,5 +1,6 @@
 #include "MPSBackend.hpp"
 #include <Eigen/Dense>
+#include "../Exceptions.hpp"
 #include <Eigen/SVD>
 #include <cmath>
 #include <stdexcept>
@@ -246,6 +247,12 @@ void MPSBackend::applyDepolarizingNoise(Precision probability) {
 
 int MPSBackend::measure(size_t target) { return 0; }
 std::vector<double> MPSBackend::getProbabilities() { return {}; }
+void MPSBackend::applyDenseUnitary(const std::vector<size_t> &targets,
+                                   const std::vector<Complex> &matrix) {
+  throw FeatureNotSupportedException(
+      "applyDenseUnitary not supported in MPS prototype.");
+}
+
 double MPSBackend::expectationValue(const std::string &pauli_string) {
   return 0.0;
 }

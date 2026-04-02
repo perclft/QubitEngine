@@ -7,7 +7,7 @@
 #include <vector>
 #include <memory>
 #include <complex>
-#include <iostream>
+#include <spdlog/spdlog.h>
 #include <random>
 #include <cmath>
 
@@ -29,8 +29,8 @@ MetalBackend::MetalBackend(size_t num_qubits)
 
   // Initialize State |0...0>
   size_t dim = 1ULL << num_qubits;
-  std::vector<Complex> initial(dim, {0.0f, 0.0f});
-  initial[0] = {1.0f, 0.0f};
+  std::vector<Complex> initial(dim, {0.0, 0.0});
+  initial[0] = {1.0, 0.0};
   uploadState(initial);
 }
 
@@ -46,28 +46,26 @@ MetalBackend::~MetalBackend() {
 }
 
 void MetalBackend::initializeMetal() {
-  std::cout << "MetalBackend::initializeMetal - Start" << std::endl;
+  spdlog::info("MetalBackend::initializeMetal - Start");
   id<MTLDevice> device = MTLCreateSystemDefaultDevice();
   if (!device) {
     throw std::runtime_error("Metal is not supported on this device.");
   }
-  std::cout << "MetalBackend::initializeMetal - Device Created: " <<
-      [[device name] UTF8String] << std::endl;
+  spdlog::info("MetalBackend::initializeMetal - Device Created: {}",
+      [[device name] UTF8String]);
   device_ = (void *)CFBridgingRetain(device);
 
   id<MTLCommandQueue> queue = [device newCommandQueue];
   commandQueue_ = (void *)CFBridgingRetain(queue);
-  std::cout << "MetalBackend::initializeMetal - CommandQueue Created"
-            << std::endl;
+  spdlog::info("MetalBackend::initializeMetal - CommandQueue Created");
 
   // Load Library
   NSError *error = nil;
   id<MTLLibrary> library =
       [device newDefaultLibraryWithBundle:[NSBundle mainBundle] error:&error];
   if (!library) {
-    std::cout << "MetalBackend::initializeMetal - Main Bundle Library not "
-                 "found, trying file..."
-              << std::endl;
+    spdlog::info("MetalBackend::initializeMetal - Main Bundle Library not "
+                 "found, trying file...");
     // Try to load from "default.metallib" in multiple locs
     NSArray<NSString *> *paths = @[
       @"default.metallib", @"bin/default.metallib", @"../bin/default.metallib",
@@ -77,22 +75,22 @@ void MetalBackend::initializeMetal() {
       NSURL *url = [NSURL fileURLWithPath:path];
       library = [device newLibraryWithURL:url error:&error];
       if (library) {
-        std::cout << "MetalBackend::initializeMetal - Loaded from "
-                  << [path UTF8String] << std::endl;
+        spdlog::info("MetalBackend::initializeMetal - Loaded from {}",
+                  [path UTF8String]);
         break;
       }
     }
   }
   if (!library) {
-    std::cerr << "MetalBackend::initializeMetal - Failed to load library: " <<
-        [[error localizedDescription] UTF8String] << std::endl;
+    spdlog::error("MetalBackend::initializeMetal - Failed to load library: {}",
+        [[error localizedDescription] UTF8String]);
     throw std::runtime_error(std::string("Could not load Metal library: ") +
                              [[error localizedDescription] UTF8String]);
   }
-  std::cout << "MetalBackend::initializeMetal - Library Loaded" << std::endl;
+  spdlog::info("MetalBackend::initializeMetal - Library Loaded");
 
   buildPipelines((void *)CFBridgingRetain(library));
-  std::cout << "MetalBackend::initializeMetal - Pipelines Built" << std::endl;
+  spdlog::info("MetalBackend::initializeMetal - Pipelines Built");
 }
 
 void MetalBackend::buildPipelines(void *libPtr) {
@@ -103,15 +101,13 @@ void MetalBackend::buildPipelines(void *libPtr) {
   auto createPipe = [&](NSString *name) -> void * {
     id<MTLFunction> func = [library newFunctionWithName:name];
     if (!func) {
-      std::cerr << "Error: Function " << [name UTF8String] << " not found."
-                << std::endl;
+      spdlog::error("Error: Function {} not found.", [name UTF8String]);
       return nullptr;
     }
     id<MTLComputePipelineState> pso =
         [device newComputePipelineStateWithFunction:func error:&error];
     if (!pso) {
-      std::cerr << "Error creating pipeline for " << [name UTF8String]
-                << std::endl;
+      spdlog::error("Error creating pipeline for {}", [name UTF8String]);
       return nullptr;
     }
     return (void *)CFBridgingRetain(pso);
@@ -424,14 +420,14 @@ int MetalBackend::measure(size_t target) {
   [cmdBuf waitUntilCompleted];
 
   float* sums = (float*)[partialSumsBuf contents];
-  float prob0 = 0.0f;
+  float prob0 = 0.0;
   for (size_t i = 0; i < numGroups; ++i) prob0 += sums[i];
   
   static std::mt19937 gen(std::random_device{}());
   std::uniform_real_distribution<float> dist(0.0, 1.0);
   int outcome = (dist(gen) > prob0) ? 1 : 0;
-  float norm = (outcome == 0) ? std::sqrt(prob0) : std::sqrt(1.0f - prob0);
-  if (norm < 1e-9f) norm = 1.0f;
+  float norm = (outcome == 0) ? std::sqrt(prob0) : std::sqrt(1.0 - prob0);
+  if (norm < 1e-9) norm = 1.0;
   
   uint32_t out_val = outcome;
   id<MTLCommandBuffer> projCmdBuf = [queue commandBuffer];
@@ -500,7 +496,7 @@ double MetalBackend::expectationValue(const std::string &pauli) {
   [cmdBuf commit];
   [cmdBuf waitUntilCompleted];
   float* sums = (float*)[partialSumsBuf contents];
-  float expected_val = 0.0f;
+  float expected_val = 0.0;
   for (size_t i = 0; i < numGroups; ++i) expected_val += sums[i];
   return (double)expected_val;
 }

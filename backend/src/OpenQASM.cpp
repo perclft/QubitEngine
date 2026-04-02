@@ -3,9 +3,7 @@
 #include <sstream>
 #include <cctype>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+// Centralized M_PI used
 
 namespace qubit_engine {
 namespace qasm {

@@ -1,5 +1,5 @@
 #include "CircuitOptimizer.hpp"
-#include <iostream>
+#include <spdlog/spdlog.h>
 
 namespace qubit_engine {
 
@@ -30,8 +30,7 @@ void CircuitOptimizer::optimize(
     }
   }
 
-  std::cout << "CircuitOptimizer: Reduced " << tape.size() << " gates to "
-            << optimizedTape.size() << std::endl;
+  spdlog::info("CircuitOptimizer: Reduced {} gates to {}", tape.size(), optimizedTape.size());
   tape = std::move(optimizedTape);
 }
 
@@ -90,8 +89,7 @@ void CircuitOptimizer::mapTo1DTopology(
     }
   }
 
-  std::cout << "CircuitOptimizer: Mapped 1D topology inserted "
-            << (mappedTape.size() - tape.size()) << " SWAP gates." << std::endl;
+  spdlog::info("CircuitOptimizer: Mapped 1D topology inserted {} SWAP gates.", (mappedTape.size() - tape.size()));
   tape = std::move(mappedTape);
 }
 

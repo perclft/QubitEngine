@@ -14,15 +14,14 @@
 #include <cstdint>
 #include <future>
 #include <iostream>
+#include <spdlog/spdlog.h>
 #include <random>
 #include <string>
 #include <vector>
 #include <memory>
 #include <complex>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+// Centralized M_PI used
 
 namespace qubit_engine {
 
@@ -31,8 +30,8 @@ QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
   const char* secret = std::getenv("QUBIT_ENGINE_JWT_SECRET");
   const char* skip = std::getenv("QUBIT_ENGINE_SKIP_AUTH");
   if (!secret && (!skip || std::string(skip) != "1")) {
-      std::cerr << "WARNING: QUBIT_ENGINE_JWT_SECRET is not set. Simulation security may be compromised." << std::endl;
-      std::cerr << "Set QUBIT_ENGINE_SKIP_AUTH=1 to explicitly disable this warning during development." << std::endl;
+      spdlog::warn("QUBIT_ENGINE_JWT_SECRET is not set. Simulation security may be compromised.");
+      spdlog::warn("Set QUBIT_ENGINE_SKIP_AUTH=1 to explicitly disable this warning during development.");
   }
 
   // Check ConfigManager for force local execution override if not explicitly specified
@@ -42,7 +41,7 @@ QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
   auto cloud_url = ConfigManager::Instance().getCloudUrl();
   if (cloud_url.has_value() && !use_local) {
     backend = std::make_unique<CloudBackend>(n, cloud_url.value());
-    std::cout << "QuantumRegister: Using CloudBackend (Remote: " << cloud_url.value() << ")" << std::endl;
+    spdlog::info("QuantumRegister: Using CloudBackend (Remote: {})", cloud_url.value());
     return;
   }
 
@@ -61,11 +60,10 @@ QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
     try {
       // Stub: In real imp, check device count e.g. cudaGetDeviceCount
       backend = std::make_unique<CudaBackend>(n);
-      std::cout << "QuantumRegister: Using CudaBackend (GPU)" << std::endl;
+      spdlog::info("QuantumRegister: Using CudaBackend (GPU)");
       return;
     } catch (...) {
-      std::cerr << "QuantumRegister: CudaBackend failed. Falling back."
-                << std::endl;
+      spdlog::error("QuantumRegister: CudaBackend failed. Falling back.");
     }
   }
 #endif

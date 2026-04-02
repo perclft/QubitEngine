@@ -1,5 +1,5 @@
 #include "MetalContext.h"
-#include <iostream>
+#include <spdlog/spdlog.h>
 #include <stdexcept>
 
 #ifdef __APPLE__
@@ -85,8 +85,8 @@ void MetalContext::loadLibrary(const std::string &path) {
     pImpl->defaultLibrary = [pImpl->device newLibraryWithURL:url error:&error];
 
     if (!pImpl->defaultLibrary) {
-      std::cerr << "Failed to load Metal library: " <<
-          [[error localizedDescription] UTF8String] << std::endl;
+      spdlog::error("Failed to load Metal library: {}",
+          [[error localizedDescription] UTF8String]);
     }
   }
 }
@@ -101,7 +101,7 @@ void MetalContext::dispatchCompute(const std::string &kernelName,
     NSString *name = [NSString stringWithUTF8String:kernelName.c_str()];
     id<MTLFunction> function = [pImpl->defaultLibrary newFunctionWithName:name];
     if (!function) {
-      std::cerr << "Failed to find Metal function: " << kernelName << std::endl;
+      spdlog::error("Failed to find Metal function: {}", kernelName);
       return;
     }
 
@@ -110,8 +110,8 @@ void MetalContext::dispatchCompute(const std::string &kernelName,
         [pImpl->device newComputePipelineStateWithFunction:function
                                                      error:&error];
     if (!pipelineState) {
-      std::cerr << "Failed to create pipeline state: " <<
-          [[error localizedDescription] UTF8String] << std::endl;
+      spdlog::error("Failed to create pipeline state: {}",
+          [[error localizedDescription] UTF8String]);
       return;
     }
 

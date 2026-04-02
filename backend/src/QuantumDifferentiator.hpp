@@ -8,10 +8,7 @@
 #include <functional>
 #include <vector>
 
-// Fallback for M_PI if not defined (Windows compatibility)
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+// Redundant M_PI definition removed; centralized in Types.hpp
 
 // Type alias for the ansatz function: (params, register) -> void
 using qubit_engine::QuantumRegister;

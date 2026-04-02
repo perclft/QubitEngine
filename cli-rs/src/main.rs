@@ -400,3 +400,69 @@ where
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::mpsc;
+    use crossterm::event::{KeyEvent, KeyModifiers};
+
+    #[tokio::test]
+    async fn test_router_navigation() {
+        let (tx, _rx) = mpsc::channel(1);
+        let mut router = RouterComponent {
+            endpoint: "http://localhost:50051".to_string(),
+            circuits_dir: ".".to_string(),
+            engine_tx: tx,
+            active_view: ActiveView::Simulation,
+            circuits: vec!["a.json".to_string(), "b.json".to_string()],
+            circuit_list_state: ratatui::widgets::ListState::default(),
+            sim: components::simulation::SimulationState::default(),
+            current_task: None,
+            topology: components::topology::TopologyState::default(),
+            circuit: components::circuit::CircuitState::default(),
+            last_terminal_size: (80, 24),
+        };
+        router.circuit_list_state.select(Some(0));
+
+        router.next();
+        assert_eq!(router.circuit_list_state.selected(), Some(1));
+
+        router.next();
+        assert_eq!(router.circuit_list_state.selected(), Some(0));
+
+        router.previous();
+        assert_eq!(router.circuit_list_state.selected(), Some(1));
+    }
+
+    #[tokio::test]
+    async fn test_view_switching() {
+        let (tx, _rx) = mpsc::channel(1);
+        let mut router = RouterComponent {
+            endpoint: "http://localhost:50051".to_string(),
+            circuits_dir: ".".to_string(),
+            engine_tx: tx,
+            active_view: ActiveView::Simulation,
+            circuits: vec!["a.json".to_string()],
+            circuit_list_state: ratatui::widgets::ListState::default(),
+            sim: components::simulation::SimulationState::default(),
+            current_task: None,
+            topology: components::topology::TopologyState::default(),
+            circuit: components::circuit::CircuitState::default(),
+            last_terminal_size: (80, 24),
+        };
+
+        // Simulate key presses for view switching via Char event handlers
+        let event_topology = AppEvent::Input(crossterm::event::Event::Key(
+            KeyEvent::new(KeyCode::Char('2'), KeyModifiers::empty())
+        ));
+        router.handle_event(&event_topology).unwrap();
+        assert_eq!(router.active_view, ActiveView::Topology);
+
+        let event_circuit = AppEvent::Input(crossterm::event::Event::Key(
+            KeyEvent::new(KeyCode::Char('3'), KeyModifiers::empty())
+        ));
+        router.handle_event(&event_circuit).unwrap();
+        assert_eq!(router.active_view, ActiveView::Circuit);
+    }
+}

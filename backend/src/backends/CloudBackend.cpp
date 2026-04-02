@@ -1,6 +1,6 @@
 #include "CloudBackend.hpp"
 #include <grpcpp/grpcpp.h>
-#include <iostream>
+#include <spdlog/spdlog.h>
 
 namespace qubit_engine {
 
@@ -161,7 +161,7 @@ void CloudBackend::ensureRemoteExecution() const {
   grpc::Status status = stub_->RunCircuit(&context, request_, &last_response_);
 
   if (!status.ok()) {
-    std::cerr << "Cloud gRPC Error: " << status.error_message() << std::endl;
+    spdlog::error("Cloud gRPC Error: {}", status.error_message());
   } else {
     needs_sync_ = false;
   }

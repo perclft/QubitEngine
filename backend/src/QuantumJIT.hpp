@@ -8,12 +8,11 @@
 #include <chrono>
 #define _USE_MATH_DEFINES
 #include <cmath>
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+// Centralized M_PI used from Types.hpp
 #include <complex>
 #include <list>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -96,6 +95,7 @@ private:
   size_t max_cache_size_{1000}; // Default bounding to prevent memory leak
 
   // Cache for storing previously compiled circuits (LRU eviction)
+  std::mutex cache_mutex_;
   std::list<std::pair<std::string, CircuitIR>> ir_cache_list_;
   std::unordered_map<std::string, decltype(ir_cache_list_)::iterator>
       ir_cache_map_;

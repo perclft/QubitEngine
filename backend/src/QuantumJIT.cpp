@@ -22,11 +22,14 @@ QuantumJIT::CircuitIR QuantumJIT::compile(
 
   // 1. Fast Path: Check Cache
   std::string hash_key = compute_hash(num_qubits, gates, params);
-  auto it = ir_cache_map_.find(hash_key);
-  if (it != ir_cache_map_.end()) {
-    // Evict to front (LRU)
-    ir_cache_list_.splice(ir_cache_list_.begin(), ir_cache_list_, it->second);
-    return it->second->second;
+  {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    auto it = ir_cache_map_.find(hash_key);
+    if (it != ir_cache_map_.end()) {
+      // Evict to front (LRU)
+      ir_cache_list_.splice(ir_cache_list_.begin(), ir_cache_list_, it->second);
+      return it->second->second;
+    }
   }
 
   CircuitIR ir;
@@ -65,14 +68,17 @@ QuantumJIT::CircuitIR QuantumJIT::compile(
       static_cast<double>(ir.stats.original_gates) / ir.stats.optimized_gates;
 
   // Cache Results (Push to front)
-  ir_cache_list_.emplace_front(hash_key, ir);
-  ir_cache_map_[hash_key] = ir_cache_list_.begin();
+  {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    ir_cache_list_.emplace_front(hash_key, ir);
+    ir_cache_map_[hash_key] = ir_cache_list_.begin();
 
-  // Enforce bounding limit
-  if (ir_cache_list_.size() > max_cache_size_) {
-    auto last = std::prev(ir_cache_list_.end());
-    ir_cache_map_.erase(last->first);
-    ir_cache_list_.pop_back();
+    // Enforce bounding limit
+    if (ir_cache_list_.size() > max_cache_size_) {
+      auto last = std::prev(ir_cache_list_.end());
+      ir_cache_map_.erase(last->first);
+      ir_cache_list_.pop_back();
+    }
   }
 
   return ir;
@@ -80,6 +86,7 @@ QuantumJIT::CircuitIR QuantumJIT::compile(
 
 // --- Caching ---
 void QuantumJIT::clear_cache() {
+  std::lock_guard<std::mutex> lock(cache_mutex_);
   ir_cache_list_.clear();
   ir_cache_map_.clear();
 }

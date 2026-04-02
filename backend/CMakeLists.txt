@@ -275,6 +275,12 @@ add_library(qubit_engine_core STATIC
     src/OpenQASM.cpp
     src/ipc/SharedMemory.cpp
     src/QuantumMetrics.cpp
+    src/auth/AuthInterceptor.cpp
+    src/services/CircuitService.cpp
+    src/services/VQEService.cpp
+    src/services/TopologyService.cpp
+    src/workers/JobExecutor.cpp
+    src/workers/WorkerPool.cpp
     ${METAL_SOURCES}
     ${GPU_SOURCES}
 )
@@ -328,7 +334,6 @@ target_link_libraries(qubit_engine_core
 # =================================================================
 add_executable(qubit_engine
     src/ServiceImpl.cpp
-    src/ServiceImpl_Visualize.cpp
     src/main.cpp
 )
 
@@ -394,12 +399,12 @@ add_executable(tests
     tests/MPSBackendTests.cpp
     tests/StabilizerBackendTests.cpp
     tests/SecurityIntegrationTests.cpp
+    tests/WorkerStressTests.cpp
 )
 
 # Service tests need gRPC generated headers + ServiceImpl sources
 target_sources(tests PRIVATE
     src/ServiceImpl.cpp
-    src/ServiceImpl_Visualize.cpp
     ${PROTO_SRC_GENERATED_CPP}
     ${GRPC_SRC_GENERATED_CPP}
 )
@@ -428,7 +433,6 @@ add_executable(benchmark tests/Benchmark.cpp)
 
 target_sources(benchmark PRIVATE
     src/ServiceImpl.cpp
-    src/ServiceImpl_Visualize.cpp
     ${PROTO_SRC_GENERATED_CPP}
     ${GRPC_SRC_GENERATED_CPP}
 )
@@ -467,6 +471,22 @@ if(MPI_FOUND)
         $<$<BOOL:${UNIX}>:dl>
         $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
         $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
+        spdlog::spdlog
+    )
+endif()
+
+# =================================================================
+# Fuzzing
+# =================================================================
+option(ENABLE_FUZZING "Enable LLVM libFuzzer for OpenQASM3Parser" OFF)
+if(ENABLE_FUZZING)
+    message(STATUS "Fuzzing enabled. Building OpenQASMFuzzTest.")
+    add_executable(OpenQASMFuzzTest tests/OpenQASMFuzzTest.cpp src/OpenQASM3Parser.cpp src/OpenQASM.cpp)
+    target_include_directories(OpenQASMFuzzTest PRIVATE src)
+    target_compile_options(OpenQASMFuzzTest PRIVATE -fprofile-instr-generate -fcoverage-mapping -fsanitize=fuzzer,address,undefined)
+    target_link_options(OpenQASMFuzzTest PRIVATE -fsanitize=fuzzer,address,undefined)
+    target_link_libraries(OpenQASMFuzzTest PRIVATE
+        fmt::fmt
         spdlog::spdlog
     )
 endif()

@@ -330,7 +330,17 @@ jobs:
 
       - name: Lint
         working-directory: web
-        run: npm run lint || true
+        run: npm run lint
+
+      - name: Test
+        working-directory: web
+        run: npm test -- --coverage
+
+      - name: Upload Coverage Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-coverage-results
+          path: web/coverage/
 
       - name: Build
         working-directory: web

@@ -27,7 +27,7 @@ public:
   std::vector<Complex> getStateVector() const override;
 
   void applyDenseUnitary(const std::vector<size_t> &targets,
-                         const std::vector<Complex> &matrix) override {}
+                         const std::vector<Complex> &matrix) override;
 
   // Basic gates (Clifford)
   void applyHadamard(size_t target) override;

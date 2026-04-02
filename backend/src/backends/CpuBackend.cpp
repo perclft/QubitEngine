@@ -1,7 +1,7 @@
 #include "CpuBackend.hpp"
 #include <algorithm>
 #include <cmath>
-#include <iostream>
+#include <spdlog/spdlog.h>
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -34,7 +34,7 @@ inline MPI_Datatype get_mpi_precision_type() {
 
 namespace qubit_engine {
 
-static const Precision INV_SQRT_2 = 1.0f / std::sqrt(2.0f);
+static const Precision INV_SQRT_2 = 1.0 / std::sqrt(2.0);
 
 // --- Lifecycle ---
 CpuBackend::CpuBackend(size_t n, bool force_local) : num_qubits(n) {
@@ -58,9 +58,9 @@ CpuBackend::CpuBackend(size_t n, bool force_local) : num_qubits(n) {
   if (local_dim == 0)
     local_dim = 1;
 
-  state.resize(local_dim, 0.0f);
+  state.resize(local_dim, 0.0);
   if (local_rank == 0)
-    state[0] = 1.0f;
+    state[0] = 1.0;
 }
 
 // --- Core Gates ---
@@ -71,9 +71,9 @@ void CpuBackend::applyHadamard(size_t target) {
 
   if (stride < local_dim) {
 #if defined(USE_NEON_INTRINSICS)
-    // ARM NEON implementation for Apple Silicon (FLOAT Optimized)
-    // float32x4_t holds 2 complex numbers (4 floats)
-    float32x4_t v_inv_sqrt2 = vdupq_n_f32(INV_SQRT_2);
+    // ARM NEON implementation for Apple Silicon (DOUBLE Optimized)
+    // float64x2_t holds 1 complex number (2 doubles)
+    float64x2_t v_inv_sqrt2 = vdupq_n_f64(INV_SQRT_2);
 
     // Threshold for when to switch to inner-loop parallelization
     // If we have few outer iterations (large stride), we must parallelize
@@ -87,30 +87,21 @@ void CpuBackend::applyHadamard(size_t target) {
 #endif
       for (long long i = 0; i < static_cast<long long>(local_dim);
            i += 2 * stride) {
-        for (size_t j = i; j < i + stride; j += 2) {
-          // Handle vectorization boundary for small strides
-          if (j + 1 >= i + stride && stride < 2) {
-            Complex a = state[j];
-            Complex b = state[j + stride];
-            state[j] = (a + b) * INV_SQRT_2;
-            state[j + stride] = (a - b) * INV_SQRT_2;
-            continue;
-          }
+        for (size_t j = i; j < i + stride; j += 1) {
+          double *ptr_a = reinterpret_cast<double *>(&state[j]);
+          double *ptr_b = reinterpret_cast<double *>(&state[j + stride]);
 
-          float *ptr_a = reinterpret_cast<float *>(&state[j]);
-          float *ptr_b = reinterpret_cast<float *>(&state[j + stride]);
+          float64x2_t v_a = vld1q_f64(ptr_a);
+          float64x2_t v_b = vld1q_f64(ptr_b);
 
-          float32x4_t v_a = vld1q_f32(ptr_a);
-          float32x4_t v_b = vld1q_f32(ptr_b);
+          float64x2_t v_sum = vaddq_f64(v_a, v_b);
+          v_sum = vmulq_f64(v_sum, v_inv_sqrt2);
 
-          float32x4_t v_sum = vaddq_f32(v_a, v_b);
-          v_sum = vmulq_f32(v_sum, v_inv_sqrt2);
+          float64x2_t v_diff = vsubq_f64(v_a, v_b);
+          v_diff = vmulq_f64(v_diff, v_inv_sqrt2);
 
-          float32x4_t v_diff = vsubq_f32(v_a, v_b);
-          v_diff = vmulq_f32(v_diff, v_inv_sqrt2);
-
-          vst1q_f32(ptr_a, v_sum);
-          vst1q_f32(ptr_b, v_diff);
+          vst1q_f64(ptr_a, v_sum);
+          vst1q_f64(ptr_b, v_diff);
         }
       }
     } else {
@@ -122,28 +113,28 @@ void CpuBackend::applyHadamard(size_t target) {
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static)
 #endif
-        for (size_t j = i; j < i + stride; j += 2) {
-          float *ptr_a = reinterpret_cast<float *>(&state[j]);
-          float *ptr_b = reinterpret_cast<float *>(&state[j + stride]);
+        for (size_t j = i; j < i + stride; j += 1) {
+          double *ptr_a = reinterpret_cast<double *>(&state[j]);
+          double *ptr_b = reinterpret_cast<double *>(&state[j + stride]);
 
-          float32x4_t v_a = vld1q_f32(ptr_a);
-          float32x4_t v_b = vld1q_f32(ptr_b);
+          float64x2_t v_a = vld1q_f64(ptr_a);
+          float64x2_t v_b = vld1q_f64(ptr_b);
 
-          float32x4_t v_sum = vaddq_f32(v_a, v_b);
-          v_sum = vmulq_f32(v_sum, v_inv_sqrt2);
+          float64x2_t v_sum = vaddq_f64(v_a, v_b);
+          v_sum = vmulq_f64(v_sum, v_inv_sqrt2);
 
-          float32x4_t v_diff = vsubq_f32(v_a, v_b);
-          v_diff = vmulq_f32(v_diff, v_inv_sqrt2);
+          float64x2_t v_diff = vsubq_f64(v_a, v_b);
+          v_diff = vmulq_f64(v_diff, v_inv_sqrt2);
 
-          vst1q_f32(ptr_a, v_sum);
-          vst1q_f32(ptr_b, v_diff);
+          vst1q_f64(ptr_a, v_sum);
+          vst1q_f64(ptr_b, v_diff);
         }
       }
     }
 #elif defined(USE_AVX2_INTRINSICS) && defined(__AVX2__)
-    // AVX2 float implementation
+    // AVX2 double implementation
     const size_t PARALLEL_THRESHOLD = 2048;
-    __m256 v_inv_sqrt2 = _mm256_set1_ps(INV_SQRT_2);
+    __m256d v_inv_sqrt2 = _mm256_set1_pd(INV_SQRT_2);
 
     if (2 * stride < local_dim / 4 || stride < PARALLEL_THRESHOLD) {
 #ifdef _OPENMP
@@ -152,18 +143,18 @@ void CpuBackend::applyHadamard(size_t target) {
       for (long long i = 0; i < static_cast<long long>(local_dim);
            i += 2 * stride) {
         long long j = i;
-        if (stride >= 4) {
-          for (; j + 3 < i + stride; j += 4) {
-            float *ptr_a = reinterpret_cast<float *>(&state[j]);
-            float *ptr_b = reinterpret_cast<float *>(&state[j + stride]);
-            __m256 v_a = _mm256_loadu_ps(ptr_a);
-            __m256 v_b = _mm256_loadu_ps(ptr_b);
-            __m256 v_sum = _mm256_add_ps(v_a, v_b);
-            __m256 v_diff = _mm256_sub_ps(v_a, v_b);
-            v_sum = _mm256_mul_ps(v_sum, v_inv_sqrt2);
-            v_diff = _mm256_mul_ps(v_diff, v_inv_sqrt2);
-            _mm256_storeu_ps(ptr_a, v_sum);
-            _mm256_storeu_ps(ptr_b, v_diff);
+        if (stride >= 2) {
+          for (; j + 1 < i + stride; j += 2) {
+            double *ptr_a = reinterpret_cast<double *>(&state[j]);
+            double *ptr_b = reinterpret_cast<double *>(&state[j + stride]);
+            __m256d v_a = _mm256_loadu_pd(ptr_a);
+            __m256d v_b = _mm256_loadu_pd(ptr_b);
+            __m256d v_sum = _mm256_add_pd(v_a, v_b);
+            __m256d v_diff = _mm256_sub_pd(v_a, v_b);
+            v_sum = _mm256_mul_pd(v_sum, v_inv_sqrt2);
+            v_diff = _mm256_mul_pd(v_diff, v_inv_sqrt2);
+            _mm256_storeu_pd(ptr_a, v_sum);
+            _mm256_storeu_pd(ptr_b, v_diff);
           }
         }
         for (; j < i + stride; ++j) {
@@ -179,19 +170,19 @@ void CpuBackend::applyHadamard(size_t target) {
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static)
 #endif
-        for (long long j = i; j < i + stride; j += 4) {
+        for (long long j = i; j < i + stride; j += 2) {
           // Checking boundary inside parallel loop might be tricky, simplified
           // assuming aligned
-          float *ptr_a = reinterpret_cast<float *>(&state[j]);
-          float *ptr_b = reinterpret_cast<float *>(&state[j + stride]);
-          __m256 v_a = _mm256_loadu_ps(ptr_a);
-          __m256 v_b = _mm256_loadu_ps(ptr_b);
-          __m256 v_sum = _mm256_add_ps(v_a, v_b);
-          __m256 v_diff = _mm256_sub_ps(v_a, v_b);
-          v_sum = _mm256_mul_ps(v_sum, v_inv_sqrt2);
-          v_diff = _mm256_mul_ps(v_diff, v_inv_sqrt2);
-          _mm256_storeu_ps(ptr_a, v_sum);
-          _mm256_storeu_ps(ptr_b, v_diff);
+          double *ptr_a = reinterpret_cast<double *>(&state[j]);
+          double *ptr_b = reinterpret_cast<double *>(&state[j + stride]);
+          __m256d v_a = _mm256_loadu_pd(ptr_a);
+          __m256d v_b = _mm256_loadu_pd(ptr_b);
+          __m256d v_sum = _mm256_add_pd(v_a, v_b);
+          __m256d v_diff = _mm256_sub_pd(v_a, v_b);
+          v_sum = _mm256_mul_pd(v_sum, v_inv_sqrt2);
+          v_diff = _mm256_mul_pd(v_diff, v_inv_sqrt2);
+          _mm256_storeu_pd(ptr_a, v_sum);
+          _mm256_storeu_pd(ptr_b, v_diff);
         }
       }
     }
@@ -253,7 +244,7 @@ void CpuBackend::applyHadamard(size_t target) {
       }
     }
 #else
-    std::cerr << "Error: Global H requested but MPI not enabled." << std::endl;
+    spdlog::error("Global H requested but MPI not enabled.");
 #endif
   }
 }
@@ -264,13 +255,14 @@ void CpuBackend::applyX(size_t target) {
 
   if (stride < local_dim) {
 #if defined(USE_NEON_INTRINSICS)
-    // Optimized Neon swap? Just copying bytes is fast enough or use intrinsics
-    // if needed. X gate is just swap.
+    // Optimized Neon swap can be expanded, but parallelizing the outer loop is more impactful for large dimensions
+#pragma omp parallel for
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j)
         std::swap(state[j], state[j + stride]);
     }
 #else
+#pragma omp parallel for
     for (size_t i = 0; i < local_dim; i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j)
         std::swap(state[j], state[j + stride]);
@@ -287,7 +279,7 @@ void CpuBackend::applyX(size_t target) {
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     state.assign(recv_buf.begin(), recv_buf.end());
 #else
-    std::cerr << "Error: Global X requested but MPI not enabled." << std::endl;
+    spdlog::error("Global X requested but MPI not enabled.");
 #endif
   }
 }
@@ -311,8 +303,7 @@ void CpuBackend::applyY(size_t target) {
     }
   } else {
     // MPI implementation skipped for brevity
-    std::cerr << "Error: Global Y requested but MPI logic simplified."
-              << std::endl;
+    spdlog::error("Global Y requested but MPI logic simplified.");
   }
 }
 
@@ -326,7 +317,7 @@ void CpuBackend::applyZ(size_t target) {
     for (long long i = 0; i < static_cast<long long>(local_dim);
          i += 2 * stride) {
       for (size_t j = i; j < i + stride; ++j)
-        state[j + stride] *= -1.0f;
+        state[j + stride] *= -1.0;
     }
   } else {
 #ifdef MPI_ENABLED
@@ -336,10 +327,10 @@ void CpuBackend::applyZ(size_t target) {
 #pragma omp parallel for
 #endif
       for (long long i = 0; i < static_cast<long long>(local_dim); ++i)
-        state[i] *= -1.0f;
+        state[i] *= -1.0;
     }
 #else
-    std::cerr << "Error: Global Z requested but MPI not enabled." << std::endl;
+    spdlog::error("Global Z requested but MPI not enabled.");
 #endif
   }
 }
@@ -401,7 +392,7 @@ void CpuBackend::applyCNOT(size_t control, size_t target) {
     }
     return;
 #else
-    std::cerr << "Error: Global CNOT requested but MPI not enabled." << std::endl;
+    spdlog::error("Global CNOT requested but MPI not enabled.");
     return;
 #endif
   }
@@ -423,7 +414,7 @@ void CpuBackend::applyCNOT(size_t control, size_t target) {
 #endif
   }
 
-  std::cerr << "Complex Global CNOT not fully implemented." << std::endl;
+  spdlog::error("Complex Global CNOT not fully implemented.");
 }
 
 // --- Advanced Gates ---
@@ -468,7 +459,7 @@ void CpuBackend::applyPhaseT(size_t target) {
   size_t local_dim = state.size();
   size_t stride = 1ULL << target;
   // T-gate phase: e^{iπ/4} = cos(π/4) + i*sin(π/4) = 1/√2 + i/√2
-  Complex phase(1.0f / std::sqrt(2.0f), 1.0f / std::sqrt(2.0f));
+  Complex phase(1.0 / std::sqrt(2.0), 1.0 / std::sqrt(2.0));
 
   if (stride < local_dim) {
 #ifdef _OPENMP
@@ -487,8 +478,8 @@ void CpuBackend::applyRotationY(size_t target, Precision angle) {
   size_t local_dim = state.size();
   size_t stride = 1ULL << target;
 
-  Precision c = std::cos(angle / 2.0f);
-  Precision s = std::sin(angle / 2.0f);
+  Precision c = std::cos(angle / 2.0);
+  Precision s = std::sin(angle / 2.0);
 
   if (stride < local_dim) {
 #ifdef _OPENMP
@@ -510,8 +501,8 @@ void CpuBackend::applyRotationZ(size_t target, Precision angle) {
   size_t local_dim = state.size();
   size_t stride = 1ULL << target;
 
-  Complex z0(std::cos(-angle / 2.0f), std::sin(-angle / 2.0f));
-  Complex z1(std::cos(angle / 2.0f), std::sin(angle / 2.0f));
+  Complex z0(std::cos(-angle / 2.0), std::sin(-angle / 2.0));
+  Complex z1(std::cos(angle / 2.0), std::sin(angle / 2.0));
 
   if (stride < local_dim) {
 #ifdef _OPENMP
@@ -532,8 +523,8 @@ void CpuBackend::applyRotationX(size_t target, Precision angle) {
   size_t local_dim = state.size();
   size_t stride = 1ULL << target;
 
-  Precision c = std::cos(angle / 2.0f);
-  Precision s = std::sin(angle / 2.0f);
+  Precision c = std::cos(angle / 2.0);
+  Precision s = std::sin(angle / 2.0);
   Complex neg_is(0, -s); // -i*sin(θ/2)
 
   if (stride < local_dim) {
@@ -589,7 +580,7 @@ void CpuBackend::applyCZ(size_t control, size_t target) {
 #endif
     for (long long i = 0; i < static_cast<long long>(local_dim); ++i) {
       if ((i & c_stride) && (i & t_stride)) {
-        state[i] *= -1.0f;
+        state[i] *= -1.0;
       }
     }
   }
@@ -631,14 +622,14 @@ int CpuBackend::measure(size_t target) {
   if (outcome == 0) {
     for (size_t i = 0; i < state.size(); ++i) {
       if (i & stride)
-        state[i] = 0.0f;
+        state[i] = 0.0;
       else
         norm += std::norm(state[i]);
     }
   } else {
     for (size_t i = 0; i < state.size(); ++i) {
       if (!(i & stride))
-        state[i] = 0.0f;
+        state[i] = 0.0;
       else
         norm += std::norm(state[i]);
     }

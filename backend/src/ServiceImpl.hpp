@@ -1,14 +1,23 @@
 #pragma once
 #include "quantum.grpc.pb.h"
 #include <grpcpp/grpcpp.h>
+#include <memory>
 
 namespace qubit_engine {
-class QuantumRegister;
+namespace auth { class AuthInterceptor; }
+namespace services {
+class CircuitService;
+class VQEService;
+class TopologyService;
+}
 }
 
 class QubitEngineServiceImpl final
     : public qubit_engine::QuantumCompute::Service {
 public:
+  QubitEngineServiceImpl();
+  ~QubitEngineServiceImpl() override;
+
   grpc::Status RunCircuit(grpc::ServerContext *context,
                           const qubit_engine::CircuitRequest *request,
                           qubit_engine::StateResponse *response) override;
@@ -31,16 +40,9 @@ public:
       const qubit_engine::HardwareTopologyRequest *request,
       qubit_engine::HardwareTopologyResponse *response) override;
 
-  bool ValidateAuth(grpc::ServerContext *context) const;
-  void ValidateAuthInternal(const std::map<std::string, std::string>& metadata) const;
-
 private:
-  void applyGate(qubit_engine::QuantumRegister &qreg,
-                 const qubit_engine::GateOperation &op,
-                 qubit_engine::StateResponse *response);
-  void serializeState(const qubit_engine::QuantumRegister &qreg,
-                      qubit_engine::StateResponse *response,
-                      qubit_engine::CircuitRequest::MeasurementStrategy
-                          strategy = qubit_engine::CircuitRequest::FULL_STATE,
-                      bool use_shm = false);
+  std::unique_ptr<qubit_engine::auth::AuthInterceptor> auth_interceptor_;
+  std::unique_ptr<qubit_engine::services::CircuitService> circuit_service_;
+  std::unique_ptr<qubit_engine::services::VQEService> vqe_service_;
+  std::unique_ptr<qubit_engine::services::TopologyService> topology_service_;
 };

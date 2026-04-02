@@ -1,4 +1,5 @@
 #include "StabilizerBackend.hpp"
+#include "../Exceptions.hpp"
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
@@ -165,6 +166,12 @@ void StabilizerBackend::applyRotationZ(size_t, Precision) {
 void StabilizerBackend::applyDepolarizingNoise(Precision) {
   throw std::runtime_error("Error: Continuous noise application pending "
                            "stabilizer discrete measurement injection.");
+}
+
+void StabilizerBackend::applyDenseUnitary(const std::vector<size_t> &targets,
+                                         const std::vector<Complex> &matrix) {
+  throw FeatureNotSupportedException(
+      "applyDenseUnitary not supported in Stabilizer backend.");
 }
 
 } // namespace qubit_engine

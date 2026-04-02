@@ -2,7 +2,7 @@
 
 #include "QuantumDifferentiator.hpp"
 #include <cmath>
-#include <iostream>
+#include <spdlog/spdlog.h>
 #include <random>
 #include <vector>
 
@@ -88,9 +88,7 @@ public:
       }
 
       if (k % 10 == 0) {
-        std::cout << "SPSA Iteration " << k
-                  << ", Energy Estimate: " << (y_plus + y_minus) / 2.0
-                  << std::endl;
+        spdlog::info("SPSA Iteration {}, Energy Estimate: {}", k, (y_plus + y_minus) / 2.0);
       }
     }
 

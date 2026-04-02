@@ -70,7 +70,7 @@ void *SharedMemory::createSegment(const std::string &descriptor,
   }
   return pBuf;
 #else
-  int fd = shm_open(descriptor.c_str(), O_CREAT | O_RDWR, 0666);
+  int fd = shm_open(descriptor.c_str(), O_CREAT | O_RDWR, 0600);
   if (fd == -1) {
     throw std::runtime_error("shm_open failed");
   }
@@ -118,7 +118,7 @@ void *SharedMemory::openSegment(const std::string &descriptor,
 
   return pBuf;
 #else
-  int fd = shm_open(descriptor.c_str(), O_RDWR, 0666);
+  int fd = shm_open(descriptor.c_str(), O_RDWR, 0600);
   if (fd == -1) {
     throw std::runtime_error("shm_open failed");
   }

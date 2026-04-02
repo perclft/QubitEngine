@@ -2,7 +2,7 @@
 
 #include "QuantumDifferentiator.hpp"
 #include <cmath>
-#include <iostream>
+#include <spdlog/spdlog.h>
 #include <vector>
 
 namespace qubit_engine {
@@ -73,13 +73,12 @@ public:
       // Let's optimize: perform check every 10 steps or just rely on gradient
       // norm.
       if (max_grad < config_.tolerance) {
-        std::cout << "Adam Converged at iteration " << t << std::endl;
+        spdlog::info("Adam Converged at iteration {}", t);
         break;
       }
 
       if (t % 10 == 0) {
-        std::cout << "Iteration " << t << ", Max Grad: " << max_grad
-                  << std::endl;
+        spdlog::info("Iteration {}, Max Grad: {}", t, max_grad);
       }
     }
 

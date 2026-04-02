@@ -1,4 +1,5 @@
 #include "CudaBackend.hpp"
+#include "../Exceptions.hpp"
 #include "../Types.hpp"
 #include "../kernels/GateKernels.hpp"
 #include <cuComplex.h>
@@ -480,6 +481,12 @@ void CudaBackend::applyFusedBlock(const std::vector<int> &targets,
                                h_unitary.data());
 
   cudaFree(d_targets);
+}
+
+void CudaBackend::applyDenseUnitary(const std::vector<size_t> &targets,
+                                   const std::vector<Complex> &matrix) {
+  throw FeatureNotSupportedException(
+      "applyDenseUnitary not supported in CUDA backend.");
 }
 
 } // namespace qubit_engine

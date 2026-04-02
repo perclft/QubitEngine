@@ -1,6 +1,6 @@
 #pragma once
 
-#include <iostream>
+#include <spdlog/spdlog.h>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -65,7 +65,7 @@ public:
 #endif
 
     if (deviceCount == 0) {
-      std::cerr << "Warning: No GPU devices found." << std::endl;
+      spdlog::warn("No GPU devices found.");
       return;
     }
 
@@ -77,11 +77,10 @@ public:
 #elif defined(ENABLE_METAL)
     MetalContext::getInstance().initializeDevice(0);
 #endif
-    std::cout << "GPU Context Initialized. Devices: " << deviceCount
-              << std::endl;
+    spdlog::info("GPU Context Initialized. Devices: {}", deviceCount);
     initialized = true;
 #else
-    std::cerr << "Warning: GPU compilation disabled." << std::endl;
+    spdlog::warn("GPU compilation disabled.");
 #endif
   }
 
