@@ -14,10 +14,13 @@ import (
 )
 
 func getJwtSecret() []byte {
-	if secret := os.Getenv("QUBIT_ENGINE_JWT_SECRET"); secret != "" {
-		return []byte(secret)
+	secret := os.Getenv("QUBIT_ENGINE_JWT_SECRET")
+	if secret == "" {
+		// In a real production system, we might want to panic or log a fatal error here
+		// if we strictly require authentication.
+		return nil
 	}
-	return []byte("qubit-engine-development-secret-12345")
+	return []byte(secret)
 }
 
 func GenerateToken(userID string, expiry time.Duration) (string, error) {
