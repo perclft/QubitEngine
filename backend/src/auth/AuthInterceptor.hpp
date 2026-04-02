@@ -19,14 +19,9 @@ public:
    * @return true if authentication is successful or skipped, false otherwise.
    */
   bool ValidateAuth(grpc::ServerContext *context) const;
+  void ValidateAuthInternal(const std::map<std::string, std::string>& metadata) const;
 
 private:
-  /**
-   * @brief Internal helper to validate binary or string metadata for JWT.
-   * @param metadata A map of metadata keys and values from the request.
-   * @throws std::runtime_error if validation fails.
-   */
-  void ValidateAuthInternal(const std::map<std::string, std::string>& metadata) const;
 };
 
 } // namespace auth

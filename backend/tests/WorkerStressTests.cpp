@@ -37,7 +37,7 @@ TEST_F(WorkerStressTest, ConcurrentJobProcessing) {
     circuit.set_num_qubits(2);
     auto* op = circuit.add_operations();
     op->set_type(qubit_engine::GateOperation::HADAMARD);
-    op->add_qubits(0);
+    op->set_target_qubit(0);
 
     std::string circuit_bin;
     circuit.SerializeToString(&circuit_bin);

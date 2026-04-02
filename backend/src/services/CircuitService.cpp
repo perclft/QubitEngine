@@ -8,6 +8,7 @@
 #include <future>
 #include <cmath>
 #include <random>
+#include <string>
 
 #ifdef __linux__
 #include <sys/sysinfo.h>
@@ -72,7 +73,7 @@ void CircuitService::serializeState(
         size_t bytes = state_vec.size() * sizeof(qubit_engine::Complex);
         qubit_engine::ipc::SharedMemory shm(shm_name, bytes, true);
         std::memcpy(shm.data(), state_vec.data(), bytes);
-        response->set_shm_handle(shm_name);
+        response->set_shm_descriptor(shm_name);
         shm_success = true;
       } catch (const std::exception &e) {
         spdlog::error("Shared Memory Error in serializeState: {}", e.what());

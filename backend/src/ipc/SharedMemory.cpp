@@ -40,6 +40,22 @@ static std::unordered_map<void*, std::shared_ptr<SharedMemorySegmentRAII>> activ
 static std::mutex handle_mutex;
 #endif
 
+SharedMemory::SharedMemory(const std::string& descriptor, size_t sizeBytes, bool create)
+    : descriptor_(descriptor), sizeBytes_(sizeBytes), ptr_(nullptr) {
+  if (create) {
+    ptr_ = createSegment(descriptor, sizeBytes);
+  } else {
+    ptr_ = openSegment(descriptor, sizeBytes);
+  }
+}
+
+SharedMemory::~SharedMemory() {
+  if (ptr_) {
+    closeSegment(descriptor_, ptr_, sizeBytes_);
+    unlinkSegment(descriptor_);
+  }
+}
+
 void *SharedMemory::createSegment(const std::string &descriptor,
                                   size_t sizeBytes) {
 #ifdef _WIN32

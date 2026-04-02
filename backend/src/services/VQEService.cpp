@@ -9,11 +9,7 @@
 namespace qubit_engine {
 namespace services {
 
-// Struct for Hamiltonian terms
-struct PauliTerm {
-  double coefficient;
-  std::string pauli_string;
-};
+// PauliTerm is defined in MolecularHamiltonian.hpp (included via QuantumDifferentiator.hpp)
 
 // Typedef for Ansatz function
 using AnsatzFunction = std::function<void(const std::vector<double> &, QuantumRegister &)>;
@@ -25,7 +21,7 @@ grpc::Status VQEService::RunVQE(
   spdlog::info("VQEService: Starting VQE Optimization...");
 
   int num_qubits = 0;
-  std::vector<PauliTerm> hamiltonian;
+  std::vector<::PauliTerm> hamiltonian;
 
   if (request->observables_size() > 0) {
     num_qubits = request->observables(0).pauli_string().length();

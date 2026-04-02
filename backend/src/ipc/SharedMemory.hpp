@@ -9,26 +9,27 @@ namespace ipc {
 
 class SharedMemory {
 public:
-  // Creates or opens a shared memory segment of the given size.
-  // descriptor should be a unique string (e.g., "/qe_shm_job123" on POSIX or
-  // "Local\\qe_shm_job123" on Windows)
+  // RAII Constructor
+  SharedMemory(const std::string& descriptor, size_t sizeBytes, bool create = false);
+  
+  // RAII Destructor
+  ~SharedMemory();
+
+  // Access the mapped data
+  void* data() const { return ptr_; }
+  
+  // Static methods for manual control if needed
   static void *createSegment(const std::string &descriptor, size_t sizeBytes);
-
-  // Opens an existing shared memory segment
   static void *openSegment(const std::string &descriptor, size_t sizeBytes);
-
-  // Unmaps the memory and closes the handle/descriptor
   static void closeSegment(const std::string &descriptor, void *ptr,
                            size_t sizeBytes);
-
-  // Marks the shared memory descriptor for deletion (POSIX only, no-op on
-  // Windows)
   static void unlinkSegment(const std::string &descriptor);
-
-  // Schedules an automatic cleanup of the memory mapped file after a given timeout
   static void scheduleCleanup(const std::string &descriptor, void *ptr, size_t sizeBytes, int timeoutMs);
 
 private:
+  std::string descriptor_;
+  size_t sizeBytes_;
+  void* ptr_;
   static void performCleanup(std::string descriptor, void *ptr, size_t sizeBytes, int timeoutMs);
 };
 

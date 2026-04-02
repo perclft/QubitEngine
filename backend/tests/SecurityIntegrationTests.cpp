@@ -1,4 +1,5 @@
 #include "../src/ServiceImpl.hpp"
+#include "../src/auth/AuthInterceptor.hpp"
 #include "quantum.grpc.pb.h"
 #include <grpcpp/grpcpp.h>
 #include <gtest/gtest.h>
@@ -29,25 +30,25 @@ protected:
     return token;
   }
 
-  QubitEngineServiceImpl service;
+  qubit_engine::auth::AuthInterceptor interceptor;
 };
 
-TEST_F(SecurityIntegrationTest, ValidateAuthInternal_NoToken_Throws) {
+TEST_F(SecurityIntegrationTest, ValidateAuthInternal_MissingMetadata_Throws) {
   std::map<std::string, std::string> metadata;
-  EXPECT_THROW(service.ValidateAuthInternal(metadata), std::runtime_error);
+  EXPECT_THROW(interceptor.ValidateAuthInternal(metadata), std::runtime_error);
 }
 
 TEST_F(SecurityIntegrationTest, ValidateAuthInternal_ValidToken_Success) {
   std::map<std::string, std::string> metadata;
   metadata["authorization"] = "Bearer " + generate_valid_token();
-  EXPECT_NO_THROW(service.ValidateAuthInternal(metadata));
+  EXPECT_NO_THROW(interceptor.ValidateAuthInternal(metadata));
 }
 
 TEST_F(SecurityIntegrationTest, ValidateAuthInternal_InvalidToken_Throws) {
   std::map<std::string, std::string> metadata;
   auto bad_token = jwt::create().sign(jwt::algorithm::hs256{"wrong-secret"});
   metadata["authorization"] = "Bearer " + bad_token;
-  EXPECT_THROW(service.ValidateAuthInternal(metadata), std::exception);
+  EXPECT_THROW(interceptor.ValidateAuthInternal(metadata), std::exception);
 }
 
 TEST_F(SecurityIntegrationTest, ValidateAuthInternal_WrongIssuer_Throws) {
@@ -57,5 +58,5 @@ TEST_F(SecurityIntegrationTest, ValidateAuthInternal_WrongIssuer_Throws) {
       .sign(jwt::algorithm::hs256{"test-secret-123"});
   metadata["authorization"] = "Bearer " + bad_token;
   // Currently we expect "qubit-engine" as issuer in the implementation
-  EXPECT_THROW(service.ValidateAuthInternal(metadata), std::exception);
+  EXPECT_THROW(interceptor.ValidateAuthInternal(metadata), std::exception);
 }
