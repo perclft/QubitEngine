@@ -30,9 +30,19 @@ grpc::Status VQEService::RunVQE(
     }
   } else {
     // Fallback logic for deprecated molecules
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
     auto molType = (request->molecule() == qubit_engine::VQERequest::LiH)
                        ? MolecularHamiltonian::LiH
                        : MolecularHamiltonian::H2;
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+#pragma GCC diagnostic pop
     num_qubits = MolecularHamiltonian::getNumQubits(molType);
     hamiltonian = MolecularHamiltonian::getHamiltonian(molType);
   }

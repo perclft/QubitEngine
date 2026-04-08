@@ -93,6 +93,6 @@ TEST_F(WorkerStressTest, ErrorHandlingDeadLetter) {
     
     pool.stop();
     EXPECT_TRUE(failed);
-    EXPECT_TRUE(dlq_item.has_value());
+    EXPECT_TRUE((bool)dlq_item);
     EXPECT_EQ(*dlq_item, job_id);
 }
