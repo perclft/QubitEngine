@@ -257,14 +257,14 @@ void CpuBackend::applyX(size_t target) {
 #if defined(USE_NEON_INTRINSICS)
     // Optimized Neon swap can be expanded, but parallelizing the outer loop is more impactful for large dimensions
 #pragma omp parallel for
-    for (size_t i = 0; i < local_dim; i += 2 * stride) {
-      for (size_t j = i; j < i + stride; ++j)
+    for (long long i = 0; i < static_cast<long long>(local_dim); i += 2 * stride) {
+      for (size_t j = static_cast<size_t>(i); j < static_cast<size_t>(i) + stride; ++j)
         std::swap(state[j], state[j + stride]);
     }
 #else
 #pragma omp parallel for
-    for (size_t i = 0; i < local_dim; i += 2 * stride) {
-      for (size_t j = i; j < i + stride; ++j)
+    for (long long i = 0; i < static_cast<long long>(local_dim); i += 2 * stride) {
+      for (size_t j = static_cast<size_t>(i); j < static_cast<size_t>(i) + stride; ++j)
         std::swap(state[j], state[j + stride]);
     }
 #endif
