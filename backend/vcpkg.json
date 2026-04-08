@@ -13,6 +13,7 @@
     "spdlog",
     "eigen3",
     "redis-plus-plus",
+    "hiredis",
     "nlohmann-json",
     "jwt-cpp",
     "picojson"

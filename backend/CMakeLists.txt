@@ -91,6 +91,7 @@ find_package(fmt CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(Eigen3 CONFIG REQUIRED)
 find_package(redis++ CONFIG REQUIRED)
+find_package(hiredis CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 # jwt-cpp is a header-only library used for authentication
 find_package(jwt-cpp CONFIG REQUIRED)
@@ -101,6 +102,14 @@ elseif(TARGET redis++::redis++_static)
     set(REDIS_LIB redis++::redis++_static)
 else()
     set(REDIS_LIB redis++)
+endif()
+
+if(TARGET hiredis::hiredis)
+    set(HIREDIS_LIB hiredis::hiredis)
+elseif(TARGET hiredis::hiredis_static)
+    set(HIREDIS_LIB hiredis::hiredis_static)
+else()
+    set(HIREDIS_LIB hiredis)
 endif()
 
 # --- GPU Acceleration (CUDA) ---
@@ -330,6 +339,7 @@ target_link_libraries(qubit_engine_core
         spdlog::spdlog
         fmt::fmt
         ${REDIS_LIB}
+        ${HIREDIS_LIB}
         $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
         $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
 )
@@ -426,6 +436,8 @@ target_link_libraries(tests PRIVATE
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
     spdlog::spdlog
+    ${REDIS_LIB}
+    ${HIREDIS_LIB}
 )
 
 add_test(NAME CoreTests COMMAND tests)
@@ -452,6 +464,8 @@ target_link_libraries(benchmark PRIVATE
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
     spdlog::spdlog
+    ${REDIS_LIB}
+    ${HIREDIS_LIB}
 )
 
 # =================================================================
