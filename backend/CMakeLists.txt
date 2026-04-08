@@ -329,6 +329,7 @@ target_link_libraries(qubit_engine_core
         gRPC::gpr
         spdlog::spdlog
         fmt::fmt
+        ${REDIS_LIB}
         $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
         $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
 )
@@ -363,7 +364,6 @@ target_link_libraries(qubit_engine
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
     $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
     spdlog::spdlog
-    ${REDIS_LIB}
     jwt-cpp::jwt-cpp
 )
 
