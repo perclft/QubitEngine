@@ -39,4 +39,14 @@ int ConfigManager::getMpsThreshold() const {
   return 25; // Default threshold
 }
 
+int ConfigManager::getMpsBondDimension() const {
+  if (const char* env_p = std::getenv("QUBIT_MPS_BOND_DIMENSION")) {
+    try {
+      int val = std::stoi(env_p);
+      if (val > 0) return val;
+    } catch (...) {}
+  }
+  return 64; // Default bond dimension
+}
+
 } // namespace qubit_engine

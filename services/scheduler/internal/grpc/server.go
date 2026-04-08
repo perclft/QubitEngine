@@ -2,10 +2,11 @@ package grpc
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
-
 	"log/slog"
+	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/sony/gobreaker"
 	google_grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -54,6 +56,7 @@ func (t tokenAuth) RequireTransportSecurity() bool {
 type userLimiter struct {
 	tokens float64
 	last   time.Time
+	mu     sync.Mutex
 }
 
 const (
@@ -81,8 +84,17 @@ func NewSchedulerServer(rdb *redis.Client, engineAddr string, engineToken string
 }
 
 func (s *SchedulerServer) ConnectEngine(ctx context.Context) error {
+	var creds credentials.TransportCredentials
+	if os.Getenv("QUBIT_ENGINE_CERT_PATH") != "" || os.Getenv("QUBIT_ENGINE_SKIP_AUTH") == "" {
+		// Use TLS in production if cert path is available or auth is not explicitly skipped.
+		// For simplicity we use default client TLS certs which rely on system CA pool.
+		creds = credentials.NewTLS(&tls.Config{})
+	} else {
+		creds = insecure.NewCredentials()
+	}
+
 	conn, err := google_grpc.Dial(s.engineAddr,
-		google_grpc.WithTransportCredentials(insecure.NewCredentials()),
+		google_grpc.WithTransportCredentials(creds),
 		google_grpc.WithPerRPCCredentials(tokenAuth{token: s.engineToken}),
 	)
 	if err != nil {
@@ -103,7 +115,7 @@ func (s *SchedulerServer) SubmitJob(ctx context.Context, req *pb.JobRequest) (*p
 		lim, _ := s.limiters.LoadOrStore(req.UserId, &userLimiter{tokens: burstSize, last: time.Now()})
 		l := lim.(*userLimiter)
 		
-		s.mu.Lock()
+		l.mu.Lock()
 		now_lim := time.Now()
 		dt := now_lim.Sub(l.last).Seconds()
 		l.tokens += dt * refillRate
@@ -113,11 +125,11 @@ func (s *SchedulerServer) SubmitJob(ctx context.Context, req *pb.JobRequest) (*p
 		l.last = now_lim
 		
 		if l.tokens < 1.0 {
-			s.mu.Unlock()
+			l.mu.Unlock()
 			return nil, status.Errorf(codes.ResourceExhausted, "rate limit exceeded for user %s", req.UserId)
 		}
 		l.tokens -= 1.0
-		s.mu.Unlock()
+		l.mu.Unlock()
 	}
 
 	// 2. Input Validation
@@ -150,12 +162,18 @@ func (s *SchedulerServer) SubmitJob(ctx context.Context, req *pb.JobRequest) (*p
 	if req.Circuit != nil {
 		job.NumQubits = req.Circuit.NumQubits
 		job.NumOps = int32(len(req.Circuit.Operations))
-		circuitBytes, _ := json.Marshal(req.Circuit)
+		circuitBytes, err := json.Marshal(req.Circuit)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to marshal circuit: %v", err)
+		}
 		job.CircuitJSON = string(circuitBytes)
 	}
 
 	_, err := s.cb.Execute(func() (interface{}, error) {
-		jobBytes, _ := json.Marshal(job)
+		jobBytes, err := json.Marshal(job)
+		if err != nil {
+			return nil, err
+		}
 		if err := s.rdb.Set(ctx, "job:"+jobID, jobBytes, 24*time.Hour).Err(); err != nil {
 			return nil, err
 		}
@@ -187,6 +205,13 @@ func (s *SchedulerServer) SubmitJob(ctx context.Context, req *pb.JobRequest) (*p
 			Score:  float64(now),
 			Member: jobID,
 		})
+		
+		if job.UserID != "" {
+			s.rdb.ZAdd(ctx, "index:jobs:user:"+job.UserID, &redis.Z{
+				Score:  float64(now),
+				Member: jobID,
+			})
+		}
 		
 		return nil, nil
 	})
@@ -294,13 +319,25 @@ func (s *SchedulerServer) updateJobState(ctx context.Context, jobID string, stat
 }
 
 func (s *SchedulerServer) saveJob(ctx context.Context, job *models.Job) {
-	jobBytes, _ := json.Marshal(job)
+	jobBytes, err := json.Marshal(job)
+	if err != nil {
+		slog.Error("Failed to marshal job for saving", "job_id", job.ID, "error", err)
+		return
+	}
 	s.rdb.Set(ctx, "job:"+job.ID, jobBytes, 24*time.Hour)
 }
 
 func (s *SchedulerServer) ListJobs(ctx context.Context, req *pb.ListJobsRequest) (*pb.JobList, error) {
 	// Use secondary sorted-set index instead of SCAN for O(log n) lookups
-	allIDs, err := s.rdb.ZRevRange(ctx, "index:jobs:all", 0, -1).Result()
+	var allIDs []string
+	var err error
+	
+	if req.UserId != "" {
+		allIDs, err = s.rdb.ZRevRange(ctx, "index:jobs:user:"+req.UserId, 0, -1).Result()
+	} else {
+		allIDs, err = s.rdb.ZRevRange(ctx, "index:jobs:all", 0, -1).Result()
+	}
+
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to list jobs: %v", err)
 	}
@@ -313,10 +350,6 @@ func (s *SchedulerServer) ListJobs(ctx context.Context, req *pb.ListJobsRequest)
 		}
 		var job models.Job
 		if err := json.Unmarshal(jobBytes, &job); err != nil {
-			continue
-		}
-
-		if req.UserId != "" && job.UserID != req.UserId {
 			continue
 		}
 

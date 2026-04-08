@@ -235,6 +235,39 @@ jobs:
           cd build
           ctest --output-on-failure --timeout 300
 
+  build-cuda:
+    runs-on: ubuntu-latest
+    container: nvidia/cuda:12.2.2-devel-ubuntu22.04
+    env:
+      VCPKG_FORCE_SYSTEM_BINARIES: 1
+    steps:
+      - name: Install system dependencies needed for checkout
+        run: apt-get update && apt-get install -y git curl zip unzip tar
+        
+      - uses: actions/checkout@v4
+
+      - name: Install build tools and MPI
+        run: |
+          apt-get update
+          apt-get install -y libopenmpi-dev ninja-build autoconf autoconf-archive automake libtool pkg-config python3-pip default-jre
+          pip3 install cmake
+
+      - name: Setup VCPKG
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.sh
+
+      - name: Configure CMake
+        run: |
+          cmake -S backend -B build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DMPI_ENABLED=OFF \
+            -DENABLE_CUDA=ON
+
+      - name: Build
+        run: cmake --build build --parallel $(nproc)
+
   test-services:
     runs-on: ubuntu-latest
     steps:

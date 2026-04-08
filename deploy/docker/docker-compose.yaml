@@ -13,6 +13,11 @@ services:
       - ../../.env
     depends_on:
       - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 50051 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   # 2. PostgreSQL (Circuit Registry Backend)
   postgres:
@@ -108,6 +113,11 @@ services:
     depends_on:
       - scheduler
       - engine
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   # 8. Jaeger (Distributed Tracing)
   jaeger:

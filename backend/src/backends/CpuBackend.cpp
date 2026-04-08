@@ -587,8 +587,7 @@ void CpuBackend::applyCZ(size_t control, size_t target) {
 }
 
 void CpuBackend::applyDepolarizingNoise(Precision probability) {
-  std::random_device rd;
-  std::mt19937 gen(rd());
+  static thread_local std::mt19937 gen(std::random_device{}());
   std::uniform_real_distribution<> dis(0.0, 1.0);
 
   for (size_t i = 0; i < num_qubits; ++i) {
@@ -642,7 +641,7 @@ int CpuBackend::measure(size_t target) {
   return outcome;
 }
 
-std::vector<double> CpuBackend::getProbabilities() {
+std::vector<double> CpuBackend::getProbabilities() const {
   std::vector<double> probs(state.size(), 0.0);
   for (size_t i = 0; i < state.size(); ++i) {
     probs[i] = std::norm(state[i]);
@@ -650,7 +649,7 @@ std::vector<double> CpuBackend::getProbabilities() {
   return probs;
 }
 
-double CpuBackend::expectationValue(const std::string &pauli_string) {
+double CpuBackend::expectationValue(const std::string &pauli_string) const {
   Precision partial_expected_value = 0.0;
   size_t local_dim = state.size();
 

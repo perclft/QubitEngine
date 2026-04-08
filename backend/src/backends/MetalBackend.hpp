@@ -30,8 +30,8 @@ public:
                          const std::vector<Complex> &matrix) override;
 
   int measure(size_t target) override;
-  std::vector<double> getProbabilities() override;
-  double expectationValue(const std::string &pauli) override;
+  std::vector<double> getProbabilities() const override;
+  double expectationValue(const std::string &pauli) const override;
 
   int getRank() const override { return 0; }
   int getSize() const override { return 1; }

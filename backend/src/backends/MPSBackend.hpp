@@ -4,7 +4,6 @@
 #include <complex>
 #include <vector>
 
-
 namespace qubit_engine {
 
 // Represents a single node in a Matrix Product State (MPS)
@@ -52,19 +51,17 @@ public:
   void applyRotationZ(size_t target, Precision angle) override;
   void applySWAP(size_t qubit1, size_t qubit2) override;
   void applyCZ(size_t control, size_t target) override;
+  void applyDepolarizingNoise(Precision p) override {}
 
-  // --- Noise ---
-  void applyDepolarizingNoise(Precision probability) override;
-
-  // --- Measurement & Analysis ---
   int measure(size_t target) override;
-  std::vector<double> getProbabilities() override;
+  std::vector<double> getProbabilities() const override;
+  double expectationValue(const std::string &pauli_string) const override;
   void applyDenseUnitary(const std::vector<size_t> &targets,
                          const std::vector<Complex> &matrix) override;
-  double expectationValue(const std::string &pauli_string) override;
 
-  // --- State Access ---
   std::vector<Complex> getStateVector() const override;
+  
+  size_t getNumQubits() const override { return static_cast<size_t>(num_qubits); }
 };
 
 } // namespace qubit_engine

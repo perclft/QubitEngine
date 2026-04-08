@@ -60,6 +60,7 @@ message CircuitRequest {
   }
   MeasurementStrategy measurement_strategy = 5;
   bool use_shm = 6;
+  string version = 7;
 }
 
 message GateOperation {

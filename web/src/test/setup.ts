@@ -15,3 +15,15 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: vi.fn(),
   })),
 });
+
+// Mock EventSource
+class MockEventSource {
+  onmessage: any;
+  onerror: any;
+  close = vi.fn();
+  constructor(url: string) {}
+}
+
+Object.defineProperty(window, 'EventSource', {
+  value: MockEventSource,
+});

@@ -88,6 +88,18 @@ void CircuitService::serializeState(
         pb_c->set_imag(c.imag());
       }
     }
+  } else if (strategy == qubit_engine::CircuitRequest::SPARSE_STATE) {
+    auto probs = qreg.getProbabilities();
+    for (size_t i = 0; i < probs.size(); ++i) {
+      if (probs[i] > 1e-6) {
+        auto *sparse = response->add_sparse_states();
+        sparse->set_qubit_index(static_cast<uint64_t>(i));
+        sparse->set_probability(probs[i]);
+      }
+    }
+  } else if (strategy == qubit_engine::CircuitRequest::EXPECTATION_VALUES) {
+    double exp_val = qreg.expectationValue("Z");
+    spdlog::info("Expectation Value (Z): {}", exp_val);
   }
 }
 

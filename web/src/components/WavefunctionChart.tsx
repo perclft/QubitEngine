@@ -1,3 +1,5 @@
+"use client";
+
 import { motion } from "framer-motion";
 import { Activity, Cpu } from "lucide-react";
 import { ExecutionResult } from "./types";

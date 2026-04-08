@@ -41,8 +41,8 @@ public:
 
   // --- Measurement & Analysis ---
   int measure(size_t target);
-  std::vector<double> getProbabilities();
-  double expectationValue(const std::string &pauli_string);
+  std::vector<double> getProbabilities() const;
+  double expectationValue(const std::string &pauli_string) const;
 
   // --- Distributed Helpers ---
   int getRank() const;

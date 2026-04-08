@@ -13,6 +13,7 @@ public:
   bool forceLocalExecution() const;
   std::optional<std::string> getTopologyPath() const;
   int getMpsThreshold() const;
+  int getMpsBondDimension() const;
 
 private:
   ConfigManager() = default;

@@ -73,7 +73,8 @@ public:
     O0 = 0, // No optimization
     O1 = 1, // Basic gate cancellation
     O2 = 2, // Gate fusion
-    O3 = 3  // Aggressive fusion + reordering
+    O3 = 3, // Aggressive fusion + reordering
+    O4 = 4  // Two-qubit adjacent fusion (KAK-style)
   };
 
   QuantumJIT(OptLevel level = O2) : opt_level_(level) {}
@@ -139,6 +140,9 @@ private:
 
   std::vector<CompiledGate>
   fuse_tensor_network(const std::vector<CompiledGate> &gates);
+
+  std::vector<CompiledGate>
+  fuse_two_qubit_adjacent(const std::vector<CompiledGate> &gates);
 
   int count_fused_blocks(const std::vector<CompiledGate> &gates);
   

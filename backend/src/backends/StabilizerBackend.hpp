@@ -20,8 +20,8 @@ public:
 
   // Measurement and expectation values
   int measure(size_t target) override;
-  std::vector<double> getProbabilities() override;
-  double expectationValue(const std::string &pauli_string) override;
+  std::vector<double> getProbabilities() const override;
+  double expectationValue(const std::string &pauli_string) const override;
 
   // Retrieve full state vector (Warning: Exponential complexity)
   std::vector<Complex> getStateVector() const override;

@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "qubit-engine.fullname" . }}
+  labels:
+    {{- include "qubit-engine.labels" . | nindent 4 }}
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      {{- include "qubit-engine.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: grpc
+      path: /metrics
+      interval: 15s
+    - port: http
+      path: /metrics
+      interval: 15s

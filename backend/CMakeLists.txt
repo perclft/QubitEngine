@@ -100,7 +100,7 @@ else()
 endif()
 
 # --- GPU Acceleration (CUDA) ---
-option(ENABLE_CUDA "Enable CUDA GPU Acceleration" ON)
+option(ENABLE_CUDA "Enable CUDA GPU Acceleration" OFF)
 
 if(ENABLE_CUDA)
     include(CheckLanguage)

@@ -240,20 +240,15 @@ void MPSBackend::applyCZ(size_t control, size_t target) {
   applyTwoQubitGate(control, target, CZ);
 }
 
-void MPSBackend::applyDepolarizingNoise(Precision probability) {
-  // Not strictly supported cleanly in pure state MPS without going to MPO
-  // (Matrix Product Operators)
-}
-
 int MPSBackend::measure(size_t target) { return 0; }
-std::vector<double> MPSBackend::getProbabilities() { return {}; }
+std::vector<double> MPSBackend::getProbabilities() const { return {}; }
 void MPSBackend::applyDenseUnitary(const std::vector<size_t> &targets,
                                    const std::vector<Complex> &matrix) {
   throw FeatureNotSupportedException(
       "applyDenseUnitary not supported in MPS prototype.");
 }
 
-double MPSBackend::expectationValue(const std::string &pauli_string) {
+double MPSBackend::expectationValue(const std::string &pauli_string) const {
   return 0.0;
 }
 

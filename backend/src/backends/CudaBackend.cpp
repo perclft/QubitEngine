@@ -150,6 +150,20 @@ void CudaBackend::copyStateToHost(std::vector<Complex> &host_state) const {
   }
 }
 
+#ifdef ENABLE_NCCL
+void CudaBackend::gatherStateNCCL() {
+  if (mpi_size_ <= 1) return;
+  size_t local_dim = 1ULL << num_qubits_;
+  size_t global_dim = local_dim * mpi_size_;
+  Complex *gathered_state;
+  cudaMalloc(&gathered_state, global_dim * sizeof(Complex));
+  ncclAllGather((const void *)device_state_, (void *)gathered_state,
+                local_dim, ncclFloat64, nccl_comm_, 0);
+  cudaDeviceSynchronize();
+  cudaFree(gathered_state);
+}
+#endif
+
 // --- Core Gates ---
 
 void CudaBackend::applyHadamard(size_t target) {
@@ -170,28 +184,7 @@ void CudaBackend::applyZ(size_t target) {
 
 void CudaBackend::applyCNOT(size_t control, size_t target) {
 #ifdef ENABLE_NCCL
-  if (mpi_size_ > 1) {
-    size_t local_dim = 1ULL << num_qubits_;
-    size_t global_dim = local_dim * mpi_size_;
-    size_t local_bytes = local_dim * sizeof(Complex);
-
-    // 1. Allocate Gathering Buffer
-    Complex *gathered_state;
-    cudaMalloc(&gathered_state, global_dim * sizeof(Complex));
-
-    // 2. AllGather to assemble full system state
-    ncclAllGather(
-        (const void *)device_state_, (void *)gathered_state,
-        local_dim,   // Send count per rank (number of Complex elements)
-        ncclFloat64, // Using 64-bit float logic (each Complex is pair of
-                     // Float64) -> Wait, NCCL doesn't have ncclComplex.
-        nccl_comm_, 0);
-    // Actually, ncclFloat64 only sends 64 bits. Complex is 128. Send count must
-    // be local_dim * 2: ncclAllGather((const void*)device_state_,
-    // (void*)gathered_state, local_dim * 2, ncclFloat64, nccl_comm_, 0); But
-    // NCCL doesn't like modifying the buffer mid-stream for gates. We'll
-    // simplify and execute standard gather.
-  }
+  gatherStateNCCL();
 #endif
   qe::cuda::launchCNOT(device_state_, num_qubits_, control, target);
 }
@@ -201,14 +194,7 @@ void CudaBackend::applyCNOT(size_t control, size_t target) {
 void CudaBackend::applyToffoli(size_t control1, size_t control2,
                                size_t target) {
 #ifdef ENABLE_NCCL
-  if (mpi_size_ > 1) {
-    size_t local_dim = 1ULL << num_qubits_;
-    size_t global_dim = local_dim * mpi_size_;
-    Complex *gathered_state;
-    cudaMalloc(&gathered_state, global_dim * sizeof(Complex));
-    ncclAllGather((const void *)device_state_, (void *)gathered_state,
-                  local_dim, ncclFloat64, nccl_comm_, 0);
-  }
+  gatherStateNCCL();
 #endif
   qe::cuda::launchToffoli(device_state_, num_qubits_, control1, control2,
                           target);
@@ -231,22 +217,12 @@ void CudaBackend::applyRotationZ(size_t target, Precision angle) {
 }
 
 void CudaBackend::applyRotationX(size_t target, Precision angle) {
-  // Rx(θ) = H * Rz(θ) * H
-  applyHadamard(target);
-  applyRotationZ(target, angle);
-  applyHadamard(target);
+  qe::cuda::launchRotationX(device_state_, num_qubits_, target, angle);
 }
 
 void CudaBackend::applySWAP(size_t qubit1, size_t qubit2) {
 #ifdef ENABLE_NCCL
-  if (mpi_size_ > 1) {
-    size_t local_dim = 1ULL << num_qubits_;
-    size_t global_dim = local_dim * mpi_size_;
-    Complex *gathered_state;
-    cudaMalloc(&gathered_state, global_dim * sizeof(Complex));
-    ncclAllGather((const void *)device_state_, (void *)gathered_state,
-                  local_dim, ncclFloat64, nccl_comm_, 0);
-  }
+  gatherStateNCCL();
 #endif
   // SWAP = CNOT(q1,q2) * CNOT(q2,q1) * CNOT(q1,q2)
   applyCNOT(qubit1, qubit2);
@@ -256,14 +232,7 @@ void CudaBackend::applySWAP(size_t qubit1, size_t qubit2) {
 
 void CudaBackend::applyCZ(size_t control, size_t target) {
 #ifdef ENABLE_NCCL
-  if (mpi_size_ > 1) {
-    size_t local_dim = 1ULL << num_qubits_;
-    size_t global_dim = local_dim * mpi_size_;
-    Complex *gathered_state;
-    cudaMalloc(&gathered_state, global_dim * sizeof(Complex));
-    ncclAllGather((const void *)device_state_, (void *)gathered_state,
-                  local_dim, ncclFloat64, nccl_comm_, 0);
-  }
+  gatherStateNCCL();
 #endif
   // CZ = H(target) * CNOT(control, target) * H(target)
   applyHadamard(target);
@@ -341,7 +310,7 @@ int CudaBackend::measure(size_t target) {
   return result;
 }
 
-std::vector<double> CudaBackend::getProbabilities() {
+std::vector<double> CudaBackend::getProbabilities() const {
   size_t dim = 1ULL << num_qubits_;
 
   // Allocate device memory for probabilities

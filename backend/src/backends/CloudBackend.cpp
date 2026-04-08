@@ -128,14 +128,14 @@ int CloudBackend::measure(size_t target) {
   return 0; // Default
 }
 
-std::vector<double> CloudBackend::getProbabilities() {
+std::vector<double> CloudBackend::getProbabilities() const {
   ensureRemoteExecution();
   // If we had expectation values or similar from cloud...
   // Usually cloud doesn't return full state vector for > 30 qubits.
   return {}; 
 }
 
-double CloudBackend::expectationValue(const std::string &pauli_string) {
+double CloudBackend::expectationValue(const std::string &pauli_string) const {
   // Remote execution to get expectation value
   ensureRemoteExecution();
   if (last_response_.expectation_values_size() > 0) {

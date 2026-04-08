@@ -37,8 +37,8 @@ public:
 
   // --- Measurement ---
   int measure(size_t target) override;
-  std::vector<double> getProbabilities() override;
-  double expectationValue(const std::string &pauli_string) override;
+  std::vector<double> getProbabilities() const override;
+  double expectationValue(const std::string &pauli_string) const override;
 
   // --- State Access ---
   std::vector<Complex> getStateVector() const override;

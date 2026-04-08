@@ -1,5 +1,6 @@
 #include "QuantumRegister.hpp"
 #include "Types.hpp"
+#include <optional>
 #include "QuantumMetrics.hpp"
 #include "CircuitOptimizer.hpp"
 #include "ConfigManager.hpp"
@@ -16,8 +17,13 @@
 #include <iostream>
 #include <spdlog/spdlog.h>
 #include <random>
+#include <stdexcept>
 #include <string>
-#include <vector>
+
+#ifdef ENABLE_OPENTELEMETRY
+#include <opentelemetry/trace/provider.h>
+#include <opentelemetry/trace/tracer.h>
+#endif
 #include <memory>
 #include <complex>
 
@@ -48,9 +54,11 @@ QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
   // Phase 4: Tensor Network Acceleration
   int mps_threshold = ConfigManager::Instance().getMpsThreshold();
   if (n >= static_cast<size_t>(mps_threshold) && !use_local) {
-    // Emulate using MPS for circuits >= 25 qubits to showcase memory
+    // Emulate using MPS for circuits >= threshold to showcase memory
     // compression
-    backend = std::make_unique<MPSBackend>(static_cast<int>(n));
+    int bond_dim = ConfigManager::Instance().getMpsBondDimension();
+    backend = std::make_unique<MPSBackend>(static_cast<int>(n), bond_dim);
+    spdlog::info("QuantumRegister: Using MPSBackend (bond_dim={})", bond_dim);
     return;
   }
 
@@ -234,11 +242,11 @@ int QuantumRegister::measure(size_t target) {
   return backend->measure(target);
 }
 
-std::vector<double> QuantumRegister::getProbabilities() {
+std::vector<double> QuantumRegister::getProbabilities() const {
   return backend->getProbabilities();
 }
 
-double QuantumRegister::expectationValue(const std::string &pauli_string) {
+double QuantumRegister::expectationValue(const std::string &pauli_string) const {
   return backend->expectationValue(pauli_string);
 }
 
@@ -265,8 +273,22 @@ QuantumRegister::getTape() const {
   return tape;
 }
 
-void QuantumRegister::optimize() { CircuitOptimizer::optimize(tape); }
+void QuantumRegister::optimize() {
+#ifdef ENABLE_OPENTELEMETRY
+  auto tracer = opentelemetry::trace::Provider::GetTracerProvider()->GetTracer("QubitEngine");
+  auto span = tracer->StartSpan("QuantumRegister::optimize");
+  auto scope = tracer->WithActiveSpan(span);
+#endif
+  spdlog::debug("Optimizing circuit tape of size {}", tape.size());
+  CircuitOptimizer::optimize(tape);
+}
+
 void QuantumRegister::mapTo1DTopology() {
+#ifdef ENABLE_OPENTELEMETRY
+  auto tracer = opentelemetry::trace::Provider::GetTracerProvider()->GetTracer("QubitEngine");
+  auto span = tracer->StartSpan("QuantumRegister::mapTo1DTopology");
+  auto scope = tracer->WithActiveSpan(span);
+#endif
   CircuitOptimizer::mapTo1DTopology(tape);
 }
 

@@ -36,13 +36,12 @@ public:
   virtual void applyDepolarizingNoise(Precision probability) = 0;
 
   // --- Measurement & Analysis ---
-  virtual int measure(size_t target) = 0;
-  virtual std::vector<double>
-  getProbabilities() = 0; // Return double for probs usually fine
-  virtual double expectationValue(const std::string &pauli_string) = 0;
+  [[nodiscard]] virtual int measure(size_t target) = 0;
+  [[nodiscard]] virtual std::vector<double> getProbabilities() const = 0; // Return double for probs usually fine
+  [[nodiscard]] virtual double expectationValue(const std::string &pauli_string) const = 0;
 
   // --- State Access ---
-  virtual std::vector<Complex> getStateVector() const = 0;
+  [[nodiscard]] virtual std::vector<Complex> getStateVector() const = 0;
 
   // --- Distributed Helpers (Optional / Backend Specific) ---
   virtual int getRank() const { return 0; }

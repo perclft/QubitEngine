@@ -44,14 +44,14 @@ public:
 
   // --- Measurement ---
   int measure(size_t target) override;
-  std::vector<double> getProbabilities() override;
-  double expectationValue(const std::string &pauli_string) override;
+  std::vector<double> getProbabilities() const override;
+  double expectationValue(const std::string &pauli_string) const override;
 
   void applyDenseUnitary(const std::vector<size_t> &targets,
                          const std::vector<Complex> &matrix) override;
 
   // --- State Access ---
-
+  std::vector<Complex> getStateVector() const override { return getStateVectorAsync(); }
   // --- Distributed Helpers ---
   int getRank() const override { return mpi_rank_; }
   int getSize() const override { return mpi_size_; }
@@ -71,6 +71,10 @@ private:
   void initializeCuda();
   void copyStateToDevice(const std::vector<Complex> &host_state);
   void copyStateToHost(std::vector<Complex> &host_state) const;
+
+#ifdef ENABLE_NCCL
+  void gatherStateNCCL();
+#endif
 
   // Async telemetry stream (non-blocking D2H on secondary stream)
   void *telemetry_stream_;     // cudaStream_t (opaque for non-CUDA TUs)

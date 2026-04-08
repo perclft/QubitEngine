@@ -468,12 +468,12 @@ std::vector<double> MetalBackend::getProbabilities() {
   return results;
 }
 
-double MetalBackend::expectationValue(const std::string &pauli) {
+double MetalBackend::expectationValue(const std::string &pauli) const {
   uint64_t z_mask = 0;
   bool is_diagonal = true;
-  for (size_t i = 0; i < pauli.length(); ++i) {
-      if (pauli[i] == 'Z') z_mask |= (1ULL << i);
-      else if (pauli[i] != 'I') { is_diagonal = false; break; }
+  for (size_t i = 0; i < pauli_string.length(); ++i) {
+      if (pauli_string[i] == 'Z') z_mask |= (1ULL << i);
+      else if (pauli_string[i] != 'I') { is_diagonal = false; break; }
   }
   if (!is_diagonal) return 0.0;
 
@@ -525,7 +525,7 @@ void MetalBackend::applyCZ(size_t c, size_t t) {}
 void MetalBackend::applyDepolarizingNoise(Precision p) {}
 int MetalBackend::measure(size_t t) { return 0; }
 std::vector<double> MetalBackend::getProbabilities() { return {}; }
-double MetalBackend::expectationValue(const std::string &p) { return 0.0; }
+double MetalBackend::expectationValue(const std::string &p) const { return 0.0; }
 std::vector<Complex> MetalBackend::getStateVector() const { return {}; }
 } // namespace qubit_engine
 

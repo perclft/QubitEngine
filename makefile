@@ -29,7 +29,7 @@ proto:
 build-engine:
 	@echo "Building C++ Engine..."
 	@mkdir -p backend/build
-	cd backend/build && cmake .. -DCMAKE_TOOLCHAIN_FILE=/Users/sahil/vcpkg/scripts/buildsystems/vcpkg.cmake -DMPI_ENABLED=ON && cmake --build . --config Release --parallel
+	cd backend/build && cmake .. -DCMAKE_TOOLCHAIN_FILE=$(VCPKG_ROOT)/scripts/buildsystems/vcpkg.cmake -DMPI_ENABLED=ON && cmake --build . --config Release --parallel
 
 # Build Rust TUI
 build-tui:

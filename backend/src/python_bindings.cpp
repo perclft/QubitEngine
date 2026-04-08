@@ -104,6 +104,12 @@ PYBIND11_MODULE(core, m) {
               vec_ptr->data(),
               capsule
           );
+      })
+      .def("__repr__", [](const QuantumRegister &q) {
+          return "<qubit_engine.QuantumRegister qubits=" + std::to_string(q.getSize()) + " rank=" + std::to_string(q.getRank()) + ">";
+      })
+      .def("__str__", [](const QuantumRegister &q) {
+          return "QuantumRegister(qubits=" + std::to_string(q.getSize()) + " mpi_rank=" + std::to_string(q.getRank()) + ")";
       });
 
   // --- GPUQuantumRegister Binding ---
@@ -278,7 +284,8 @@ PYBIND11_MODULE(core, m) {
           },
           "Run SPSA Optimizer natively in C++");
 
-  m.def("finalize", []() {
+  py::module_ atexit = py::module_::import("atexit");
+  atexit.attr("register")(py::cpp_function([]() {
 #ifdef MPI_ENABLED
     int initialized;
     MPI_Initialized(&initialized);
@@ -290,5 +297,5 @@ PYBIND11_MODULE(core, m) {
       }
     }
 #endif
-  });
+  }));
 }
