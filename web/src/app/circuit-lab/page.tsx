@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { runCustomCircuit } from "../actions";
+import { ExecutionResult } from "../components/types";
 import { motion, AnimatePresence } from "framer-motion";
 import { Cpu, Plus, Trash2, Play, Sliders } from "lucide-react";
 
@@ -36,7 +37,7 @@ export default function CircuitLabPage() {
   const [noiseProbability, setNoiseProbability] = useState(0);
   const [backend, setBackend] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<ExecutionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const addGate = useCallback((type: string, label: string) => {
@@ -68,14 +69,14 @@ export default function CircuitLabPage() {
         controlQubit: g.control,
         angle: g.angle,
       }));
-      const res: any = await runCustomCircuit(numQubits, ops, noiseProbability, backend);
-      if (res.error) {
+      const res = await runCustomCircuit(numQubits, ops, noiseProbability, backend);
+      if ("error" in res) {
         setError(res.error);
       } else {
         setResult(res);
       }
-    } catch (e: any) {
-      setError(e.toString());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setIsRunning(false);
     }
@@ -225,7 +226,7 @@ export default function CircuitLabPage() {
                   <div className="text-[11px] text-slate-500 mb-4 font-mono">Node: {result.serverId}</div>
                 )}
                 <div className="flex-1 flex items-end justify-center gap-3 flex-wrap pb-4 border-b border-white/5">
-                  {result.stateVector?.slice(0, 32).map((sv: any, i: number) => {
+                  {result.stateVector?.slice(0, 32).map((sv, i) => {
                     const prob = sv.real * sv.real + sv.imag * sv.imag;
                     if (prob < 0.001) return null;
                     const height = Math.max(prob * 100, 3);

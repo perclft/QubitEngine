@@ -4,8 +4,19 @@ import * as grpc from '@grpc/grpc-js';
 import { QuantumComputeClient } from '../api/quantum';
 import { QuantumSchedulerClient } from '../api/scheduler';
 import { CircuitRegistryClient, CircuitMetadata } from '../api/registry';
-import { CircuitRequest, GateOperation_GateType } from '../api/quantum';
-import { ExecutionResult, TopologyData, ComplexNumber, ClusterMetricsData } from '../components/types';
+import { 
+  CircuitRequest, 
+  GateOperation_GateType, 
+  Measurement, 
+  StateResponse, 
+  StateResponse_ComplexNumber, 
+  VQEResponse, 
+  QubitNode, 
+  CouplerEdge,
+  HardwareTopologyResponse
+} from '../api/quantum';
+import { JobStatus, JobList } from '../api/scheduler';
+import { ExecutionResult, TopologyData, ClusterMetricsData } from '../components/types';
 
 // --- Types ---
 
@@ -103,11 +114,11 @@ export async function runDemoCircuit(numQubits: number): Promise<ExecutionResult
       measurementStrategy: 1,
       useShm: false,
     };
-    client.runCircuit(req, getMetadata(), (err, response) => {
+    client.runCircuit(req, getMetadata(), (err: grpc.ServiceError | null, response: StateResponse) => {
       if (err) { resolve({ error: err.message }); return; }
       resolve({
         serverId: response.serverId,
-        results: response.sparseStates.map((st: any) => ({ index: st.qubitIndex, probability: st.probability })),
+        results: response.sparseStates.map((st: Measurement) => ({ index: st.qubitIndex, probability: st.probability })),
       });
     });
   });
@@ -117,11 +128,11 @@ export async function runDemoCircuit(numQubits: number): Promise<ExecutionResult
 export async function getTopology(): Promise<TopologyData | { error: string }> {
   return new Promise((resolve) => {
     const client = getClient();
-    client.getHardwareTopology({}, getMetadata(), (err, response) => {
+    client.getHardwareTopology({}, getMetadata(), (err: grpc.ServiceError | null, response: HardwareTopologyResponse) => {
       if (err) { resolve({ error: err.message }); return; }
       resolve({ 
-        nodes: response.nodes.map((n: any) => ({ id: n.id.toString(), x: n.x, y: n.y })), 
-        edges: response.edges.map((e: any) => ({ node1: e.node1.toString(), node2: e.node2.toString() })) 
+        nodes: response.nodes.map((n: QubitNode) => ({ id: n.id.toString(), x: n.x, y: n.y })), 
+        edges: response.edges.map((e: CouplerEdge) => ({ node1: e.node1.toString(), node2: e.node2.toString() })) 
       });
     });
   });
@@ -153,12 +164,12 @@ export async function runCustomCircuit(
       measurementStrategy: 0, // FULL_STATE
       useShm: false,
     };
-    client.runCircuit(req, getMetadata(), (err, response) => {
+    client.runCircuit(req, getMetadata(), (err: grpc.ServiceError | null, response: StateResponse) => {
       if (err) { resolve({ error: err.message }); return; }
       resolve({
         serverId: response.serverId,
-        stateVector: response.stateVector.map((sv: any) => ({ real: sv.real, imag: sv.imag })),
-        results: response.sparseStates.map((st: any) => ({ index: st.qubitIndex, probability: st.probability })),
+        stateVector: response.stateVector.map((sv: StateResponse_ComplexNumber) => ({ real: sv.real, imag: sv.imag })),
+        results: response.sparseStates.map((st: Measurement) => ({ index: st.qubitIndex, probability: st.probability })),
       });
     });
   });
@@ -171,11 +182,11 @@ export async function* runVQE(molecule: number, maxIterations: number, learningR
   const stream = client.runVqe(req, getMetadata());
   
   const queue: VQEResult[] = [];
-  let error: any = null;
+  let error: grpc.ServiceError | null = null;
   let done = false;
   let resolveWait: (() => void) | null = null;
 
-  stream.on('data', (response: any) => {
+  stream.on('data', (response: VQEResponse) => {
     queue.push({
       iteration: response.iteration,
       energy: response.energy,
@@ -188,7 +199,7 @@ export async function* runVQE(molecule: number, maxIterations: number, learningR
     }
   });
 
-  stream.on('error', (err: any) => {
+  stream.on('error', (err: grpc.ServiceError) => {
     error = err;
     if (resolveWait) {
       resolveWait();
@@ -218,7 +229,7 @@ export async function* runVQE(molecule: number, maxIterations: number, learningR
 }
 
 // ─── Visualizer: Step-by-step Circuit (streaming) ───────────────────────
-export async function visualizeCircuit(numQubits: number): Promise<{ steps: any[] } | { error: string }> {
+export async function visualizeCircuit(numQubits: number): Promise<{ steps: { probabilities: number[]; serverId: string }[] } | { error: string }> {
   return new Promise((resolve) => {
     const client = getClient();
     const req: CircuitRequest = {
@@ -233,13 +244,13 @@ export async function visualizeCircuit(numQubits: number): Promise<{ steps: any[
       measurementStrategy: 0,
       useShm: false,
     };
-    const steps: any[] = [];
+    const steps: { probabilities: number[]; serverId: string }[] = [];
     const stream = client.visualizeCircuit(req, getMetadata());
-    stream.on('data', (response: any) => {
-      const probabilities = response.stateVector.map((sv: any) => sv.real * sv.real + sv.imag * sv.imag);
+    stream.on('data', (response: StateResponse) => {
+      const probabilities = response.stateVector.map((sv: StateResponse_ComplexNumber) => sv.real * sv.real + sv.imag * sv.imag);
       steps.push({ probabilities, serverId: response.serverId });
     });
-    stream.on('error', (err: any) => {
+    stream.on('error', (err: grpc.ServiceError) => {
       if (steps.length > 0) {
         resolve({ steps });
       } else {
@@ -256,10 +267,10 @@ export async function visualizeCircuit(numQubits: number): Promise<{ steps: any[
 export async function listJobs(): Promise<JobListResult | { error: string }> {
   return new Promise((resolve) => {
     const client = getSchedulerClient();
-    client.listJobs({ userId: "", stateFilter: 0, limit: 50, offset: 0 }, getMetadata(), (err, response) => {
+    client.listJobs({ userId: "", stateFilter: 0, limit: 50, offset: 0 }, getMetadata(), (err: grpc.ServiceError | null, response: JobList) => {
       if (err) { resolve({ error: err.message }); return; }
       resolve({
-        jobs: response.jobs.map((j: any) => ({
+        jobs: response.jobs.map((j: JobStatus) => ({
           jobId: j.jobId,
           state: j.state,
           positionInQueue: j.positionInQueue,

@@ -18,10 +18,12 @@ Object.defineProperty(window, 'matchMedia', {
 
 // Mock EventSource
 class MockEventSource {
-  onmessage: any;
-  onerror: any;
+  onmessage: ((ev: MessageEvent) => void) | null = null;
+  onerror: ((ev: Event) => void) | null = null;
   close = vi.fn();
-  constructor(url: string) {}
+  constructor(url: string) {
+    console.log(url);
+  }
 }
 
 Object.defineProperty(window, 'EventSource', {

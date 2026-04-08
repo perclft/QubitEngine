@@ -32,8 +32,8 @@ export default function VQEPage() {
         setEnergyData((prev) => [...prev, { iteration: data.iteration, energy: data.energy }]);
         if (data.converged) setConverged(true);
       }
-    } catch (e: any) {
-      setError(e.toString());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setIsRunning(false);
     }

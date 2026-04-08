@@ -1,11 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { listJobs, getJobStatus } from "../actions";
+import { useState, useEffect, useCallback, type ComponentType } from "react";
+import { listJobs, type JobStatusResult } from "../actions";
 import { motion, AnimatePresence } from "framer-motion";
-import { ListTodo, RefreshCw, Clock, CheckCircle2, XCircle, Loader2, Ban } from "lucide-react";
+import { ListTodo, RefreshCw, Clock, CheckCircle2, XCircle, Loader2, Ban, type LucideProps } from "lucide-react";
 
-const STATE_LABELS: Record<number, { label: string; color: string; icon: any }> = {
+interface StatusConfig {
+  label: string;
+  color: string;
+  icon: ComponentType<LucideProps>;
+}
+
+const STATE_LABELS: Record<number, StatusConfig> = {
   0: { label: "Unknown", color: "text-slate-400 bg-slate-500/10", icon: Clock },
   1: { label: "Queued", color: "text-amber-300 bg-amber-500/10", icon: Clock },
   2: { label: "Running", color: "text-blue-300 bg-blue-500/10", icon: Loader2 },
@@ -15,7 +21,7 @@ const STATE_LABELS: Record<number, { label: string; color: string; icon: any }> 
 };
 
 export default function JobsPage() {
-  const [jobs, setJobs] = useState<any[]>([]);
+  const [jobs, setJobs] = useState<JobStatusResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
@@ -23,15 +29,15 @@ export default function JobsPage() {
   const fetchJobs = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res: any = await listJobs();
-      if (res.error) {
+      const res = await listJobs();
+      if ("error" in res) {
         setError(res.error);
       } else {
         setJobs(res.jobs || []);
         setError(null);
       }
-    } catch (e: any) {
-      setError(e.toString());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setIsLoading(false);
     }
@@ -103,7 +109,7 @@ export default function JobsPage() {
             </div>
           ) : (
             <AnimatePresence>
-              {jobs.map((job: any, i: number) => {
+              {jobs.map((job, i) => {
                 const state = STATE_LABELS[job.state] || STATE_LABELS[0];
                 const Icon = state.icon;
                 return (

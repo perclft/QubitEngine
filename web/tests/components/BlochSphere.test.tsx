@@ -1,6 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { BlochSphere } from '../../src/components/BlochSphere';
 
 describe('BlochSphere Component', () => {
   it('renders without crashing', () => {

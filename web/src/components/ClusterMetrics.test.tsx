@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { ClusterMetrics } from './ClusterMetrics';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
@@ -20,11 +20,6 @@ describe('ClusterMetrics', () => {
     // The EventSource mock intercepts the new EventSource call from component.
     // Wait for the component to attach the onmessage handler, then simulate an event.
     setTimeout(() => {
-       const mockMetrics = {
-         activeWorkers: 5,
-         queueDepth: 12,
-         memoryUsagePercent: 45.5,
-       };
        // Find the last created MockEventSource instance that captured the handlers
        // (Our setup.ts didn't expose instances globally yet, but we can do a simple fallback test 
        // by verifying the component doesn't crash, since testing EventSource properly requires 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import * as grpc from '@grpc/grpc-js';
-import { QuantumSchedulerClient } from '../../../api/scheduler';
+import { QuantumSchedulerClient, ClusterMetricsResponse } from '../../../api/scheduler';
 
 const SCHEDULER_ADDR = process.env.SCHEDULER_GRPC_ADDR || process.env.SCHEDULER_ADDR || '127.0.0.1:50053';
 
@@ -15,7 +15,7 @@ export async function GET() {
       const stream = client.streamClusterMetrics({}, meta);
       let isClosed = false;
       
-      stream.on('data', (response: any) => {
+      stream.on('data', (response: ClusterMetricsResponse) => {
         if (isClosed) return;
         try {
           const metrics = {
@@ -30,17 +30,17 @@ export async function GET() {
         }
       });
 
-      stream.on('error', (err: any) => {
+      stream.on('error', (err: grpc.ServiceError) => {
         console.error('SSE gRPC Error:', err);
         if (!isClosed) {
-          try { controller.error(err); } catch (e) {}
+          try { controller.error(err); } catch { /* ignore */ }
           isClosed = true;
         }
       });
 
       stream.on('end', () => {
         if (!isClosed) {
-          try { controller.close(); } catch (e) {}
+          try { controller.close(); } catch { /* ignore */ }
           isClosed = true;
         }
       });

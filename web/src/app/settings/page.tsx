@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Settings as SettingsIcon, Save, Server, Key, Globe } from "lucide-react";
+import { Save, Server, Key, Globe } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function SettingsPage() {

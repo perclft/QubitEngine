@@ -83,8 +83,8 @@ export default function DashboardPage() {
       } else {
         setResult(res);
       }
-    } catch (e: any) {
-      setError(e.toString());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setIsRunning(false);
     }
@@ -98,7 +98,7 @@ export default function DashboardPage() {
       } else {
         setTopology(top);
       }
-    } catch (e: any) {
+    } catch (e) {
       console.error(e);
     }
   };

@@ -129,6 +129,7 @@ pub async fn run_circuit(server_addr: String, circuit_path: String, tx: mpsc::Se
         execution_backend: 0,
         measurement_strategy: 0,
         use_shm: false,
+        version: "1.0".to_string(),
     });
 
     let token = std::env::var("QUBIT_ENGINE_AUTH_TOKEN").unwrap_or_else(|_| "default-secret-token".to_string());

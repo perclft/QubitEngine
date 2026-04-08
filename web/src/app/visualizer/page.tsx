@@ -5,10 +5,15 @@ import { visualizeCircuit } from "../actions";
 import { motion, AnimatePresence } from "framer-motion";
 import { Waves, Play } from "lucide-react";
 
+interface VisualizerStep {
+  probabilities: number[];
+  serverId: string;
+}
+
 export default function VisualizerPage() {
   const [numQubits, setNumQubits] = useState(3);
   const [isRunning, setIsRunning] = useState(false);
-  const [steps, setSteps] = useState<any[]>([]);
+  const [steps, setSteps] = useState<VisualizerStep[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,14 +23,14 @@ export default function VisualizerPage() {
     setCurrentStep(0);
     setError(null);
     try {
-      const res: any = await visualizeCircuit(numQubits);
-      if (res.error) {
+      const res = await visualizeCircuit(numQubits);
+      if ("error" in res) {
         setError(res.error);
-      } else if (res.steps) {
+      } else if ("steps" in res) {
         setSteps(res.steps);
       }
-    } catch (e: any) {
-      setError(e.toString());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setIsRunning(false);
     }
