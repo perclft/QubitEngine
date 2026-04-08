@@ -216,10 +216,11 @@ export async function* runVQE(molecule: number, maxIterations: number, learningR
   });
 
   while (true) {
+    const currentError = error as grpc.ServiceError | null;
     if (queue.length > 0) {
       yield queue.shift()!;
-    } else if (error) {
-      throw new Error(error.message || "Stream error");
+    } else if (currentError) {
+      throw new Error(currentError.message || "Stream error");
     } else if (done) {
       break;
     } else {

@@ -77,10 +77,10 @@ export default function DashboardPage() {
     setError(null);
     setResult(null);
     try {
-      const res = await runDemoCircuit(3) as ExecutionResult;
-      if (res.error) {
+      const res = await runDemoCircuit(3) as ExecutionResult | { error: string };
+      if ("error" in res && res.error) {
         setError(res.error);
-      } else {
+      } else if (!("error" in res)) {
         setResult(res);
       }
     } catch (e) {
@@ -92,10 +92,10 @@ export default function DashboardPage() {
 
   const handleFetchTopology = async () => {
     try {
-      const top = await getTopology() as TopologyData;
-      if (top.error) {
+      const top = await getTopology() as TopologyData | { error: string };
+      if ("error" in top && top.error) {
         setError(top.error);
-      } else {
+      } else if (!("error" in top)) {
         setTopology(top);
       }
     } catch (e) {

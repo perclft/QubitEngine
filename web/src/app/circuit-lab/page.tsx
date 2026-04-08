@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { runCustomCircuit } from "../actions";
-import { ExecutionResult } from "../components/types";
+import { ExecutionResult } from "../../components/types";
 import { motion, AnimatePresence } from "framer-motion";
 import { Cpu, Plus, Trash2, Play, Sliders } from "lucide-react";
 
@@ -70,9 +70,9 @@ export default function CircuitLabPage() {
         angle: g.angle,
       }));
       const res = await runCustomCircuit(numQubits, ops, noiseProbability, backend);
-      if ("error" in res) {
+      if ("error" in res && res.error) {
         setError(res.error);
-      } else {
+      } else if (!("error" in res)) {
         setResult(res);
       }
     } catch (e) {
