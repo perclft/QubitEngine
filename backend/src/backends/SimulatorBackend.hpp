@@ -1,7 +1,11 @@
 #pragma once
 #include "../QuantumRegister.hpp"
 #include "IQuantumBackend.hpp"
-#include <unistd.h> // for gethostname
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 class SimulatorBackend : public IQuantumBackend {
 private:
@@ -68,11 +72,20 @@ public:
       c->set_imag(amp.imag());
     }
 
-    char hostname[1024];
-    if (gethostname(hostname, 1024) == 0) {
+    char hostname[256];
+#ifdef _WIN32
+    DWORD host_size = sizeof(hostname);
+    if (GetComputerNameA(hostname, &host_size)) {
       response->set_server_id(std::string(hostname) + " (Simulator)");
     } else {
       response->set_server_id("unknown (Simulator)");
     }
+#else
+    if (gethostname(hostname, sizeof(hostname)) == 0) {
+      response->set_server_id(std::string(hostname) + " (Simulator)");
+    } else {
+      response->set_server_id("unknown (Simulator)");
+    }
+#endif
   }
 };

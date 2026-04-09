@@ -3,6 +3,12 @@
 #include <spdlog/spdlog.h>
 #include <chrono>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
 namespace qubit_engine {
 namespace workers {
 
@@ -76,11 +82,18 @@ void WorkerPool::runWorkerLoop(int worker_index) {
 }
 
 std::string WorkerPool::buildWorkerId(int index) {
-  char hostname[1024];
+  char hostname[256];
   std::string suffix = "worker-" + std::to_string(index);
-  if (gethostname(hostname, 1024) == 0) {
+#ifdef _WIN32
+  DWORD host_size = sizeof(hostname);
+  if (GetComputerNameA(hostname, &host_size)) {
     return std::string(hostname) + ":" + suffix;
   }
+#else
+  if (gethostname(hostname, sizeof(hostname)) == 0) {
+    return std::string(hostname) + ":" + suffix;
+  }
+#endif
   return suffix;
 }
 

@@ -1,7 +1,11 @@
 #pragma once
 #include "GPUQuantumRegister.hpp"
 #include "IQuantumBackend.hpp"
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <unistd.h>
+#endif
 
 class GPUBackend : public IQuantumBackend {
 private:
@@ -47,11 +51,20 @@ public:
       c->set_imag(amp.imag());
     }
 
-    char hostname[1024];
-    if (gethostname(hostname, 1024) == 0) {
+    char hostname[256];
+#ifdef _WIN32
+    DWORD host_size = sizeof(hostname);
+    if (GetComputerNameA(hostname, &host_size)) {
       response->set_server_id(std::string(hostname) + " (GPU)");
     } else {
       response->set_server_id("unknown (GPU)");
     }
+#else
+    if (gethostname(hostname, sizeof(hostname)) == 0) {
+      response->set_server_id(std::string(hostname) + " (GPU)");
+    } else {
+      response->set_server_id("unknown (GPU)");
+    }
+#endif
   }
 };
