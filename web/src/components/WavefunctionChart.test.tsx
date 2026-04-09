@@ -1,13 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import WavefunctionChart from './WavefunctionChart';
+import { WavefunctionChart } from './WavefunctionChart';
 
 describe('WavefunctionChart', () => {
   it('renders a default state correctly', () => {
-    const defaultData = [
-      { state: '|0>', probability: 1.0 },
-      { state: '|1>', probability: 0.0 }
-    ];
     
     // We mock ResizeObserver which Recharts requires
     global.ResizeObserver = class ResizeObserver {
@@ -16,7 +12,7 @@ describe('WavefunctionChart', () => {
       disconnect() {}
     };
 
-    render(<WavefunctionChart data={defaultData} />);
+    render(<WavefunctionChart result={null} error={null} />);
     expect(screen.getByText('Probability Distribution')).toBeInTheDocument();
   });
 });
