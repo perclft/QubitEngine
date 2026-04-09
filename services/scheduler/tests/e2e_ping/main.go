@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/perclft/QubitEngine/api/auth"
@@ -32,6 +33,11 @@ func main() {
 	var conn *grpc.ClientConn
 	var err error
 	
+	// Ensure JWT secret is set for test environments
+	if os.Getenv("QUBIT_ENGINE_JWT_SECRET") == "" {
+		os.Setenv("QUBIT_ENGINE_JWT_SECRET", "e2e_ping_test_secret_1234567890")
+	}
+
 	token, err := auth.GenerateToken("test-user", 24*time.Hour)
 	if err != nil {
 		log.Fatalf("Failed to generate token: %v", err)
