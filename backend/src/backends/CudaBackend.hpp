@@ -51,7 +51,7 @@ public:
                          const std::vector<Complex> &matrix) override;
 
   // --- State Access ---
-  std::vector<Complex> getStateVector() const override { return getStateVectorAsync(); }
+  std::vector<Complex> getStateVector() const override;
   // --- Distributed Helpers ---
   int getRank() const override { return mpi_rank_; }
   int getSize() const override { return mpi_size_; }

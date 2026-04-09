@@ -8,7 +8,9 @@
 #ifdef MPI_ENABLED
 #include <mpi.h>
 #endif
+#ifdef ENABLE_NCCL
 #include <nccl.h>
+#endif
 
 #include <cuda_runtime.h>
 #include <iostream>
@@ -355,7 +357,7 @@ std::vector<double> CudaBackend::getProbabilities() const {
 
 // --- Expectation Value (Device-Side Reduction) ---
 
-double CudaBackend::expectationValue(const std::string &pauli_string) {
+double CudaBackend::expectationValue(const std::string &pauli_string) const {
   // Encode Pauli string into int array: 0=I, 1=X, 2=Y, 3=Z
   std::vector<int> h_pauli_ops(num_qubits_, 0);
   for (size_t q = 0; q < num_qubits_ && q < pauli_string.size(); ++q) {

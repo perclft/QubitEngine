@@ -43,9 +43,8 @@ void launchPauliExpectation(const void *deviceState, int num_qubits,
 // Applies a 2^k × 2^k unitary to k target qubits (k ≤ 3)
 // d_targets: device array of k target qubit indices
 // h_unitary: HOST pointer to the unitary matrix (copied to constant memory)
-struct cuDoubleComplex;
 void launchFusedUnitary(void *deviceState, int num_qubits, const int *d_targets,
-                        int k, const cuDoubleComplex *h_unitary);
+                        int k, const void *h_unitary);
 
 // --- Memory Management Helpers ---
 void* allocateDeviceState(size_t size_bytes);

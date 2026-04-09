@@ -33,6 +33,7 @@ public:
 
   // Data Transfer
   std::vector<std::complex<double>> getStateVector() const;
+  void* getDeviceState() const { return device_state; }
 
   // Helper for Adjoint / Tape Replay
   void applyRegisteredGate(const QuantumRegister::RecordedGate &gate) {
