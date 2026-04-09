@@ -101,15 +101,15 @@ std::string QuantumJIT::compute_hash(
 
   std::string hash = std::to_string(num_qubits) + "|";
   for (size_t i = 0; i < gates.size(); ++i) {
-    hash += gates[i].first;
+    hash += gates[i].first + "_";
     for (int q : gates[i].second) {
-      hash += std::to_string(q);
+      hash += std::to_string(q) + ",";
     }
     if (i < params.size()) {
       // Round parameters slightly to catch FP inaccuracies near Pi
       hash += std::to_string(std::round(params[i] * 1e6) / 1e6);
     }
-    hash += "_";
+    hash += ";";
   }
   return hash;
 }

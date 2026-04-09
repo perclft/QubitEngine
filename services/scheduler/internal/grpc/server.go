@@ -93,9 +93,15 @@ func (s *SchedulerServer) ConnectEngine(ctx context.Context) error {
 		creds = insecure.NewCredentials()
 	}
 
-	conn, err := google_grpc.Dial(s.engineAddr,
+	targetAddr := s.engineAddr
+	if !strings.HasPrefix(targetAddr, "dns:///") {
+		targetAddr = "dns:///" + targetAddr
+	}
+
+	conn, err := google_grpc.Dial(targetAddr,
 		google_grpc.WithTransportCredentials(creds),
 		google_grpc.WithPerRPCCredentials(tokenAuth{token: s.engineToken}),
+		google_grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to connect to engine: %w", err)

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -93,7 +94,7 @@ func main() {
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     *redisAddr,
-		Password: "",
+		Password: os.Getenv("REDIS_PASSWORD"),
 		DB:       0,
 	})
 
@@ -219,7 +220,18 @@ func main() {
 		"engine", *engineAddr,
 	)
 
-	wrappedGrpc := grpcweb.WrapServer(grpcServer, grpcweb.WithOriginFunc(func(origin string) bool { return true }))
+	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
+	wrappedGrpc := grpcweb.WrapServer(grpcServer, grpcweb.WithOriginFunc(func(origin string) bool {
+		if allowedOrigins == "" || allowedOrigins == "*" {
+			return true
+		}
+		for _, allowed := range strings.Split(allowedOrigins, ",") {
+			if strings.TrimSpace(allowed) == origin {
+				return true
+			}
+		}
+		return false
+	}))
 
 	httpServer := &http.Server{
 		Addr: ":8080",

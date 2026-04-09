@@ -394,7 +394,22 @@ void MetalBackend::applyDenseUnitary(const std::vector<size_t> &targets,
   }
 }
 
-void MetalBackend::applyDepolarizingNoise(Precision p) {}
+void MetalBackend::applyDepolarizingNoise(Precision p) {
+  if (p <= 0.0) return;
+  
+  static std::mt19937 gen(std::random_device{}());
+  std::uniform_real_distribution<float> dist(0.0, 1.0);
+  
+  // Stochastic noise: For each qubit, with probability p, apply a random Pauli gate
+  for (size_t target = 0; target < num_qubits_; ++target) {
+    if (dist(gen) < p) {
+      float r = dist(gen);
+      if (r < 0.3333f) applyX(target);
+      else if (r < 0.6666f) applyY(target);
+      else applyZ(target);
+    }
+  }
+}
 
 int MetalBackend::measure(size_t target) {
   uint32_t stride = 1 << target;
@@ -471,33 +486,51 @@ std::vector<double> MetalBackend::getProbabilities() {
 double MetalBackend::expectationValue(const std::string &pauli) const {
   uint64_t z_mask = 0;
   bool is_diagonal = true;
-  for (size_t i = 0; i < pauli_string.length(); ++i) {
-      if (pauli_string[i] == 'Z') z_mask |= (1ULL << i);
-      else if (pauli_string[i] != 'I') { is_diagonal = false; break; }
+  for (size_t i = 0; i < pauli.length(); ++i) {
+    if (pauli[i] == 'Z') {
+      z_mask |= (1ULL << i);
+    } else if (pauli[i] != 'I') {
+      is_diagonal = false;
+      break;
+    }
   }
-  if (!is_diagonal) return 0.0;
+
+  if (!is_diagonal) {
+    // For non-diagonal, we could perform basis rotation on GPU, 
+    // but for now we fallback or return 0 for unsupported non-diagonal on Metal
+    spdlog::warn("MetalBackend: Non-diagonal expectation values not yet supported on GPU.");
+    return 0.0;
+  }
 
   size_t dim = 1ULL << num_qubits_;
   size_t totalThreads = dim;
   size_t maxThreads = 256;
   size_t numGroups = (totalThreads + maxThreads - 1) / maxThreads;
+  
   id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
-  id<MTLBuffer> partialSumsBuf = [device newBufferWithLength:numGroups * sizeof(float) options:MTLResourceStorageModeShared];
+  id<MTLBuffer> partialSumsBuf = [device newBufferWithLength:numGroups * sizeof(float)
+                                                     options:MTLResourceStorageModeShared];
   id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)commandQueue_;
   id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
   id<MTLComputeCommandEncoder> enc = [cmdBuf computeCommandEncoder];
   id<MTLComputePipelineState> pso = (__bridge id<MTLComputePipelineState>)diagonalExpectationPipeline_;
+
   [enc setComputePipelineState:pso];
   [enc setBuffer:(__bridge id<MTLBuffer>)gpuBuffer_ offset:0 atIndex:0];
   [enc setBytes:&z_mask length:sizeof(uint64_t) atIndex:1];
   [enc setBuffer:partialSumsBuf offset:0 atIndex:2];
-  [enc dispatchThreads:MTLSizeMake(totalThreads, 1, 1) threadsPerThreadgroup:MTLSizeMake(maxThreads, 1, 1)];
+  [enc setBytes:&totalThreads length:sizeof(uint32_t) atIndex:3];
+  [enc dispatchThreads:MTLSizeMake(totalThreads, 1, 1)
+      threadsPerThreadgroup:MTLSizeMake(maxThreads, 1, 1)];
   [enc endEncoding];
   [cmdBuf commit];
   [cmdBuf waitUntilCompleted];
-  float* sums = (float*)[partialSumsBuf contents];
+
+  float *sums = (float *)[partialSumsBuf contents];
   float expected_val = 0.0;
-  for (size_t i = 0; i < numGroups; ++i) expected_val += sums[i];
+  for (size_t i = 0; i < numGroups; ++i) {
+    expected_val += sums[i];
+  }
   return (double)expected_val;
 }
 

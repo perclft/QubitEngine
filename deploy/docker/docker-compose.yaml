@@ -82,6 +82,11 @@ services:
         condition: service_healthy
       engine:
         condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 50053 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   # 6. Result Cache Service
   cache:
@@ -130,6 +135,31 @@ services:
       - COLLECTOR_OTLP_ENABLED=true
     networks:
       - qubit-net
+
+  # 9. Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - qubit-net
+    depends_on:
+      - engine
+      - scheduler
+
+  # 10. Grafana
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - qubit-net
+    depends_on:
+      - prometheus
 
 networks:
   qubit-net:

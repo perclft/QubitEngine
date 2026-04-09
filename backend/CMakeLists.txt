@@ -120,7 +120,7 @@ if(ENABLE_CUDA)
     check_language(CUDA)
     if(CMAKE_CUDA_COMPILER)
         enable_language(CUDA)
-        set(CMAKE_CUDA_ARCHITECTURES "75")
+        set(CMAKE_CUDA_ARCHITECTURES "70;75;80;86;89;90")
         find_package(CUDAToolkit REQUIRED)
         add_compile_definitions(ENABLE_CUDA)
         message(STATUS "CUDA Detected. GPU Acceleration Enabled.")
@@ -414,6 +414,7 @@ add_executable(tests
     tests/StabilizerBackendTests.cpp
     tests/SecurityIntegrationTests.cpp
     tests/WorkerStressTests.cpp
+    tests/MetalBackendTests.cpp
 )
 
 # Service tests need gRPC generated headers + ServiceImpl sources

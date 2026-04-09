@@ -391,20 +391,22 @@ kernel void dense_unitary_2q_kernel(device Complex* state [[buffer(0)]],
     state[i11] = res[3];
 }
 
+
 // Kernel for diagonal expectation values (products of Z and I)
 kernel void diagonal_expectation_kernel(device Complex* state [[buffer(0)]],
                                         constant uint64_t& z_mask [[buffer(1)]],
                                         device float* partial_sums [[buffer(2)]],
+                                        constant uint& total_threads [[buffer(3)]],
                                         uint id [[thread_position_in_grid]],
                                         uint tid [[thread_position_in_threadgroup]],
                                         uint gid [[threadgroup_position_in_grid]],
-                                        uint threads_per_group [[threads_per_threadgroup]],
-                                        uint total_threads [[threads_per_grid]]) {
+                                        uint threads_per_group [[threads_per_threadgroup]]) {
     threadgroup float local_sum[1024];
     float val = 0.0f;
     if (id < total_threads) {
         float prob = state[id].real * state[id].real + state[id].imag * state[id].imag;
-        if (popcount(id & z_mask) % 2) val = -prob;
+        // Use __builtin_popcountll for uint64_t
+        if (__builtin_popcountll(id & z_mask) % 2) val = -prob;
         else val = prob;
     }
     local_sum[tid] = val;

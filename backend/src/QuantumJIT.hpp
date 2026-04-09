@@ -79,16 +79,21 @@ public:
 
   QuantumJIT(OptLevel level = O2) : opt_level_(level) {}
 
-  // Set the maximum number of circuits to cache
+  /// @brief Sets the maximum number of circuits to cache.
+  /// @param size The maximum cache size.
   void set_max_cache_size(size_t size) { max_cache_size_ = size; }
 
-  // Compile a circuit from gate list
+  /// @brief Compiles an immediate representation (IR) of the circuit using the current optimizations.
+  /// @param num_qubits The number of qubits in the circuit.
+  /// @param gates The sequence of recorded gates to compile.
+  /// @param params The variational parameters for the circuit.
+  /// @return The optimized list of compiled gates within a CircuitIR block.
   CircuitIR
   compile(int num_qubits,
           const std::vector<std::pair<std::string, std::vector<int>>> &gates,
           const std::vector<double> &params = {});
 
-  // Clear the internal compilation cache
+  /// @brief Clears the internal compilation cache.
   void clear_cache();
 
 private:

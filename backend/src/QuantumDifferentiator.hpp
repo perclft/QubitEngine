@@ -32,6 +32,12 @@ public:
   // ========================================================================
   // Adjoint Differentiation Method (template — must remain in header)
   // ========================================================================
+  /// @brief Calculates analytical gradients using the Adjoint Differentiation method.
+  /// @param num_qubits The number of qubits in the circuit.
+  /// @param current_params The current variational parameters.
+  /// @param applyAnsatz The callback function to apply the parameterized ansatz.
+  /// @param hamiltonian The observable Hamiltonian as a list of Pauli terms.
+  /// @return A vector containing the gradients with respect to each parameter.
   template <typename RegisterType = QuantumRegister>
   static std::vector<double>
   calculateGradientsAdjoint(int num_qubits,

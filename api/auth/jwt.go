@@ -16,9 +16,10 @@ import (
 func getJwtSecret() []byte {
 	secret := os.Getenv("QUBIT_ENGINE_JWT_SECRET")
 	if secret == "" {
-		// In a real production system, we might want to panic or log a fatal error here
-		// if we strictly require authentication.
-		return nil
+		if os.Getenv("QUBIT_ENGINE_SKIP_AUTH") != "1" {
+			panic("QUBIT_ENGINE_JWT_SECRET is required in production but not set")
+		}
+		return []byte("default_dev_secret")
 	}
 	return []byte(secret)
 }

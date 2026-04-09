@@ -174,8 +174,8 @@ grpc::Status CircuitService::RunCircuit(grpc::ServerContext *context,
               case qubit_engine::GateOperation::PAULI_X: name = "X"; break;
               case qubit_engine::GateOperation::PAULI_Y: name = "Y"; break;
               case qubit_engine::GateOperation::PAULI_Z: name = "Z"; break;
-              case qubit_engine::GateOperation::CNOT: name = "CX"; qbs.push_back(op.control_qubit()); break;
-              case qubit_engine::GateOperation::CZ: name = "CZ"; qbs.push_back(op.control_qubit()); break;
+              case qubit_engine::GateOperation::CNOT: name = "CX"; qbs = { static_cast<int>(op.control_qubit()), static_cast<int>(op.target_qubit()) }; break;
+              case qubit_engine::GateOperation::CZ: name = "CZ"; qbs = { static_cast<int>(op.control_qubit()), static_cast<int>(op.target_qubit()) }; break;
               case qubit_engine::GateOperation::SWAP: name = "SWAP"; qbs.push_back(op.second_target_qubit()); break;
               case qubit_engine::GateOperation::ROTATION_X: name = "RX"; break;
               case qubit_engine::GateOperation::ROTATION_Y: name = "RY"; break;
