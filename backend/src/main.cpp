@@ -75,8 +75,6 @@ void RunServer() {
   spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [thread %t] %v");
 
   spdlog::info("QubitEngine (C++) listening on {}", server_address);
-  
-  QuantumMetrics::Instance().Start();
 
   std::signal(SIGINT, signalHandler);
   std::signal(SIGTERM, signalHandler);
