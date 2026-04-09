@@ -249,7 +249,7 @@ jobs:
       - name: Install build tools and MPI
         run: |
           apt-get update
-          apt-get install -y libopenmpi-dev ninja-build autoconf autoconf-archive automake libtool pkg-config python3-pip default-jre libnccl2 libnccl-dev
+          apt-get install -y --allow-change-held-packages libopenmpi-dev ninja-build autoconf autoconf-archive automake libtool pkg-config python3-pip default-jre libnccl2 libnccl-dev
           pip3 install cmake
 
       - name: Setup VCPKG
