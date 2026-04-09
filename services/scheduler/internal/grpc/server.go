@@ -18,6 +18,7 @@ import (
 	"github.com/perclft/QubitEngine/services/scheduler/pkg/models"
 	"github.com/sony/gobreaker"
 	google_grpc "google.golang.org/grpc"
+	_ "google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
