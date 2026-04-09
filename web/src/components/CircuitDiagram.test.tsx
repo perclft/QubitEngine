@@ -7,6 +7,6 @@ describe('CircuitDiagram', () => {
     render(<CircuitDiagram numQubits={2} gates={[]} />);
     
     // Test base layout rendered
-    expect(screen.getByText('Quantum Circuit')).toBeInTheDocument();
+    expect(screen.getByText('Circuit Visualization')).toBeInTheDocument();
   });
 });

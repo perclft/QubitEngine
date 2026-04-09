@@ -13,6 +13,6 @@ describe('WavefunctionChart', () => {
     };
 
     render(<WavefunctionChart result={null} error={null} />);
-    expect(screen.getByText('Probability Distribution')).toBeInTheDocument();
+    expect(screen.getByText('Quantum State Distribution')).toBeInTheDocument();
   });
 });

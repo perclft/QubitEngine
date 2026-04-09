@@ -4,7 +4,7 @@ import { TopologyGraph } from './TopologyGraph';
 
 describe('TopologyGraph', () => {
   it('displays the topology placeholder empty state or frame', () => {
-    render(<TopologyGraph topology={null} />);
+    render(<TopologyGraph topology={{ nodes: [], edges: [] }} />);
     expect(screen.getByText('Hardware Topology')).toBeInTheDocument();
   });
 });
