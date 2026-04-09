@@ -23,6 +23,8 @@ import (
 var testAuthToken string
 
 func init() {
+	// Set a mock JWT secret for testing so auth doesn't panic in production mode
+	os.Setenv("QUBIT_ENGINE_JWT_SECRET", "e2e_test_secret_key_1234567890")
 	var err error
 	testAuthToken, err = auth.GenerateToken("test-user", 3600*time.Second)
 	if err != nil {
