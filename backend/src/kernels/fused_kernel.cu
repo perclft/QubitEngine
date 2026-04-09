@@ -94,7 +94,7 @@ namespace qe {
 namespace cuda {
 
 void launchFusedUnitary(void *deviceState, int num_qubits, const int *d_targets,
-                        int k, const cuDoubleComplex *h_unitary) {
+                        int k, const void *h_unitary) {
   int sub_dim = 1 << k;
 
   // Upload unitary matrix to constant memory
