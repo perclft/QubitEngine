@@ -50,7 +50,13 @@ TEST(StabilizerBackendTest, NonCliffordGatesThrow) {
 TEST(StabilizerBackendTest, ObservationMethodsThrow) {
     StabilizerBackend stab(3);
     
-    EXPECT_THROW(stab.measure(0), std::runtime_error);
+    // measure(0) is supported, verify it returns 0 or 1
+    int outcome = -1;
+    EXPECT_NO_THROW({
+        outcome = stab.measure(0);
+    });
+    EXPECT_TRUE(outcome == 0 || outcome == 1);
+    
     EXPECT_THROW(stab.getProbabilities(), std::runtime_error);
     EXPECT_THROW(stab.expectationValue("Z"), std::runtime_error);
     EXPECT_THROW(stab.getStateVector(), std::runtime_error);

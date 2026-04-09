@@ -57,6 +57,23 @@ void CircuitService::applyGate(qubit_engine::QuantumRegister &qreg,
 void CircuitService::serializeState(
     const qubit_engine::QuantumRegister &qreg, qubit_engine::StateResponse *response,
     qubit_engine::CircuitRequest::MeasurementStrategy strategy, bool use_shm) {
+  
+  char hostname[256];
+#ifdef _WIN32
+  DWORD host_size = sizeof(hostname);
+  if (GetComputerNameA(hostname, &host_size)) {
+    response->set_server_id(hostname);
+  } else {
+    response->set_server_id("QubitEngine-Windows");
+  }
+#else
+  if (gethostname(hostname, sizeof(hostname)) == 0) {
+    response->set_server_id(hostname);
+  } else {
+    response->set_server_id("QubitEngine-Unix");
+  }
+#endif
+
   if (strategy == qubit_engine::CircuitRequest::FULL_STATE) {
     bool shm_success = false;
     if (use_shm) {
