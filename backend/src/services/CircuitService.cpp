@@ -205,17 +205,17 @@ grpc::Status CircuitService::RunCircuit(grpc::ServerContext *context,
 
           if (!ir_block.gates.empty()) {
             for (const auto &g : ir_block.gates) {
-              if (g.type == qubit_engine::jit::CompiledGate::FUSED_BLOCK) {
-                std::vector<size_t> targets;
-                for (int t : g.target_qubits) targets.push_back((size_t)t);
+              std::vector<size_t> targets;
+              for (int t : g.target_qubits) targets.push_back((size_t)t);
+
+              // Prefer fused_unitary — fuse_tensor_network stores results
+              // there even for blocks it labels SINGLE_QUBIT / TWO_QUBIT.
+              if (!g.fused_unitary.empty()) {
                 qreg.applyDenseUnitary(targets, g.fused_unitary);
               } else if (g.type == qubit_engine::jit::CompiledGate::SINGLE_QUBIT) {
-                std::vector<size_t> targets = {(size_t)g.target_qubits[0]};
                 std::vector<qubit_engine::Complex> matrix(g.single_matrix.begin(), g.single_matrix.end());
                 qreg.applyDenseUnitary(targets, matrix);
               } else if (g.type == qubit_engine::jit::CompiledGate::TWO_QUBIT) {
-                std::vector<size_t> targets;
-                for (int t : g.target_qubits) targets.push_back((size_t)t);
                 std::vector<qubit_engine::Complex> matrix(g.two_matrix.begin(), g.two_matrix.end());
                 qreg.applyDenseUnitary(targets, matrix);
               }
