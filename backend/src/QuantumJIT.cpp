@@ -402,8 +402,8 @@ void QuantumJIT::apply_gate_to_unitary(std::vector<Complex>& unitary,
             for (size_t row = 0; row < dim; ++row) {
                 if (!(row & c_mask) && !(row & t_mask)) {
                     size_t r00 = row;
-                    size_t r01 = row | t_mask;
-                    size_t r10 = row | c_mask;
+                    size_t r01 = row | t_mask; // Index 1: targets[1] set
+                    size_t r10 = row | c_mask; // Index 2: targets[0] set
                     size_t r11 = row | c_mask | t_mask;
                     
                     Complex v00 = unitary[r00 * dim + col];
