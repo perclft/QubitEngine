@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include "../src/QuantumRegister.hpp"
-#include "../src/backends/Types.hpp"
+#include "../src/Types.hpp"
 #include <cmath>
 
 #ifdef __APPLE__
