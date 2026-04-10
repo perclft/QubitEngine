@@ -390,7 +390,9 @@ jobs:
           go-version: '1.24'
           
       - name: Create .env file
-        run: cp .env.example .env
+        run: |
+          cp .env.example .env
+          echo "QUBIT_ENGINE_JWT_SECRET=e2e_ping_test_secret_1234567890" >> .env
 
       - name: Start Docker Compose Stack
         run: docker compose -f deploy/docker/docker-compose.yaml up -d --build
