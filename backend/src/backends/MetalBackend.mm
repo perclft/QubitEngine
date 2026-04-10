@@ -462,7 +462,7 @@ int MetalBackend::measure(size_t target) {
   return outcome;
 }
 
-std::vector<double> MetalBackend::getProbabilities() {
+std::vector<double> MetalBackend::getProbabilities() const {
   size_t dim = 1ULL << num_qubits_;
   id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
   id<MTLBuffer> probBuf = [device newBufferWithLength:dim * sizeof(float) options:MTLResourceStorageModeShared];
@@ -557,7 +557,7 @@ void MetalBackend::applySWAP(size_t q1, size_t q2) {}
 void MetalBackend::applyCZ(size_t c, size_t t) {}
 void MetalBackend::applyDepolarizingNoise(Precision p) {}
 int MetalBackend::measure(size_t t) { return 0; }
-std::vector<double> MetalBackend::getProbabilities() { return {}; }
+std::vector<double> MetalBackend::getProbabilities() const { return {}; }
 double MetalBackend::expectationValue(const std::string &p) const { return 0.0; }
 std::vector<Complex> MetalBackend::getStateVector() const { return {}; }
 } // namespace qubit_engine
