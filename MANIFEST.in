@@ -2,6 +2,6 @@ recursive-include backend *
 recursive-include api/proto *
 include README.md
 include LICENSE
-include VERSION
-include CMakeLists.txt
 include backend/CMakeLists.txt
+include backend/vcpkg.json
+prune backend/build

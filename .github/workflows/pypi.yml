@@ -17,16 +17,30 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y cmake ninja-build autoconf autoconf-archive automake libtool
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.4
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: '${{ github.workspace }}/vcpkg'
+
+      - name: Install pip dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install build twine cmake
+          pip install build twine cmake ninja
 
       - name: Build binary wheel
+        env:
+          VCPKG_ROOT: '${{ github.workspace }}/vcpkg'
+          SCCACHE_GHA_ENABLED: "true"
         run: |
-          # Note: This will build the C++ extension if needed, 
-          # but for PyPI we usually want manylinux wheels.
-          # This is a simplified version for CI.
+          # Note: This will build the C++ extension if needed.
+          # We pass VCPKG_ROOT so that setup.py finds the toolchain.
           python -m build
 
       - name: Publish to PyPI
