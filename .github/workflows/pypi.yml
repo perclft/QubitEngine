@@ -27,7 +27,6 @@ jobs:
           # Note: This will build the C++ extension if needed, 
           # but for PyPI we usually want manylinux wheels.
           # This is a simplified version for CI.
-          cd python
           python -m build
 
       - name: Publish to PyPI
@@ -36,4 +35,4 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
-          twine upload python/dist/*
+          twine upload dist/*
