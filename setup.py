@@ -11,7 +11,7 @@ from setuptools.command.build_ext import build_ext
 # The name must be the _exact_ name of the extension, but the sourcedir is the
 # root of the CMake project - in our case, the root of the repo (where backend CMakeLists.txt lives).
 class CMakeExtension(Extension):
-    def __init__(self, name, sourcedir=""):
+    def __init__(self, name, sourcedir="."):
         super().__init__(name, sources=[])
         self.sourcedir = os.path.abspath(sourcedir)
 
@@ -51,13 +51,6 @@ class CMakeBuild(build_ext):
         else:
             cmake_args.append("-DENABLE_CUDA=OFF")
         
-        # Disable VCPKG by default for standard pip installs to avoid compiling huge dependencies,
-        # users can mount VCPKG_ROOT if they want the full suite.
-        # But we DO need to ensure pybind11 is found.
-        # We will turn off building the main executable and tests, just build the module.
-        # Wait, our CMakeLists.txt builds gRPC/Proto as well. Let's pass a flag to only build python module?
-        # Actually gRPC is in vcpkg. For a PyPI wheel, we'd bundle everything.
-        
         # Pass any VCPKG toolchain if present in environment
         vcpkg_root = os.environ.get("VCPKG_ROOT")
         if vcpkg_root:
@@ -70,11 +63,6 @@ class CMakeBuild(build_ext):
 
         build_args = []
         if self.compiler.compiler_type != "msvc":
-            # Using Ninja-build since it a) is available as a wheel and b)
-            # multithreads automatically. MSVC would require all variables be
-            # exported for Ninja to pick it up, which is a little tricky to do.
-            # Users can override the generator with CMAKE_GENERATOR in CMake
-            # 3.15+.
             if not cmake_generator or cmake_generator == "Ninja":
                 try:
                     import ninja
@@ -117,7 +105,7 @@ class CMakeBuild(build_ext):
         if not build_temp.exists():
             build_temp.mkdir(parents=True)
 
-        backend_dir = os.path.abspath(os.path.join(ext.sourcedir, "..", "backend"))
+        backend_dir = os.path.abspath(os.path.join(ext.sourcedir, "backend"))
 
         try:
              subprocess.check_call(["cmake", backend_dir] + cmake_args, cwd=build_temp)
@@ -135,7 +123,8 @@ setup(
     description="High-performance C++ Quantum Simulator with CUDA support",
     ext_modules=[CMakeExtension("qubit_engine.core")],
     cmdclass={"build_ext": CMakeBuild},
-    packages=find_packages(),
+    packages=find_packages(where="python"),
+    package_dir={"": "python"},
     zip_safe=False,
     python_requires=">=3.8",
     extras_require={

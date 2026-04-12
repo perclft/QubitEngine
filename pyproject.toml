@@ -23,5 +23,5 @@ test = ["pytest>=7.0.0", "qiskit[visualization]>=1.0.0"]
 minversion = "7.0"
 addopts = "-ra -q"
 testpaths = [
-    "tests",
+    "python/tests",
 ]
