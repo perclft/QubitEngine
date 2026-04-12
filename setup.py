@@ -118,7 +118,7 @@ class CMakeBuild(build_ext):
 
 setup(
     name="qubit-engine",
-    version="0.2.0",
+    version="0.2.5",
     author="QubitEngine Core Team",
     description="High-performance C++ Quantum Simulator with CUDA support",
     ext_modules=[CMakeExtension("qubit_engine.core")],

@@ -1,14 +1,16 @@
-Metadata-Version: 2.4
+Metadata-Version: 2.1
 Name: qubit-engine
 Version: 0.2.0
 Summary: High-performance C++ Quantum Simulator with CUDA support
+Home-page: UNKNOWN
 Author: QubitEngine Core Team
+License: UNKNOWN
+Platform: UNKNOWN
 Requires-Python: >=3.8
-Description-Content-Type: text/markdown
-Requires-Dist: numpy>=1.20.0
 Provides-Extra: qiskit
-Requires-Dist: qiskit>=1.0.0; extra == "qiskit"
-Provides-Extra: test
-Requires-Dist: pytest>=7.0.0; extra == "test"
-Requires-Dist: qiskit[visualization]>=1.0.0; extra == "test"
-Dynamic: requires-python
+Provides-Extra: pennylane
+Provides-Extra: all
+License-File: LICENSE
+
+UNKNOWN
+

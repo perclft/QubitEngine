@@ -40,7 +40,7 @@ const BlochVector = ({ theta = 0, phi = 0, animating = false }: BlochSphereProps
 
   return (
     <primitive
-      object={new THREE.ArrowHelper(dir, new THREE.Vector3(0, 0, 0), 1.2, 0x8b5cf6, 0.2, 0.1)}
+      object={useMemo(() => new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 1.2, 0x8b5cf6, 0.2, 0.1), [])}
       ref={arrowRef}
     />
   );

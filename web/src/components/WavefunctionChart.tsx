@@ -12,7 +12,7 @@ interface Props {
 export function WavefunctionChart({ result, error }: Props) {
   return (
     <motion.div
-      initial={{ opacity: 0, x: 20 }}
+      initial={false}
       animate={{ opacity: 1, x: 0 }}
       className="bg-white/[0.03] border border-white/[0.06] backdrop-blur-xl rounded-2xl p-6 min-h-[280px] flex flex-col"
     >

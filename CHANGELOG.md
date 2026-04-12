@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 ### Fixed
 
+## [0.2.5] - 2026-04-12
+
+### Fixed
+- **Dashboard UI**: Resolved bug where the "Execute" button was invisible until user interaction by making entrance animations more robust.
+- **macOS Build**: Fixed `libomp` dependency linkage and dynamic Homebrew path discovery on macOS runners.
+- **CI/CD**: Corrected Python package distribution by relocating build configuration to the repository root.
+- **CI/CD**: Synchronized project-wide versioning to ensure clean PyPI publication.
+
 ## [0.2.0] - 2026-04-11
 
 ### Added

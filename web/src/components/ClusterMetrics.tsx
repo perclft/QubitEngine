@@ -48,7 +48,7 @@ export function ClusterMetrics() {
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
+      initial={false}
       animate={{ opacity: 1, scale: 1 }}
       className="bg-white/[0.03] border border-white/[0.06] backdrop-blur-xl rounded-2xl p-6 relative overflow-hidden group"
     >

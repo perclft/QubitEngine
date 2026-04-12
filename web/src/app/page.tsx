@@ -121,7 +121,7 @@ export default function DashboardPage() {
           <ClusterMetrics />
           
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={false}
             animate={{ opacity: 1, y: 0 }}
             className="bg-white/[0.03] border border-white/[0.06] backdrop-blur-xl rounded-2xl p-6"
           >
