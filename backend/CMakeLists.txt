@@ -36,11 +36,21 @@ endif()
 option(ENABLE_OPENMP "Enable OpenMP Multi-threading" ON)
 if(ENABLE_OPENMP)
     if(APPLE)
-        set(OpenMP_C_FLAGS "-Xpreprocessor -fopenmp -I/opt/homebrew/opt/libomp/include")
-        set(OpenMP_CXX_FLAGS "-Xpreprocessor -fopenmp -I/opt/homebrew/opt/libomp/include")
+        # On macOS, Homebrew libomp is not in the system path.
+        # We try to find it using 'brew --prefix libomp'
+        execute_process(COMMAND brew --prefix libomp
+                        OUTPUT_VARIABLE LIBOMP_PREFIX
+                        OUTPUT_STRIP_TRAILING_WHITESPACE
+                        ERROR_QUIET)
+        if(NOT LIBOMP_PREFIX)
+            set(LIBOMP_PREFIX "/opt/homebrew/opt/libomp") # Fallback to Apple Silicon default
+        endif()
+
+        set(OpenMP_C_FLAGS "-Xpreprocessor -fopenmp -I${LIBOMP_PREFIX}/include")
+        set(OpenMP_CXX_FLAGS "-Xpreprocessor -fopenmp -I${LIBOMP_PREFIX}/include")
         set(OpenMP_C_LIB_NAMES omp)
         set(OpenMP_CXX_LIB_NAMES omp)
-        set(OpenMP_omp_LIBRARY /opt/homebrew/opt/libomp/lib/libomp.dylib)
+        set(OpenMP_omp_LIBRARY ${LIBOMP_PREFIX}/lib/libomp.dylib)
     endif()
     find_package(OpenMP)
     if(OpenMP_CXX_FOUND)

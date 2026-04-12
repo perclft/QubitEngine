@@ -23,7 +23,7 @@ jobs:
     - name: Set up dependencies (macOS)
       if: runner.os == 'macOS'
       run: |
-        brew install cmake ninja autoconf autoconf-archive automake libtool
+        brew install cmake ninja autoconf autoconf-archive automake libtool libomp
 
     - name: Set up dependencies (Windows)
       if: runner.os == 'Windows'
