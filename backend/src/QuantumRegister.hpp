@@ -100,7 +100,7 @@ private:
   void applyPostGateNoise1Q(size_t target);
   void applyPostGateNoise2Q(size_t q1, size_t q2);
   size_t num_qubits;
-  std::unique_ptr<IQuantumBackend> backend;
+  std::unique_ptr<qubit_engine::IQuantumBackend> backend;
   std::shared_ptr<NoiseModel> noise_model_;
   bool recording_enabled = false;
   bool execution_enabled = true;

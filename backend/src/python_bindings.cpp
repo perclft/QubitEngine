@@ -150,7 +150,11 @@ PYBIND11_MODULE(core, m) {
            py::arg("error"), "Set default readout error for all qubits")
       .def("set_enabled", &qubit_engine::NoiseModel::setEnabled,
            py::arg("enabled"), "Enable or disable the noise model")
-      .def("is_enabled", &qubit_engine::NoiseModel::isEnabled);
+      .def("is_enabled", &qubit_engine::NoiseModel::isEnabled)
+      .def("set_coherent_error", &qubit_engine::NoiseModel::setCoherentError,
+           py::arg("gate_type"), py::arg("epsilon"), "Add a systematic rotation bias")
+      .def("get_coherent_error", &qubit_engine::NoiseModel::getCoherentError,
+           py::arg("gate_type"), "Get the systematic rotation bias for a gate type");
 
   // --- NoiseChannel1Q Binding ---
   py::class_<qubit_engine::NoiseChannel1Q>(m, "NoiseChannel1Q")
@@ -171,6 +175,9 @@ PYBIND11_MODULE(core, m) {
         py::arg("gamma"), "Create an amplitude damping (T1) noise channel");
   m.def("make_phase_damping_channel", &qubit_engine::makePhaseDampingChannel,
         py::arg("gamma"), "Create a phase damping (T2) noise channel");
+  m.def("make_thermal_relaxation_channel", &qubit_engine::makeThermalRelaxationChannel,
+        py::arg("t1"), py::arg("t2"), py::arg("gate_time"),
+        "Create a thermal relaxation (T1/T2) noise channel");
 
   // --- GPUQuantumRegister Binding ---
   py::class_<GPUQuantumRegister>(m, "GPUQuantumRegister")

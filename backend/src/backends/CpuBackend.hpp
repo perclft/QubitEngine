@@ -3,6 +3,7 @@
 #include "../Allocator.hpp"
 #include "../Types.hpp"
 #include "IQuantumBackend.hpp"
+#include <array>
 #include <vector>
 
 
@@ -54,6 +55,10 @@ private:
   std::vector<Complex, HugePageAllocator<Complex>> state;
   int local_rank = 0;
   int world_size = 1;
+
+  // --- Noise Selection Helpers ---
+  [[nodiscard]] std::array<Complex, 4> getReducedDensityMatrix1Q(size_t target) const;
+  [[nodiscard]] std::array<Complex, 16> getReducedDensityMatrix2Q(size_t q1, size_t q2) const;
 };
 
 } // namespace qubit_engine

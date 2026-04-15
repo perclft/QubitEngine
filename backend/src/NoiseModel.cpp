@@ -54,6 +54,35 @@ static std::array<Complex, 16> kronecker2x2(const std::array<Complex, 4>& A,
   return result;
 }
 
+/// @brief Compute K†K for a 2×2 matrix
+static std::array<Complex, 4> computeDagSelf2x2(const std::array<Complex, 4>& m) {
+  // M† = [[conj(m00), conj(m10)], [conj(m01), conj(m11)]]
+  // Result = M† * M
+  Complex m00 = m[0], m01 = m[1], m10 = m[2], m11 = m[3];
+  Complex d00 = std::conj(m00), d01 = std::conj(m10), d10 = std::conj(m01), d11 = std::conj(m11);
+  
+  return {
+    d00 * m00 + d01 * m10, d00 * m01 + d01 * m11,
+    d10 * m00 + d11 * m10, d10 * m01 + d11 * m11
+  };
+}
+
+/// @brief Compute K†K for a 4×4 matrix
+static std::array<Complex, 16> computeDagSelf4x4(const std::array<Complex, 16>& m) {
+  std::array<Complex, 16> result{};
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 0; j < 4; ++j) {
+      Complex sum(0, 0);
+      for (int k = 0; k < 4; ++k) {
+        // (M†)ik = conj(Mki)
+        sum += std::conj(m[k * 4 + i]) * m[k * 4 + j];
+      }
+      result[i * 4 + j] = sum;
+    }
+  }
+  return result;
+}
+
 /// @brief Scale a 4×4 matrix by a scalar
 static std::array<Complex, 16> scale4x4(Precision s,
                                          const std::array<Complex, 16>& m) {
@@ -80,10 +109,10 @@ NoiseChannel1Q makeDepolarizingChannel1Q(Precision p) {
   Precision sqrt_1mp = std::sqrt(1.0 - p);
   Precision sqrt_p3 = std::sqrt(p / 3.0);
 
-  channel.operators.push_back({1.0 - p, scale2x2(sqrt_1mp, PAULI_I)});
-  channel.operators.push_back({p / 3.0, scale2x2(sqrt_p3, PAULI_X)});
-  channel.operators.push_back({p / 3.0, scale2x2(sqrt_p3, PAULI_Y)});
-  channel.operators.push_back({p / 3.0, scale2x2(sqrt_p3, PAULI_Z)});
+  channel.operators.push_back({1.0 - p, scale2x2(sqrt_1mp, PAULI_I), computeDagSelf2x2(scale2x2(sqrt_1mp, PAULI_I))});
+  channel.operators.push_back({p / 3.0, scale2x2(sqrt_p3, PAULI_X), computeDagSelf2x2(scale2x2(sqrt_p3, PAULI_X))});
+  channel.operators.push_back({p / 3.0, scale2x2(sqrt_p3, PAULI_Y), computeDagSelf2x2(scale2x2(sqrt_p3, PAULI_Y))});
+  channel.operators.push_back({p / 3.0, scale2x2(sqrt_p3, PAULI_Z), computeDagSelf2x2(scale2x2(sqrt_p3, PAULI_Z))});
 
   return channel;
 }
@@ -114,10 +143,12 @@ NoiseChannel2Q makeDepolarizingChannel2Q(Precision p) {
 
       if (a == 0 && b == 0) {
         // Identity ⊗ Identity: weight = 1 - p
-        channel.operators.push_back({1.0 - p, scale4x4(sqrt_1mp, kron)});
+        auto mat = scale4x4(sqrt_1mp, kron);
+        channel.operators.push_back({1.0 - p, mat, computeDagSelf4x4(mat)});
       } else {
         // Non-identity Pauli product: weight = p / 15
-        channel.operators.push_back({p / 15.0, scale4x4(sqrt_p15, kron)});
+        auto mat = scale4x4(sqrt_p15, kron);
+        channel.operators.push_back({p / 15.0, mat, computeDagSelf4x4(mat)});
       }
     }
   }
@@ -144,15 +175,17 @@ NoiseChannel1Q makeAmplitudeDampingChannel(Precision gamma) {
 
   // K0 = [[1, 0], [0, sqrt(1-γ)]]
   KrausOperator1Q k0;
-  k0.probability = 1.0 - gamma; // Approximate selection weight
+  k0.probability = 1.0 - gamma; 
   k0.matrix = {Complex(1, 0), Complex(0, 0),
                Complex(0, 0), Complex(sqrt_1mg, 0)};
+  k0.matrix_dag_self = computeDagSelf2x2(k0.matrix);
 
   // K1 = [[0, sqrt(γ)], [0, 0]]
   KrausOperator1Q k1;
   k1.probability = gamma;
   k1.matrix = {Complex(0, 0), Complex(sqrt_g, 0),
                Complex(0, 0), Complex(0, 0)};
+  k1.matrix_dag_self = computeDagSelf2x2(k1.matrix);
 
   channel.operators.push_back(k0);
   channel.operators.push_back(k1);
@@ -182,15 +215,68 @@ NoiseChannel1Q makePhaseDampingChannel(Precision gamma) {
   k0.probability = 1.0 - gamma;
   k0.matrix = {Complex(1, 0), Complex(0, 0),
                Complex(0, 0), Complex(sqrt_1mg, 0)};
+  k0.matrix_dag_self = computeDagSelf2x2(k0.matrix);
 
   // K1 = [[0, 0], [0, sqrt(γ)]]
   KrausOperator1Q k1;
   k1.probability = gamma;
   k1.matrix = {Complex(0, 0), Complex(0, 0),
                Complex(0, 0), Complex(sqrt_g, 0)};
+  k1.matrix_dag_self = computeDagSelf2x2(k1.matrix);
 
   channel.operators.push_back(k0);
   channel.operators.push_back(k1);
+
+  return channel;
+}
+
+// ============================================================================
+// Channel Factory: Thermal Relaxation
+// ============================================================================
+
+NoiseChannel1Q makeThermalRelaxationChannel(Precision t1, Precision t2, Precision gate_time) {
+  if (t1 <= 0.0 || t2 <= 0.0 || gate_time < 0.0) {
+    throw std::invalid_argument("T1, T2 must be positive and gate_time non-negative");
+  }
+  if (t2 > 2.0 * t1) {
+    throw std::invalid_argument("T2 must satisfy T2 <= 2*T1 for physical relaxation, got T1=" + 
+                                std::to_string(t1) + ", T2=" + std::to_string(t2));
+  }
+
+  // Calculate probabilities for AD and PD components
+  Precision gamma_ad = 1.0 - std::exp(-gate_time / t1);
+  // Pure dephasing rate: 1/T_phi = 1/T2 - 1/(2*T1)
+  // Gamma_pd = 1 - exp(-2 * gate_time / T_phi)
+  Precision gamma_pd = 1.0 - std::exp(-(2.0 / t2 - 1.0 / t1) * gate_time);
+
+  // Combine AD and PD channels (AD then PD)
+  // This results in 4 operators: K_ij = K_pd_i * K_ad_j
+  auto ad = makeAmplitudeDampingChannel(gamma_ad);
+  auto pd = makePhaseDampingChannel(gamma_pd);
+
+  NoiseChannel1Q channel;
+  channel.name = "thermal_relaxation";
+
+  for (auto& k_pd : pd.operators) {
+    for (auto& k_ad : ad.operators) {
+      KrausOperator1Q combined;
+      // Probability here is just for initialization/ordering
+      combined.probability = k_pd.probability * k_ad.probability;
+      
+      // Matrix multiplication: M_pd * M_ad
+      for (int i = 0; i < 2; ++i) {
+        for (int j = 0; j < 2; ++j) {
+          Complex sum(0, 0);
+          for (int k = 0; k < 2; ++k) {
+            sum += k_pd.matrix[i * 2 + k] * k_ad.matrix[k * 2 + j];
+          }
+          combined.matrix[i * 2 + j] = sum;
+        }
+      }
+      combined.matrix_dag_self = computeDagSelf2x2(combined.matrix);
+      channel.operators.push_back(combined);
+    }
+  }
 
   return channel;
 }
@@ -219,6 +305,10 @@ void NoiseModel::setReadoutErrorAll(ReadoutError error) {
 
 void NoiseModel::setEnabled(bool enabled) { enabled_ = enabled; }
 
+void NoiseModel::setCoherentError(int gate_type_int, Precision epsilon) {
+  coherent_errors_[gate_type_int] = epsilon;
+}
+
 // ============================================================================
 // NoiseModel — Query API
 // ============================================================================
@@ -244,6 +334,14 @@ ReadoutError NoiseModel::getReadoutError(size_t qubit) const {
     return it->second;
   }
   return default_readout_;
+}
+
+Precision NoiseModel::getCoherentError(int gate_type_int) const {
+  auto it = coherent_errors_.find(gate_type_int);
+  if (it != coherent_errors_.end()) {
+    return it->second;
+  }
+  return 0.0;
 }
 
 // ============================================================================

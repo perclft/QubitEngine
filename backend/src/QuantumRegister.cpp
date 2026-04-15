@@ -188,30 +188,39 @@ void QuantumRegister::applyPhaseT(size_t target) {
 
 void QuantumRegister::applyRotationY(size_t target, Precision angle) {
   validateQubit(target);
+  Precision bias = (noise_model_) ? noise_model_->getCoherentError(7 /* ROTATION_Y */) : 0.0;
+  Precision actual_angle = angle + bias;
+
   if (recording_enabled)
-    tape.push_back({RecordedGate::RY, {target}, {(double)angle}});
+    tape.push_back({RecordedGate::RY, {target}, {(double)actual_angle}});
   if (execution_enabled) {
-    backend->applyRotationY(target, angle);
+    backend->applyRotationY(target, actual_angle);
     applyPostGateNoise1Q(target);
   }
 }
 
 void QuantumRegister::applyRotationZ(size_t target, Precision angle) {
   validateQubit(target);
+  Precision bias = (noise_model_) ? noise_model_->getCoherentError(8 /* ROTATION_Z */) : 0.0;
+  Precision actual_angle = angle + bias;
+
   if (recording_enabled)
-    tape.push_back({RecordedGate::RZ, {target}, {(double)angle}});
+    tape.push_back({RecordedGate::RZ, {target}, {(double)actual_angle}});
   if (execution_enabled) {
-    backend->applyRotationZ(target, angle);
+    backend->applyRotationZ(target, actual_angle);
     applyPostGateNoise1Q(target);
   }
 }
 
 void QuantumRegister::applyRotationX(size_t target, Precision angle) {
   validateQubit(target);
+  Precision bias = (noise_model_) ? noise_model_->getCoherentError(11 /* ROTATION_X */) : 0.0;
+  Precision actual_angle = angle + bias;
+
   if (recording_enabled)
-    tape.push_back({RecordedGate::RX, {target}, {(double)angle}});
+    tape.push_back({RecordedGate::RX, {target}, {(double)actual_angle}});
   if (execution_enabled) {
-    backend->applyRotationX(target, angle);
+    backend->applyRotationX(target, actual_angle);
     applyPostGateNoise1Q(target);
   }
 }

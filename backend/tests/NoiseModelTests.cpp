@@ -114,6 +114,23 @@ TEST(NoiseModelTest, PhaseDampingChannel_KrausCompleteness) {
   EXPECT_NEAR(sum[2].real(), 0.0, 1e-12);
 }
 
+TEST(NoiseModelTest, ThermalRelaxation_KrausCompleteness) {
+  // Use T1=100, T2=50, t=10 => gamma_ad = 1 - e^-0.1, gamma_pd = 1 - e^-(2/50 - 1/100)*10
+  NoiseChannel1Q channel = makeThermalRelaxationChannel(100.0, 50.0, 10.0);
+  ASSERT_EQ(channel.operators.size(), 4);
+
+  std::array<Complex, 4> sum{};
+  for (const auto& op : channel.operators) {
+    auto kdagk = daggerProduct2x2(op.matrix);
+    for (int i = 0; i < 4; ++i) sum[i] += kdagk[i];
+  }
+
+  EXPECT_NEAR(sum[0].real(), 1.0, 1e-10);
+  EXPECT_NEAR(sum[3].real(), 1.0, 1e-10);
+  EXPECT_NEAR(sum[1].real(), 0.0, 1e-10);
+  EXPECT_NEAR(sum[2].real(), 0.0, 1e-10);
+}
+
 // ============================================================================
 // NoiseModel Configuration Tests
 // ============================================================================
@@ -216,8 +233,24 @@ TEST(NoiseModelTest, AmplitudeDampingDecaysExcitedState) {
 
   // With γ=0.8 and renormalization, we expect a significant fraction to decay to |0⟩
   double ratio = static_cast<double>(count_zero) / NUM_TRIALS;
-  EXPECT_GT(ratio, 0.55); // Allow wide statistical variance for stochastic application
-  EXPECT_LT(ratio, 0.95);
+  EXPECT_NEAR(ratio, 0.8, 0.05); // Should be very close to 0.8
+}
+
+TEST(NoiseModelTest, AmplitudeDamping_PhysicalCorrectness) {
+  // CRITICAL TEST: Verify that |0> state NEVER decays.
+  // With fixed probabilities, it would decay with probability gamma.
+  // With state-dependent probabilities, it should stay |0> always.
+  CpuBackend backend(1);
+  // State is |0>
+  
+  NoiseChannel1Q channel = makeAmplitudeDampingChannel(0.5);
+  for (int i = 0; i < 100; ++i) {
+    backend.applyNoiseChannel1Q(channel, 0);
+  }
+
+  auto probs = backend.getProbabilities();
+  EXPECT_NEAR(probs[0], 1.0, 1e-12); // Must remain in |0>
+  EXPECT_NEAR(probs[1], 0.0, 1e-12);
 }
 
 TEST(NoiseModelTest, DepolarizingNoiseDegradesPurity) {
@@ -314,4 +347,22 @@ TEST(NoiseModelTest, AutomaticNoiseDoesNotCrash) {
   double total = 0.0;
   for (double p : probs) total += p;
   EXPECT_NEAR(total, 1.0, 1e-6); // After renormalization, should always be 1.0
+}
+
+TEST(NoiseModelTest, CoherentRotationError) {
+  // Test RX(pi) with a bias of 0.1 rad.
+  // Result should be RX(pi + 0.1)
+  QuantumRegister qreg(1, true);
+  NoiseModel model;
+  model.setCoherentError(11 /* ROTATION_X */, 0.1);
+  qreg.setNoiseModel(model);
+
+  qreg.applyRotationX(0, M_PI); // pi + 0.1
+  
+  auto state = qreg.getStateVector();
+  // RX(theta) = [[cos(theta/2), -i*sin(theta/2)], [-i*sin(theta/2), cos(theta/2)]]
+  // For |0>, result is [cos(theta/2), -i*sin(theta/2)]
+  double theta = M_PI + 0.1;
+  EXPECT_NEAR(state[0].real(), std::cos(theta / 2.0), 1e-10);
+  EXPECT_NEAR(state[1].imag(), -std::sin(theta / 2.0), 1e-10);
 }

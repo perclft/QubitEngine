@@ -33,6 +33,7 @@ export interface CircuitRequest {
   executionBackend: CircuitRequest_ExecutionBackend;
   measurementStrategy: CircuitRequest_MeasurementStrategy;
   useShm: boolean;
+  noiseConfig?: NoiseConfig | undefined;
 }
 
 export enum CircuitRequest_ExecutionBackend {
@@ -128,6 +129,8 @@ export interface GateOperation {
   secondTargetQubit: number;
   /** For DEPOLARIZING_NOISE (error probability 0.0 - 1.0) */
   noiseProbability: number;
+  /** For AMPLITUDE_DAMPING / PHASE_DAMPING (gamma parameter 0.0 - 1.0) */
+  noiseGamma: number;
 }
 
 export enum GateOperation_GateType {
@@ -400,6 +403,25 @@ export interface HardwareTopologyResponse {
   edges: CouplerEdge[];
 }
 
+/** Structured noise model configuration for realistic simulations */
+export interface NoiseConfig {
+  depolarizing1q: number;
+  depolarizing2q: number;
+  amplitudeDamping: number;
+  phaseDamping: number;
+  readoutP0Given1: number;
+  readoutP1Given0: number;
+  t1: number;
+  t2: number;
+  gateTime: number;
+  coherentErrors: { [key: number]: number };
+}
+
+export interface NoiseConfig_CoherentErrorsEntry {
+  key: number;
+  value: number;
+}
+
 function createBaseCircuitRequest(): CircuitRequest {
   return {
     numQubits: 0,
@@ -579,6 +601,7 @@ function createBaseGateOperation(): GateOperation {
     secondControlQubit: 0,
     secondTargetQubit: 0,
     noiseProbability: 0,
+    noiseGamma: 0,
   };
 }
 
@@ -607,6 +630,9 @@ export const GateOperation: MessageFns<GateOperation> = {
     }
     if (message.noiseProbability !== 0) {
       writer.uint32(65).double(message.noiseProbability);
+    }
+    if (message.noiseGamma !== 0) {
+      writer.uint32(73).double(message.noiseGamma);
     }
     return writer;
   },
@@ -682,6 +708,14 @@ export const GateOperation: MessageFns<GateOperation> = {
           message.noiseProbability = reader.double();
           continue;
         }
+        case 9: {
+          if (tag !== 73) {
+            break;
+          }
+
+          message.noiseGamma = reader.double();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -725,6 +759,11 @@ export const GateOperation: MessageFns<GateOperation> = {
         : isSet(object.noise_probability)
         ? globalThis.Number(object.noise_probability)
         : 0,
+      noiseGamma: isSet(object.noiseGamma)
+        ? globalThis.Number(object.noiseGamma)
+        : isSet(object.noise_gamma)
+        ? globalThis.Number(object.noise_gamma)
+        : 0,
     };
   },
 
@@ -754,6 +793,9 @@ export const GateOperation: MessageFns<GateOperation> = {
     if (message.noiseProbability !== 0) {
       obj.noiseProbability = message.noiseProbability;
     }
+    if (message.noiseGamma !== 0) {
+      obj.noiseGamma = message.noiseGamma;
+    }
     return obj;
   },
 
@@ -770,6 +812,7 @@ export const GateOperation: MessageFns<GateOperation> = {
     message.secondControlQubit = object.secondControlQubit ?? 0;
     message.secondTargetQubit = object.secondTargetQubit ?? 0;
     message.noiseProbability = object.noiseProbability ?? 0;
+    message.noiseGamma = object.noiseGamma ?? 0;
     return message;
   },
 };

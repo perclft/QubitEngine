@@ -603,26 +603,83 @@ void CpuBackend::applyDepolarizingNoise(Precision probability) {
   }
 }
 
+std::array<Complex, 4> CpuBackend::getReducedDensityMatrix1Q(size_t target) const {
+  size_t stride = 1ULL << target;
+  Complex r00(0, 0), r01(0, 0), r11(0, 0);
+
+  for (size_t i = 0; i < state.size(); i += 2 * stride) {
+    for (size_t j = i; j < i + stride; ++j) {
+      Complex c0 = state[j];
+      Complex c1 = state[j + stride];
+      r00 += c0 * std::conj(c0);
+      r11 += c1 * std::conj(c1);
+      r01 += c0 * std::conj(c1);
+    }
+  }
+  return {r00, r01, std::conj(r01), r11};
+}
+
+std::array<Complex, 16> CpuBackend::getReducedDensityMatrix2Q(size_t q1, size_t q2) const {
+  size_t stride1 = 1ULL << q1;
+  size_t stride2 = 1ULL << q2;
+  std::array<Complex, 16> rdm{};
+  rdm.fill(Complex(0, 0));
+
+  for (size_t j = 0; j < state.size(); ++j) {
+    if (!((j & stride1) || (j & stride2))) {
+      size_t idx[4] = {j, j | stride2, j | stride1, j | stride1 | stride2};
+      Complex amps[4] = {state[idx[0]], state[idx[1]], state[idx[2]], state[idx[3]]};
+      for (int r = 0; r < 4; ++r) {
+        for (int c = 0; c < 4; ++c) {
+          rdm[r * 4 + c] += amps[r] * std::conj(amps[c]);
+        }
+      }
+    }
+  }
+  return rdm;
+}
+
 void CpuBackend::applyNoiseChannel1Q(const NoiseChannel1Q& channel,
                                       size_t target) {
   if (channel.operators.empty()) return;
 
-  // Stochastic selection: pick one Kraus operator based on probabilities
+  // 1. Compute Reduced Density Matrix for the target qubit
+  auto rdm = getReducedDensityMatrix1Q(target);
+
+  // 2. Compute exact selection probabilities: P(i) = Tr(Ki† Ki ρ)
+  std::vector<Precision> probabilities;
+  probabilities.reserve(channel.operators.size());
+  Precision total_p = 0.0;
+
+  for (const auto& op : channel.operators) {
+    // Tr(M ρ) = M00*ρ00 + M01*ρ10 + M10*ρ01 + M11*ρ11
+    const auto& M = op.matrix_dag_self;
+    Complex tr = M[0] * rdm[0] + M[1] * rdm[2] + M[2] * rdm[1] + M[3] * rdm[3];
+    Precision p = std::abs(tr.real()); // Tr(Aρ) is always real for Hermitian A
+    probabilities.push_back(p);
+    total_p += p;
+  }
+
+  // 3. Stochastic selection
   static thread_local std::mt19937 gen(std::random_device{}());
-  std::uniform_real_distribution<Precision> dis(0.0, 1.0);
+  std::uniform_real_distribution<Precision> dis(0.0, total_p);
   Precision r = dis(gen);
 
   const KrausOperator1Q* selected = &channel.operators.back();
+  Precision selected_prob = probabilities.back();
   Precision cumulative = 0.0;
-  for (const auto& op : channel.operators) {
-    cumulative += op.probability;
-    if (r < cumulative) {
-      selected = &op;
+  for (size_t i = 0; i < channel.operators.size(); ++i) {
+    cumulative += probabilities[i];
+    if (r <= cumulative) {
+      selected = &channel.operators[i];
+      selected_prob = probabilities[i];
       break;
     }
   }
 
-  // Apply the selected 2×2 Kraus operator to the target qubit
+  if (selected_prob < 1e-20) return; // Should not happen for complete channels
+
+  // 4. Apply the selected Kraus operator
   const auto& m = selected->matrix;
   size_t stride = 1ULL << target;
   size_t dim = state.size();
@@ -639,16 +696,10 @@ void CpuBackend::applyNoiseChannel1Q(const NoiseChannel1Q& channel,
     }
   }
 
-  // Renormalize — Kraus operators are generally sub-unitary
-  double norm_sq = 0.0;
+  // 5. Renormalize: |ψ'⟩ = Ki|ψ⟩ / sqrt(P(i))
+  Precision inv_norm = 1.0 / std::sqrt(selected_prob);
   for (size_t i = 0; i < dim; ++i) {
-    norm_sq += std::norm(state[i]);
-  }
-  if (norm_sq > 1e-30) {
-    double inv_norm = 1.0 / std::sqrt(norm_sq);
-    for (size_t i = 0; i < dim; ++i) {
-      state[i] *= inv_norm;
-    }
+    state[i] *= inv_norm;
   }
 }
 
@@ -656,22 +707,48 @@ void CpuBackend::applyNoiseChannel2Q(const NoiseChannel2Q& channel,
                                       size_t q1, size_t q2) {
   if (channel.operators.empty()) return;
 
-  // Stochastic selection
+  // 1. Compute Reduced Density Matrix for the qubit pair
+  auto rdm = getReducedDensityMatrix2Q(q1, q2);
+
+  // 2. Compute exact selection probabilities
+  std::vector<Precision> probabilities;
+  probabilities.reserve(channel.operators.size());
+  Precision total_p = 0.0;
+
+  for (const auto& op : channel.operators) {
+    const auto& M = op.matrix_dag_self;
+    Complex tr(0, 0);
+    for (int r = 0; r < 4; ++r) {
+      for (int c = 0; c < 4; ++c) {
+        // Tr(M ρ) = Σ_{r,c} M_{rc} ρ_{cr}
+        tr += M[r * 4 + c] * rdm[c * 4 + r];
+      }
+    }
+    Precision p = std::abs(tr.real());
+    probabilities.push_back(p);
+    total_p += p;
+  }
+
+  // 3. Stochastic selection
   static thread_local std::mt19937 gen(std::random_device{}());
-  std::uniform_real_distribution<Precision> dis(0.0, 1.0);
+  std::uniform_real_distribution<Precision> dis(0.0, total_p);
   Precision r = dis(gen);
 
   const KrausOperator2Q* selected = &channel.operators.back();
+  Precision selected_prob = probabilities.back();
   Precision cumulative = 0.0;
-  for (const auto& op : channel.operators) {
-    cumulative += op.probability;
-    if (r < cumulative) {
-      selected = &op;
+  for (size_t i = 0; i < channel.operators.size(); ++i) {
+    cumulative += probabilities[i];
+    if (r <= cumulative) {
+      selected = &channel.operators[i];
+      selected_prob = probabilities[i];
       break;
     }
   }
 
-  // Apply the selected 4×4 Kraus operator to the qubit pair
+  if (selected_prob < 1e-20) return;
+
+  // 4. Apply the selected 4×4 Kraus operator
   const auto& m = selected->matrix;
   size_t m0 = 1ULL << q1;
   size_t m1 = 1ULL << q2;
@@ -681,34 +758,28 @@ void CpuBackend::applyNoiseChannel2Q(const NoiseChannel2Q& channel,
 #pragma omp parallel for schedule(static)
 #endif
   for (long long i = 0; i < static_cast<long long>(dim); ++i) {
-    if (!(i & m0) && !(i & m1)) {
-      size_t i00 = static_cast<size_t>(i);
-      size_t i01 = i00 | m1;
-      size_t i10 = i00 | m0;
-      size_t i11 = i00 | m0 | m1;
-
-      Complex v00 = state[i00];
-      Complex v01 = state[i01];
-      Complex v10 = state[i10];
-      Complex v11 = state[i11];
-
-      state[i00] = m[0]*v00  + m[1]*v01  + m[2]*v10  + m[3]*v11;
-      state[i01] = m[4]*v00  + m[5]*v01  + m[6]*v10  + m[7]*v11;
-      state[i10] = m[8]*v00  + m[9]*v01  + m[10]*v10 + m[11]*v11;
-      state[i11] = m[12]*v00 + m[13]*v01 + m[14]*v10 + m[15]*v11;
+    if (!((i & m0) || (i & m1))) {
+      size_t idx[4] = {
+        static_cast<size_t>(i),
+        static_cast<size_t>(i | m1),
+        static_cast<size_t>(i | m0),
+        static_cast<size_t>(i | m0 | m1)
+      };
+      Complex v[4] = {state[idx[0]], state[idx[1]], state[idx[2]], state[idx[3]]};
+      for (int row = 0; row < 4; ++row) {
+        Complex res(0, 0);
+        for (int col = 0; col < 4; ++col) {
+          res += m[row * 4 + col] * v[col];
+        }
+        state[idx[row]] = res;
+      }
     }
   }
 
-  // Renormalize — Kraus operators are generally sub-unitary
-  double norm_sq = 0.0;
+  // 5. Renormalize
+  Precision inv_norm = 1.0 / std::sqrt(selected_prob);
   for (size_t i = 0; i < dim; ++i) {
-    norm_sq += std::norm(state[i]);
-  }
-  if (norm_sq > 1e-30) {
-    double inv_norm = 1.0 / std::sqrt(norm_sq);
-    for (size_t i = 0; i < dim; ++i) {
-      state[i] *= inv_norm;
-    }
+    state[i] *= inv_norm;
   }
 }
 

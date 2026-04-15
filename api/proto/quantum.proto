@@ -116,6 +116,12 @@ message NoiseConfig {
   double phase_damping = 4;       // T2 phase damping gamma
   double readout_p0_given_1 = 5;  // Readout error: P(measure 0 | true state 1)
   double readout_p1_given_0 = 6;  // Readout error: P(measure 1 | true state 0)
+
+  // Advanced Noise Models
+  double t1 = 7;                  // Longitudinal relaxation time
+  double t2 = 8;                  // Transverse relaxation time
+  double gate_time = 9;           // Physical gate duration
+  map<int32, double> coherent_errors = 10; // GateType -> epsilon bias
 }
 
 // ------------------------------------------------------------------
