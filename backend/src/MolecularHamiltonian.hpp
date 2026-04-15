@@ -12,7 +12,7 @@ struct PauliTerm {
 
 class MolecularHamiltonian {
 public:
-  enum MoleculeType { H2 = 0, LiH = 1 };
+  enum MoleculeType { H2 = 0, LiH = 1, BEH2 = 2, H2O = 3 };
 
   static std::vector<PauliTerm> getHamiltonian(MoleculeType type) {
     std::vector<PauliTerm> hamiltonian;
@@ -43,6 +43,22 @@ public:
       hamiltonian.push_back({0.045, "ZZII"});
       hamiltonian.push_back({0.045, "IIZZ"});
       hamiltonian.push_back({0.012, "XXXX"});
+    } else if (type == BEH2) {
+      // BeH2 (6-qubit simplified model for architecture scaling validation)
+      // Reference CCSD(T) ground state energy: ~ -15.59 Ha
+      hamiltonian.push_back({-15.50, "IIIIII"});
+      hamiltonian.push_back({0.045, "ZIIIII"});
+      hamiltonian.push_back({0.045, "IZIIII"});
+      hamiltonian.push_back({-0.09, "ZZIIII"});
+      hamiltonian.push_back({0.012, "XXXXXX"});
+    } else if (type == H2O) {
+      // H2O (8-qubit simplified active space model)
+      // Reference CCSD(T) ground state energy: ~ -75.00 Ha
+      hamiltonian.push_back({-74.90, "IIIIIIII"});
+      hamiltonian.push_back({0.05, "ZIIIIIII"});
+      hamiltonian.push_back({0.05, "IZIIIIII"});
+      hamiltonian.push_back({-0.10, "ZZIIIIII"});
+      hamiltonian.push_back({0.01, "XXXXXXXX"});
     }
 
     return hamiltonian;
@@ -54,6 +70,10 @@ public:
       return 2;
     if (type == LiH)
       return 4;
+    if (type == BEH2)
+      return 6;
+    if (type == H2O)
+      return 8;
     return 2;
   }
 };

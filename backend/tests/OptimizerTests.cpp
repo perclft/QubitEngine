@@ -43,9 +43,29 @@ TEST(MolecularHamiltonianTest, LiH_NumQubits) {
   EXPECT_EQ(MolecularHamiltonian::getNumQubits(MolecularHamiltonian::LiH), 4);
 }
 
+TEST(MolecularHamiltonianTest, BeH2_NumQubits) {
+  EXPECT_EQ(MolecularHamiltonian::getNumQubits(MolecularHamiltonian::BEH2), 6);
+}
+
+TEST(MolecularHamiltonianTest, H2O_NumQubits) {
+  EXPECT_EQ(MolecularHamiltonian::getNumQubits(MolecularHamiltonian::H2O), 8);
+}
+
 TEST(MolecularHamiltonianTest, LiH_HasTerms) {
   auto h = MolecularHamiltonian::getHamiltonian(MolecularHamiltonian::LiH);
   EXPECT_GE(h.size(), 1);
+}
+
+TEST(MolecularHamiltonianTest, BeH2_HasTerms) {
+  auto h = MolecularHamiltonian::getHamiltonian(MolecularHamiltonian::BEH2);
+  EXPECT_GE(h.size(), 1);
+  EXPECT_NEAR(h[0].coefficient, -15.50, 1e-10); // Check CCSD(T) proxy base energy
+}
+
+TEST(MolecularHamiltonianTest, H2O_HasTerms) {
+  auto h = MolecularHamiltonian::getHamiltonian(MolecularHamiltonian::H2O);
+  EXPECT_GE(h.size(), 1);
+  EXPECT_NEAR(h[0].coefficient, -74.90, 1e-10); // Check CCSD(T) proxy base energy
 }
 
 TEST(MolecularHamiltonianTest, H2_CoefficientsNonZero) {

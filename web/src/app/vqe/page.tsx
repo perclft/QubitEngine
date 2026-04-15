@@ -64,6 +64,8 @@ export default function VQEPage() {
               >
                 <option value={0}>H₂ (Hydrogen)</option>
                 <option value={1}>LiH (Lithium Hydride)</option>
+                <option value={2}>BeH₂ (Beryllium Hydride)</option>
+                <option value={3}>H₂O (Water)</option>
               </select>
             </div>
             <div>

@@ -163,6 +163,8 @@ message VQERequest {
     enum Molecule {
         H2 = 0;   // Hydrogen molecule
         LiH = 1;  // Lithium Hydride
+        BEH2 = 2; // Beryllium Hydride
+        H2O = 3;  // Water
     }
     Molecule molecule = 1 [deprecated = true];
     int32 max_iterations = 2;

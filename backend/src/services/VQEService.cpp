@@ -38,9 +38,10 @@ grpc::Status VQEService::RunVQE(
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #endif
-    auto molType = (request->molecule() == qubit_engine::VQERequest::LiH)
-                       ? MolecularHamiltonian::LiH
-                       : MolecularHamiltonian::H2;
+    auto molType = MolecularHamiltonian::H2;
+    if (request->molecule() == qubit_engine::VQERequest::LiH) molType = MolecularHamiltonian::LiH;
+    else if (request->molecule() == qubit_engine::VQERequest::BEH2) molType = MolecularHamiltonian::BEH2;
+    else if (request->molecule() == qubit_engine::VQERequest::H2O) molType = MolecularHamiltonian::H2O;
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
@@ -110,13 +111,18 @@ grpc::Status VQEService::RunVQE(
       current_energy = evalEnergy(params);
     }
 
+    spdlog::info("VQE Iteration {}: Energy = {}", k, current_energy);
+
     if (k % 1 == 0 || k == max_iters - 1) {
       qubit_engine::VQEResponse resp;
       resp.set_iteration(k);
       resp.set_energy(current_energy);
       for (double p : params) resp.add_parameters(p);
       resp.set_converged(false);
-      double target_energy = (num_qubits == 4) ? -7.86 : -1.13;
+      double target_energy = -1.13;
+      if (num_qubits == 4) target_energy = -7.86;
+      else if (num_qubits == 6) target_energy = -15.59;
+      else if (num_qubits == 8) target_energy = -75.00;
       if (current_energy < target_energy + 0.001) {
         resp.set_converged(true);
         writer->Write(resp);
