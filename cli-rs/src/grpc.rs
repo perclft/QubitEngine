@@ -118,6 +118,7 @@ pub async fn run_circuit(server_addr: String, circuit_path: String, tx: mpsc::Se
             second_target_qubit: 0,
             angle: op.angle,
             noise_probability: 0.0,
+            noise_gamma: 0.0,
             classical_register: op.classical_reg,
         });
     }
@@ -126,6 +127,7 @@ pub async fn run_circuit(server_addr: String, circuit_path: String, tx: mpsc::Se
         num_qubits: circuit.qubits,
         operations: ops,
         noise_probability: 0.0,
+        noise_config: None,
         execution_backend: 0,
         measurement_strategy: 0,
         use_shm: false,
