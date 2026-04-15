@@ -603,6 +603,115 @@ void CpuBackend::applyDepolarizingNoise(Precision probability) {
   }
 }
 
+void CpuBackend::applyNoiseChannel1Q(const NoiseChannel1Q& channel,
+                                      size_t target) {
+  if (channel.operators.empty()) return;
+
+  // Stochastic selection: pick one Kraus operator based on probabilities
+  static thread_local std::mt19937 gen(std::random_device{}());
+  std::uniform_real_distribution<Precision> dis(0.0, 1.0);
+  Precision r = dis(gen);
+
+  const KrausOperator1Q* selected = &channel.operators.back();
+  Precision cumulative = 0.0;
+  for (const auto& op : channel.operators) {
+    cumulative += op.probability;
+    if (r < cumulative) {
+      selected = &op;
+      break;
+    }
+  }
+
+  // Apply the selected 2×2 Kraus operator to the target qubit
+  const auto& m = selected->matrix;
+  size_t stride = 1ULL << target;
+  size_t dim = state.size();
+
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+  for (long long i = 0; i < static_cast<long long>(dim); i += 2 * stride) {
+    for (size_t j = static_cast<size_t>(i); j < static_cast<size_t>(i) + stride; ++j) {
+      Complex a = state[j];
+      Complex b = state[j + stride];
+      state[j]          = m[0] * a + m[1] * b;
+      state[j + stride] = m[2] * a + m[3] * b;
+    }
+  }
+
+  // Renormalize — Kraus operators are generally sub-unitary
+  double norm_sq = 0.0;
+  for (size_t i = 0; i < dim; ++i) {
+    norm_sq += std::norm(state[i]);
+  }
+  if (norm_sq > 1e-30) {
+    double inv_norm = 1.0 / std::sqrt(norm_sq);
+    for (size_t i = 0; i < dim; ++i) {
+      state[i] *= inv_norm;
+    }
+  }
+}
+
+void CpuBackend::applyNoiseChannel2Q(const NoiseChannel2Q& channel,
+                                      size_t q1, size_t q2) {
+  if (channel.operators.empty()) return;
+
+  // Stochastic selection
+  static thread_local std::mt19937 gen(std::random_device{}());
+  std::uniform_real_distribution<Precision> dis(0.0, 1.0);
+  Precision r = dis(gen);
+
+  const KrausOperator2Q* selected = &channel.operators.back();
+  Precision cumulative = 0.0;
+  for (const auto& op : channel.operators) {
+    cumulative += op.probability;
+    if (r < cumulative) {
+      selected = &op;
+      break;
+    }
+  }
+
+  // Apply the selected 4×4 Kraus operator to the qubit pair
+  const auto& m = selected->matrix;
+  size_t m0 = 1ULL << q1;
+  size_t m1 = 1ULL << q2;
+  size_t dim = state.size();
+
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+  for (long long i = 0; i < static_cast<long long>(dim); ++i) {
+    if (!(i & m0) && !(i & m1)) {
+      size_t i00 = static_cast<size_t>(i);
+      size_t i01 = i00 | m1;
+      size_t i10 = i00 | m0;
+      size_t i11 = i00 | m0 | m1;
+
+      Complex v00 = state[i00];
+      Complex v01 = state[i01];
+      Complex v10 = state[i10];
+      Complex v11 = state[i11];
+
+      state[i00] = m[0]*v00  + m[1]*v01  + m[2]*v10  + m[3]*v11;
+      state[i01] = m[4]*v00  + m[5]*v01  + m[6]*v10  + m[7]*v11;
+      state[i10] = m[8]*v00  + m[9]*v01  + m[10]*v10 + m[11]*v11;
+      state[i11] = m[12]*v00 + m[13]*v01 + m[14]*v10 + m[15]*v11;
+    }
+  }
+
+  // Renormalize — Kraus operators are generally sub-unitary
+  double norm_sq = 0.0;
+  for (size_t i = 0; i < dim; ++i) {
+    norm_sq += std::norm(state[i]);
+  }
+  if (norm_sq > 1e-30) {
+    double inv_norm = 1.0 / std::sqrt(norm_sq);
+    for (size_t i = 0; i < dim; ++i) {
+      state[i] *= inv_norm;
+    }
+  }
+}
+
 // --- Measurement ---
 
 int CpuBackend::measure(size_t target) {

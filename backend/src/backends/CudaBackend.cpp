@@ -268,6 +268,17 @@ void CudaBackend::applyDepolarizingNoise(Precision probability) {
   }
 }
 
+void CudaBackend::applyNoiseChannel1Q(const NoiseChannel1Q& /*channel*/,
+                                       size_t /*target*/) {
+  // TODO: Implement GPU-native Kraus channel application
+  // For now, noise is applied at the QuantumRegister level via CPU fallback
+}
+
+void CudaBackend::applyNoiseChannel2Q(const NoiseChannel2Q& /*channel*/,
+                                       size_t /*q1*/, size_t /*q2*/) {
+  // TODO: Implement GPU-native 2Q Kraus channel application
+}
+
 // --- Measurement ---
 
 int CudaBackend::measure(size_t target) {

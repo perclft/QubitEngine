@@ -6,6 +6,7 @@
 
 #include "AdamOptimizer.hpp"
 #include "MolecularHamiltonian.hpp"
+#include "NoiseModel.hpp"
 #include "QuantumDifferentiator.hpp"
 #include "QuantumRegister.hpp"
 #include "SPSAOptimizer.hpp"
@@ -110,7 +111,66 @@ PYBIND11_MODULE(core, m) {
       })
       .def("__str__", [](const QuantumRegister &q) {
           return "QuantumRegister(qubits=" + std::to_string(q.getSize()) + " mpi_rank=" + std::to_string(q.getRank()) + ")";
-      });
+      })
+      .def("setNoiseModel", &QuantumRegister::setNoiseModel,
+           py::arg("model"), "Attach a noise model for automatic post-gate noise injection")
+      .def("getNoiseModel", &QuantumRegister::getNoiseModel,
+           py::return_value_policy::reference, "Get the current noise model (or None)");
+
+  // --- ReadoutError Binding ---
+  py::class_<qubit_engine::ReadoutError>(m, "ReadoutError")
+      .def(py::init<>())
+      .def(py::init([](double p0g1, double p1g0) {
+          qubit_engine::ReadoutError e;
+          e.p0_given_1 = p0g1;
+          e.p1_given_0 = p1g0;
+          return e;
+      }), py::arg("p0_given_1") = 0.0, py::arg("p1_given_0") = 0.0)
+      .def_readwrite("p0_given_1", &qubit_engine::ReadoutError::p0_given_1)
+      .def_readwrite("p1_given_0", &qubit_engine::ReadoutError::p1_given_0);
+
+  // --- NoiseModel Binding ---
+  py::class_<qubit_engine::NoiseModel>(m, "NoiseModel")
+      .def(py::init<>())
+      .def_static("Depolarizing", &qubit_engine::NoiseModel::Depolarizing,
+           py::arg("p1q"), py::arg("p2q"),
+           "Create a noise model with 1Q and 2Q depolarizing channels")
+      .def_static("Realistic", &qubit_engine::NoiseModel::Realistic,
+           py::arg("p1q"), py::arg("p2q"),
+           py::arg("t1_gamma"), py::arg("t2_gamma"),
+           py::arg("readout"),
+           "Create a realistic noise model with depolarizing, T1, T2, and readout error")
+      .def("add_single_qubit_noise", &qubit_engine::NoiseModel::addSingleQubitNoise,
+           py::arg("channel"), "Add a single-qubit noise channel")
+      .def("add_two_qubit_noise", &qubit_engine::NoiseModel::addTwoQubitNoise,
+           py::arg("channel"), "Add a two-qubit noise channel")
+      .def("set_readout_error", &qubit_engine::NoiseModel::setReadoutError,
+           py::arg("qubit"), py::arg("error"), "Set readout error for a specific qubit")
+      .def("set_readout_error_all", &qubit_engine::NoiseModel::setReadoutErrorAll,
+           py::arg("error"), "Set default readout error for all qubits")
+      .def("set_enabled", &qubit_engine::NoiseModel::setEnabled,
+           py::arg("enabled"), "Enable or disable the noise model")
+      .def("is_enabled", &qubit_engine::NoiseModel::isEnabled);
+
+  // --- NoiseChannel1Q Binding ---
+  py::class_<qubit_engine::NoiseChannel1Q>(m, "NoiseChannel1Q")
+      .def(py::init<>())
+      .def_readwrite("name", &qubit_engine::NoiseChannel1Q::name);
+
+  // --- NoiseChannel2Q Binding ---
+  py::class_<qubit_engine::NoiseChannel2Q>(m, "NoiseChannel2Q")
+      .def(py::init<>())
+      .def_readwrite("name", &qubit_engine::NoiseChannel2Q::name);
+
+  // --- Channel Factory Functions ---
+  m.def("make_depolarizing_channel_1q", &qubit_engine::makeDepolarizingChannel1Q,
+        py::arg("p"), "Create a single-qubit depolarizing noise channel");
+  m.def("make_depolarizing_channel_2q", &qubit_engine::makeDepolarizingChannel2Q,
+        py::arg("p"), "Create a two-qubit depolarizing noise channel (full 16-operator)");
+  m.def("make_amplitude_damping_channel", &qubit_engine::makeAmplitudeDampingChannel,
+        py::arg("gamma"), "Create an amplitude damping (T1) noise channel");
+  m.def("make_phase_damping_channel", &qubit_engine::makePhaseDampingChannel,
+        py::arg("gamma"), "Create a phase damping (T2) noise channel");
 
   // --- GPUQuantumRegister Binding ---
   py::class_<GPUQuantumRegister>(m, "GPUQuantumRegister")

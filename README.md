@@ -27,11 +27,12 @@
 Key capabilities:
 
 - **Multi-backend simulation** — CUDA (multi-GPU with NCCL), Metal, AVX2/NEON, and MPI distributed execution
+- **Noise simulation** — Kraus-operator noise model with depolarizing (1Q/2Q), amplitude damping (T1), phase damping (T2), and readout error channels
 - **Distributed Tensor Networks** — Matrix Product State (MPS) backend scaling beyond 32 qubits with SVD truncation
 - **Clifford Stabilizer QEC** — Gottesman-Knill simulation for thousands of qubits in polynomial time
 - **Zero-Copy IPC** — Direct POSIX shared memory mapped state vector transfers mitigating gRPC overhead
 - **Native differentiability** — Parameter Shift Rule and Adjoint differentiation for variational algorithms (VQE)
-- **JIT circuit optimization** — LRU caching & multi-level gate fusion compiler (O0–O3) utilizing background multi-threading
+- **JIT circuit optimization** — LRU caching & multi-level gate fusion compiler (O0–O4) utilizing background multi-threading
 - **Predictive Autoscaling Mesh** — Integrated Prometheus metrics querying Redis queue lengths mapping into Kubernetes HPA
 - **OpenQASM 2.0/3.0** — Import and export circuits for interoperability with Qiskit and other frameworks
 - **Interactive TUI** — Rust-based terminal dashboard with live probability streaming via gRPC
@@ -63,6 +64,7 @@ Key capabilities:
 │    ├─ StabilizerBackend (Clifford QEC)                  │
 │    └─ CloudBackend (remote execution)                    │
 │  QuantumJIT (LRU Caching) · Differentiator · Optimizer  │
+│  NoiseModel (Depolarizing · T1 · T2 · Readout Error)     │
 │  Python Bindings (pybind11 zero-copy NumPy arrays)       │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -226,7 +228,7 @@ cd backend/build
 ctest --output-on-failure
 ```
 
-The test suite covers: quantum gates, JIT compiler, OpenQASM round-trip, differentiator (parameter-shift + adjoint), circuit optimizer, CPU backend, mock hardware backend, and gRPC service handlers.
+The test suite covers: quantum gates, JIT compiler, OpenQASM round-trip, differentiator (parameter-shift + adjoint), circuit optimizer, noise model (Kraus completeness, channel application, readout errors), CPU backend, mock hardware backend, and gRPC service handlers.
 
 ### Python Binding Verification
 

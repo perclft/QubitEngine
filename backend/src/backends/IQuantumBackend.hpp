@@ -1,8 +1,10 @@
 #pragma once
 
+#include "../NoiseModel.hpp"
 #include "Types.hpp"
 #include <complex>
 #include <cstddef>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -83,6 +85,36 @@ public:
   /// @brief Applies depolarizing noise to all qubits with a given probability.
   /// @param probability The probability [0,1] of applying a random Pauli error.
   virtual void applyDepolarizingNoise(Precision probability) = 0;
+
+  /// @brief Applies a single-qubit Kraus noise channel stochastically to a target qubit.
+  /// Randomly selects one Kraus operator based on probabilities and applies it.
+  /// @param channel The noise channel containing Kraus operators.
+  /// @param target The index of the target qubit.
+  virtual void applyNoiseChannel1Q(const NoiseChannel1Q& channel, size_t target) = 0;
+
+  /// @brief Applies a two-qubit Kraus noise channel stochastically to a pair of qubits.
+  /// @param channel The noise channel containing 4×4 Kraus operators.
+  /// @param q1 The first qubit index.
+  /// @param q2 The second qubit index.
+  virtual void applyNoiseChannel2Q(const NoiseChannel2Q& channel, size_t q1, size_t q2) = 0;
+
+  /// @brief Measures a qubit with readout error applied.
+  /// Default implementation: calls measure(), then flips the result based on the
+  /// confusion matrix probabilities.
+  /// @param target The qubit to measure.
+  /// @param error The readout error configuration.
+  /// @return The (possibly flipped) measurement outcome.
+  virtual int measureWithReadoutError(size_t target, const ReadoutError& error) {
+    int result = measure(target);
+    thread_local std::mt19937 ro_gen(std::random_device{}());
+    std::uniform_real_distribution<Precision> dis(0.0, 1.0);
+    if (result == 0 && dis(ro_gen) < error.p1_given_0) {
+      return 1; // Flipped 0 → 1
+    } else if (result == 1 && dis(ro_gen) < error.p0_given_1) {
+      return 0; // Flipped 1 → 0
+    }
+    return result;
+  }
 
   // --- Measurement & Analysis ---
   /// @brief Measures a target qubit in the computational basis, collapsing the state.

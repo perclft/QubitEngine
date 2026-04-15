@@ -411,6 +411,14 @@ void MetalBackend::applyDepolarizingNoise(Precision p) {
   }
 }
 
+void MetalBackend::applyNoiseChannel1Q(const NoiseChannel1Q& /*channel*/, size_t /*target*/) {
+  // TODO: Implement Metal GPU Kraus channel application
+}
+
+void MetalBackend::applyNoiseChannel2Q(const NoiseChannel2Q& /*channel*/, size_t /*q1*/, size_t /*q2*/) {
+  // TODO: Implement Metal GPU 2Q Kraus channel application
+}
+
 int MetalBackend::measure(size_t target) {
   uint32_t stride = 1 << target;
   size_t dim = 1ULL << num_qubits_;
@@ -556,10 +564,13 @@ void MetalBackend::applyRotationX(size_t t, Precision a) {}
 void MetalBackend::applySWAP(size_t q1, size_t q2) {}
 void MetalBackend::applyCZ(size_t c, size_t t) {}
 void MetalBackend::applyDepolarizingNoise(Precision p) {}
+void MetalBackend::applyNoiseChannel1Q(const NoiseChannel1Q&, size_t) {}
+void MetalBackend::applyNoiseChannel2Q(const NoiseChannel2Q&, size_t, size_t) {}
 int MetalBackend::measure(size_t t) { return 0; }
 std::vector<double> MetalBackend::getProbabilities() const { return {}; }
 double MetalBackend::expectationValue(const std::string &p) const { return 0.0; }
 std::vector<Complex> MetalBackend::getStateVector() const { return {}; }
+void MetalBackend::applyDenseUnitary(const std::vector<size_t>&, const std::vector<Complex>&) {}
 } // namespace qubit_engine
 
 #endif

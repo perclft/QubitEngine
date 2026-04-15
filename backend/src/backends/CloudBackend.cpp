@@ -117,6 +117,17 @@ void CloudBackend::applyDepolarizingNoise(Precision probability) {
   needs_sync_ = true;
 }
 
+void CloudBackend::applyNoiseChannel1Q(const NoiseChannel1Q& /*channel*/,
+                                        size_t /*target*/) {
+  // Cloud noise is configured server-side via NoiseConfig in CircuitRequest
+  spdlog::debug("CloudBackend: applyNoiseChannel1Q is a no-op; configure noise server-side.");
+}
+
+void CloudBackend::applyNoiseChannel2Q(const NoiseChannel2Q& /*channel*/,
+                                        size_t /*q1*/, size_t /*q2*/) {
+  spdlog::debug("CloudBackend: applyNoiseChannel2Q is a no-op; configure noise server-side.");
+}
+
 int CloudBackend::measure(size_t target) {
   // Cloud measurement is tricky if we want to continue mid-circuit.
   // For now, satisfy with a one-shot full circuit run.

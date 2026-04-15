@@ -41,6 +41,8 @@ public:
 
   // --- Noise ---
   void applyDepolarizingNoise(Precision probability) override;
+  void applyNoiseChannel1Q(const NoiseChannel1Q& channel, size_t target) override;
+  void applyNoiseChannel2Q(const NoiseChannel2Q& channel, size_t q1, size_t q2) override;
 
   // --- Measurement ---
   int measure(size_t target) override;

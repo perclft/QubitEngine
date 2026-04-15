@@ -98,6 +98,7 @@ void QuantumRegister::applyHadamard(size_t target) {
   if (execution_enabled) {
     backend->applyHadamard(target);
     QuantumMetrics::Instance().RecordGateApplication();
+    applyPostGateNoise1Q(target);
   }
 }
 
@@ -108,6 +109,7 @@ void QuantumRegister::applyX(size_t target) {
   if (execution_enabled) {
     backend->applyX(target);
     QuantumMetrics::Instance().RecordGateApplication();
+    applyPostGateNoise1Q(target);
   }
 }
 
@@ -118,6 +120,7 @@ void QuantumRegister::applyY(size_t target) {
   if (execution_enabled) {
     backend->applyY(target);
     QuantumMetrics::Instance().RecordGateApplication();
+    applyPostGateNoise1Q(target);
   }
 }
 
@@ -128,6 +131,7 @@ void QuantumRegister::applyZ(size_t target) {
   if (execution_enabled) {
     backend->applyZ(target);
     QuantumMetrics::Instance().RecordGateApplication();
+    applyPostGateNoise1Q(target);
   }
 }
 
@@ -138,8 +142,10 @@ void QuantumRegister::applyCNOT(size_t control, size_t target) {
     throw InvalidArgumentException("Control and target qubits must be distinct");
   if (recording_enabled)
     tape.push_back({RecordedGate::CNOT, {control, target}, {}});
-  if (execution_enabled)
+  if (execution_enabled) {
     backend->applyCNOT(control, target);
+    applyPostGateNoise2Q(control, target);
+  }
 }
 
 // --- Advanced Gates ---
@@ -152,48 +158,62 @@ void QuantumRegister::applyToffoli(size_t c1, size_t c2, size_t t) {
     throw InvalidArgumentException("Control and target qubits must be distinct");
   if (recording_enabled)
     tape.push_back({RecordedGate::TOFFOLI, {c1, c2, t}, {}});
-  if (execution_enabled)
+  if (execution_enabled) {
     backend->applyToffoli(c1, c2, t);
+    // Toffoli is a 3-qubit gate; apply 2Q noise to all pairs involved
+    applyPostGateNoise2Q(c1, t);
+    applyPostGateNoise2Q(c2, t);
+  }
 }
 
 void QuantumRegister::applyPhaseS(size_t target) {
   validateQubit(target);
   if (recording_enabled)
     tape.push_back({RecordedGate::PHASE_S, {target}, {}});
-  if (execution_enabled)
+  if (execution_enabled) {
     backend->applyPhaseS(target);
+    applyPostGateNoise1Q(target);
+  }
 }
 
 void QuantumRegister::applyPhaseT(size_t target) {
   validateQubit(target);
   if (recording_enabled)
     tape.push_back({RecordedGate::PHASE_T, {target}, {}});
-  if (execution_enabled)
+  if (execution_enabled) {
     backend->applyPhaseT(target);
+    applyPostGateNoise1Q(target);
+  }
 }
 
 void QuantumRegister::applyRotationY(size_t target, Precision angle) {
   validateQubit(target);
   if (recording_enabled)
     tape.push_back({RecordedGate::RY, {target}, {(double)angle}});
-  if (execution_enabled)
+  if (execution_enabled) {
     backend->applyRotationY(target, angle);
+    applyPostGateNoise1Q(target);
+  }
 }
 
 void QuantumRegister::applyRotationZ(size_t target, Precision angle) {
   validateQubit(target);
   if (recording_enabled)
     tape.push_back({RecordedGate::RZ, {target}, {(double)angle}});
-  if (execution_enabled)
+  if (execution_enabled) {
     backend->applyRotationZ(target, angle);
+    applyPostGateNoise1Q(target);
+  }
 }
 
 void QuantumRegister::applyRotationX(size_t target, Precision angle) {
   validateQubit(target);
   if (recording_enabled)
     tape.push_back({RecordedGate::RX, {target}, {(double)angle}});
-  if (execution_enabled)
+  if (execution_enabled) {
     backend->applyRotationX(target, angle);
+    applyPostGateNoise1Q(target);
+  }
 }
 
 void QuantumRegister::applySWAP(size_t qubit1, size_t qubit2) {
@@ -203,8 +223,10 @@ void QuantumRegister::applySWAP(size_t qubit1, size_t qubit2) {
     throw InvalidArgumentException("Qubits must be distinct");
   if (recording_enabled)
     tape.push_back({RecordedGate::SWAP, {qubit1, qubit2}, {}});
-  if (execution_enabled)
+  if (execution_enabled) {
     backend->applySWAP(qubit1, qubit2);
+    applyPostGateNoise2Q(qubit1, qubit2);
+  }
 }
 
 void QuantumRegister::applyCZ(size_t control, size_t target) {
@@ -214,8 +236,10 @@ void QuantumRegister::applyCZ(size_t control, size_t target) {
     throw InvalidArgumentException("Control and target must be distinct");
   if (recording_enabled)
     tape.push_back({RecordedGate::CZ, {control, target}, {}});
-  if (execution_enabled)
+  if (execution_enabled) {
     backend->applyCZ(control, target);
+    applyPostGateNoise2Q(control, target);
+  }
 }
 
 void QuantumRegister::applyDenseUnitary(const std::vector<size_t> &targets,
@@ -234,11 +258,43 @@ void QuantumRegister::applyDepolarizingNoise(Precision probability) {
     backend->applyDepolarizingNoise(probability);
 }
 
+void QuantumRegister::setNoiseModel(const NoiseModel& model) {
+  noise_model_ = std::make_shared<NoiseModel>(model);
+}
+
+const NoiseModel* QuantumRegister::getNoiseModel() const {
+  return noise_model_ ? noise_model_.get() : nullptr;
+}
+
+void QuantumRegister::applyPostGateNoise1Q(size_t target) {
+  if (!noise_model_ || !noise_model_->isEnabled()) return;
+  for (const auto& channel : noise_model_->getSingleQubitChannels()) {
+    backend->applyNoiseChannel1Q(channel, target);
+  }
+}
+
+void QuantumRegister::applyPostGateNoise2Q(size_t q1, size_t q2) {
+  if (!noise_model_ || !noise_model_->isEnabled()) return;
+  // Apply single-qubit channels to both qubits involved
+  for (const auto& channel : noise_model_->getSingleQubitChannels()) {
+    backend->applyNoiseChannel1Q(channel, q1);
+    backend->applyNoiseChannel1Q(channel, q2);
+  }
+  // Apply two-qubit channels to the pair
+  for (const auto& channel : noise_model_->getTwoQubitChannels()) {
+    backend->applyNoiseChannel2Q(channel, q1, q2);
+  }
+}
+
 // --- Measurement ---
 
 int QuantumRegister::measure(size_t target) {
   if (recording_enabled)
     tape.push_back({RecordedGate::MEASURE, {target}, {}});
+  // Apply readout error if noise model is configured
+  if (noise_model_ && noise_model_->isEnabled() && noise_model_->hasReadoutError()) {
+    return backend->measureWithReadoutError(target, noise_model_->getReadoutError(target));
+  }
   return backend->measure(target);
 }
 

@@ -298,6 +298,7 @@ add_library(qubit_engine_core STATIC
     src/OpenQASM.cpp
     src/ipc/SharedMemory.cpp
     src/QuantumMetrics.cpp
+    src/NoiseModel.cpp
     src/auth/AuthInterceptor.cpp
     src/services/CircuitService.cpp
     src/services/VQEService.cpp
@@ -425,6 +426,7 @@ add_executable(tests
     tests/SecurityIntegrationTests.cpp
     tests/WorkerStressTests.cpp
     tests/MetalBackendTests.cpp
+    tests/NoiseModelTests.cpp
 )
 
 # Service tests need gRPC generated headers + ServiceImpl sources

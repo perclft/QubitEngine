@@ -225,6 +225,17 @@ void StabilizerBackend::applyDepolarizingNoise(Precision) {
                            "stabilizer discrete measurement injection.");
 }
 
+void StabilizerBackend::applyNoiseChannel1Q(const NoiseChannel1Q&, size_t) {
+  // Kraus channels are not directly applicable to the stabilizer tableau.
+  // Stochastic Pauli noise could be supported in the future by randomly
+  // applying Clifford Pauli gates within the tableau formalism.
+}
+
+void StabilizerBackend::applyNoiseChannel2Q(const NoiseChannel2Q&, size_t, size_t) {
+  // Same limitation as 1Q — tableau-based noise injection requires
+  // restricting to Pauli channels only.
+}
+
 void StabilizerBackend::applyDenseUnitary(const std::vector<size_t> &targets,
                                          const std::vector<Complex> &matrix) {
   throw FeatureNotSupportedException(

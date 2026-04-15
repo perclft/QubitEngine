@@ -52,6 +52,8 @@ public:
   void applySWAP(size_t qubit1, size_t qubit2) override;
   void applyCZ(size_t control, size_t target) override;
   void applyDepolarizingNoise(Precision p) override {}
+  void applyNoiseChannel1Q(const NoiseChannel1Q& /*channel*/, size_t /*target*/) override {}
+  void applyNoiseChannel2Q(const NoiseChannel2Q& /*channel*/, size_t /*q1*/, size_t /*q2*/) override {}
 
   int measure(size_t target) override;
   std::vector<double> getProbabilities() const override;

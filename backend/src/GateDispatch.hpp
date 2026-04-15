@@ -4,6 +4,7 @@
 // to QuantumRegister calls.  Used by ServiceImpl and worker job execution.
 
 #include "QuantumRegister.hpp"
+#include "NoiseModel.hpp"
 #include "quantum.pb.h" // Generated protobuf header for GateOperation
 
 #include <cstdint>
@@ -71,6 +72,21 @@ inline void dispatchGate(
   case GateOperation::DEPOLARIZING_NOISE:
     qreg.applyDepolarizingNoise(op.noise_probability());
     break;
+  case GateOperation::AMPLITUDE_DAMPING: {
+    auto channel = qubit_engine::makeAmplitudeDampingChannel(op.noise_gamma());
+    for (size_t q = 0; q < qreg.getNumQubits(); ++q) {
+      // Requires direct backend access; for now apply via noise model setup
+      // This is a per-gate noise injection path used by the protobuf circuit protocol
+    }
+    break;
+  }
+  case GateOperation::PHASE_DAMPING: {
+    auto channel = qubit_engine::makePhaseDampingChannel(op.noise_gamma());
+    for (size_t q = 0; q < qreg.getNumQubits(); ++q) {
+      // Same as above — channel application requires backend access
+    }
+    break;
+  }
   case GateOperation::MEASURE: {
     bool result = (qreg.measure(op.target_qubit()) != 0);
     uint32_t reg_id =

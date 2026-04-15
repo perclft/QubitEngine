@@ -61,6 +61,9 @@ message CircuitRequest {
   MeasurementStrategy measurement_strategy = 5;
   bool use_shm = 6;
   string version = 7;
+
+  // Structured noise model configuration (overrides simple noise_probability if set)
+  NoiseConfig noise_config = 8;
 }
 
 message GateOperation {
@@ -80,6 +83,8 @@ message GateOperation {
     SWAP = 12;
     CZ = 13;
     DEPOLARIZING_NOISE = 14;
+    AMPLITUDE_DAMPING = 15;
+    PHASE_DAMPING = 16;
   }
   GateType type = 1;
   uint32 target_qubit = 2;
@@ -98,6 +103,19 @@ message GateOperation {
 
   // For DEPOLARIZING_NOISE (error probability 0.0 - 1.0)
   double noise_probability = 8;
+
+  // For AMPLITUDE_DAMPING / PHASE_DAMPING (gamma parameter 0.0 - 1.0)
+  double noise_gamma = 9;
+}
+
+// Structured noise model configuration for realistic simulations
+message NoiseConfig {
+  double depolarizing_1q = 1;     // Single-qubit depolarizing probability
+  double depolarizing_2q = 2;     // Two-qubit depolarizing probability
+  double amplitude_damping = 3;   // T1 amplitude damping gamma
+  double phase_damping = 4;       // T2 phase damping gamma
+  double readout_p0_given_1 = 5;  // Readout error: P(measure 0 | true state 1)
+  double readout_p1_given_0 = 6;  // Readout error: P(measure 1 | true state 0)
 }
 
 // ------------------------------------------------------------------

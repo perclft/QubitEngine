@@ -1,6 +1,7 @@
 #pragma once
 
 #include "backends/IQuantumBackend.hpp"
+#include "NoiseModel.hpp"
 #include <complex>
 #include <cstddef>
 #include <memory>
@@ -38,6 +39,13 @@ public:
 
   // --- Noise Simulation ---
   void applyDepolarizingNoise(Precision probability);
+
+  /// @brief Attaches a noise model. When set, noise is applied automatically
+  /// after every gate operation.
+  void setNoiseModel(const NoiseModel& model);
+
+  /// @brief Returns the current noise model, or nullptr if none is set.
+  const NoiseModel* getNoiseModel() const;
 
   // --- Measurement & Analysis ---
   int measure(size_t target);
@@ -89,8 +97,11 @@ public:
 
 private:
   void validateQubit(size_t q) const;
+  void applyPostGateNoise1Q(size_t target);
+  void applyPostGateNoise2Q(size_t q1, size_t q2);
   size_t num_qubits;
   std::unique_ptr<IQuantumBackend> backend;
+  std::shared_ptr<NoiseModel> noise_model_;
   bool recording_enabled = false;
   bool execution_enabled = true;
   std::vector<RecordedGate> tape;

@@ -27,6 +27,7 @@ Defines a quantum circuit and execution parameters.
 - `noise_probability` (double): Error rate for the depolarizing noise model.
 - `execution_backend` (Enum): Choice of simulator or hardware.
 - `measurement_strategy` (Enum): How to return results (Full state vs. expectation values).
+- `noise_config` (`NoiseConfig`): Structured noise model configuration. Overrides `noise_probability` when set.
 
 ### `GateOperation`
 A single quantum instruction.
@@ -35,7 +36,8 @@ A single quantum instruction.
 - `target_qubit` (uint32): Primary qubit index.
 - `control_qubit` (uint32): Control qubit (for CNOT/CZ).
 - `angle` (double): Rotation angle in radians (for RX/RY/RZ).
-- `noise_probability` (double): Local error rate override.
+- `noise_probability` (double): Local error rate override (for DEPOLARIZING_NOISE).
+- `noise_gamma` (double): Decay/dephasing rate in [0, 1] (for AMPLITUDE_DAMPING / PHASE_DAMPING).
 
 ### `StateResponse`
 The results of a circuit execution or step.
@@ -63,8 +65,23 @@ Parameters for variational optimization.
 - `ROTATION_X`, `ROTATION_Y`, `ROTATION_Z`
 - `PHASE_S`, `PHASE_T`
 - `MEASURE`, `DEPOLARIZING_NOISE`
+- `AMPLITUDE_DAMPING`, `PHASE_DAMPING`
 
 ### `ExecutionBackend`
 - `SIMULATOR` (0)
 - `MOCK_HARDWARE` (1)
 - `REAL_IBM_Q` (2)
+
+---
+
+## Noise Configuration
+
+### `NoiseConfig`
+Structured noise model configuration for realistic simulations. Attach to `CircuitRequest` to apply noise automatically.
+
+- `depolarizing_1q` (double): Single-qubit depolarizing error probability (typ. ~0.001)
+- `depolarizing_2q` (double): Two-qubit depolarizing error probability (typ. ~0.01)
+- `amplitude_damping` (double): T1 amplitude damping gamma, γ = 1 - exp(-t/T1)
+- `phase_damping` (double): T2 phase damping gamma, γ = 1 - exp(-t/T2)
+- `readout_p0_given_1` (double): Readout error probability P(measure 0 | true state is |1⟩)
+- `readout_p1_given_0` (double): Readout error probability P(measure 1 | true state is |0⟩)
