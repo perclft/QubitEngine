@@ -30,8 +30,7 @@ public:
       hamiltonian.push_back({-0.397937424843187, "ZI"});
       hamiltonian.push_back({-0.011280104256235, "ZZ"});
       hamiltonian.push_back({0.180931199784231, "XX"});
-
-      // Note: We'll stick to real-valued Hamiltonians for this demo.
+      hamiltonian.push_back({0.180931199784231, "YY"});
     } else if (type == LiH) {
       // LiH STO-3G (Standard 4-qubit mapping tapered/simplified)
       // Ground state energy is approximately -7.86 Ha
