@@ -24,8 +24,8 @@ static void simple_ansatz(const std::vector<double> &params,
 
 TEST(MolecularHamiltonianTest, H2_ReturnsCorrectTermCount) {
   auto h = MolecularHamiltonian::getHamiltonian(MolecularHamiltonian::H2);
-  // H2 has 5 Pauli terms: II, IZ, ZI, ZZ, XX
-  EXPECT_EQ(h.size(), 5);
+  // H2 has 6 Pauli terms: II, IZ, ZI, ZZ, XX, YY
+  EXPECT_EQ(h.size(), 6);
 }
 
 TEST(MolecularHamiltonianTest, H2_FirstTermIsIdentity) {
