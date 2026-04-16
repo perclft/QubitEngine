@@ -163,17 +163,16 @@ impl Component for RouterComponent {
                                     ActiveView::Circuit => ActiveView::Topology,
                                 };
                             }
-                            KeyCode::Down | KeyCode::Char('j') => match self.active_view {
-                                ActiveView::Simulation => self.next(),
-                                ActiveView::Circuit => {
-                                    if (self.circuit.scroll as usize)
-                                        < self.circuit.diagram.len().saturating_sub(1)
+                                KeyCode::Down | KeyCode::Char('j') => match self.active_view {
+                                    ActiveView::Simulation => self.next(),
+                                    ActiveView::Circuit
+                                        if (self.circuit.scroll as usize)
+                                            < self.circuit.diagram.len().saturating_sub(1) =>
                                     {
                                         self.circuit.scroll += 1;
                                     }
-                                }
-                                _ => {}
-                            },
+                                    _ => {}
+                                },
                             KeyCode::Up | KeyCode::Char('k') => match self.active_view {
                                 ActiveView::Simulation => self.previous(),
                                 ActiveView::Circuit => {
@@ -181,55 +180,54 @@ impl Component for RouterComponent {
                                 }
                                 _ => {}
                             },
-                            KeyCode::Enter | KeyCode::Char('\n') | KeyCode::Char('\r') => {
-                                if !self.sim.is_executing {
-                                    self.sim.is_executing = true;
-                                    self.sim.is_vqe = false;
-                                    self.sim.execution_log.clear();
-                                    self.sim.probabilities.clear();
-                                    let circuit_file = self.circuits
-                                        [self.circuit_list_state.selected().unwrap_or(0)]
-                                    .clone();
-                                    let circuit_path =
-                                        format!("{}/{}", self.circuits_dir, circuit_file);
+                            KeyCode::Enter | KeyCode::Char('\n') | KeyCode::Char('\r')
+                                if !self.sim.is_executing =>
+                            {
+                                self.sim.is_executing = true;
+                                self.sim.is_vqe = false;
+                                self.sim.execution_log.clear();
+                                self.sim.probabilities.clear();
+                                let circuit_file = self.circuits
+                                    [self.circuit_list_state.selected().unwrap_or(0)]
+                                .clone();
+                                let circuit_path =
+                                    format!("{}/{}", self.circuits_dir, circuit_file);
 
-                                    // Build ASCII diagram for the Circuit view
-                                    let (diagram, name) = render::ascii_circuit::build_circuit_diagram(&circuit_path);
-                                    self.circuit.diagram = diagram;
-                                    self.circuit.name = name;
-                                    self.circuit.scroll = 0;
+                                // Build ASCII diagram for the Circuit view
+                                let (diagram, name) =
+                                    render::ascii_circuit::build_circuit_diagram(&circuit_path);
+                                self.circuit.diagram = diagram;
+                                self.circuit.name = name;
+                                self.circuit.scroll = 0;
 
-                                    if let Some(task) = self.current_task.take() {
-                                        task.abort();
-                                    }
-
-                                    let tx = self.engine_tx.clone();
-                                    let endpoint = self.endpoint.clone();
-                                    self.current_task = Some(tokio::spawn(async move {
-                                        grpc::run_circuit(endpoint, circuit_path, tx).await;
-                                    }));
+                                if let Some(task) = self.current_task.take() {
+                                    task.abort();
                                 }
+
+                                let tx = self.engine_tx.clone();
+                                let endpoint = self.endpoint.clone();
+                                self.current_task = Some(tokio::spawn(async move {
+                                    grpc::run_circuit(endpoint, circuit_path, tx).await;
+                                }));
                             }
-                            KeyCode::Char('v') => {
-                                if !self.sim.is_executing {
-                                    self.sim.is_executing = true;
-                                    self.sim.is_vqe = true;
-                                    self.sim.execution_log.clear();
-                                    self.sim.vqe_history.clear();
-                                    self.sim.vqe_min_energy = f64::INFINITY;
-                                    self.sim.vqe_max_energy = f64::NEG_INFINITY;
-                                    self.sim.vqe_max_iter = 0.0;
+                            KeyCode::Char('v') if !self.sim.is_executing => {
+                                self.sim.is_executing = true;
+                                self.sim.is_vqe = true;
+                                self.sim.execution_log.clear();
+                                self.sim.vqe_history.clear();
+                                self.sim.vqe_min_energy = f64::INFINITY;
+                                self.sim.vqe_max_energy = f64::NEG_INFINITY;
+                                self.sim.vqe_max_iter = 0.0;
 
-                                    if let Some(task) = self.current_task.take() {
-                                        task.abort();
-                                    }
-
-                                    let tx = self.engine_tx.clone();
-                                    let endpoint = self.endpoint.clone();
-                                    self.current_task = Some(tokio::spawn(async move {
-                                        grpc::run_vqe(endpoint, tx).await;
-                                    }));
+                                if let Some(task) = self.current_task.take() {
+                                    task.abort();
                                 }
+
+                                let tx = self.engine_tx.clone();
+                                let endpoint = self.endpoint.clone();
+                                self.current_task = Some(tokio::spawn(async move {
+                                    grpc::run_vqe(endpoint, tx).await;
+                                }));
                             }
                             KeyCode::Char('r') => {
                                 // Re-fetch hardware topology from backend
@@ -245,19 +243,16 @@ impl Component for RouterComponent {
                                     grpc::get_topology(endpoint, tx).await;
                                 });
                             }
-                            KeyCode::Char('c') => {
-                                if self.sim.is_executing {
-                                    if let Some(task) = self.current_task.take() {
-                                        task.abort();
-                                    }
-                                    let timestamp =
-                                        chrono::Local::now().format("%H:%M:%S").to_string();
-                                    self.sim.execution_log.push_back(format!(
-                                        "[{}] Canceled active simulation",
-                                        timestamp
-                                    ));
-                                    self.sim.is_executing = false;
+                            KeyCode::Char('c') if self.sim.is_executing => {
+                                if let Some(task) = self.current_task.take() {
+                                    task.abort();
                                 }
+                                let timestamp = chrono::Local::now().format("%H:%M:%S").to_string();
+                                self.sim.execution_log.push_back(format!(
+                                    "[{}] Canceled active simulation",
+                                    timestamp
+                                ));
+                                self.sim.is_executing = false;
                             }
                             _ => {}
                         }

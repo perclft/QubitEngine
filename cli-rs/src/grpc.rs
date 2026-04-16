@@ -194,7 +194,7 @@ pub async fn run_circuit(server_addr: String, circuit_path: String, tx: mpsc::Se
                 )
             })
             .collect();
-        probs.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        probs.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
 
         let _ = tx.try_send(AppEvent::Grpc(GrpcEvent::Wavefunction(probs)));
         step += 1;

@@ -264,45 +264,42 @@ fn draw_execution_view(f: &mut Frame, app: &mut RouterComponent, area: Rect) {
 
             f.render_widget(sparkline, vqe_chunks[2]);
         }
-    } else {
-        if app.sim.probabilities.is_empty() {
-            let content = if app.sim.execution_log.is_empty() {
-                if app.sim.is_executing {
-                    "Connecting...".to_string()
-                } else {
-                    "Select a circuit and press Enter to execute.\nPress 'v' to run VQE optimization on H2.\nPress 'c' to cancel.\nPress 'q' to quit.".to_string()
-                }
+    } else if app.sim.probabilities.is_empty() {
+        let content = if app.sim.execution_log.is_empty() {
+            if app.sim.is_executing {
+                "Connecting...".to_string()
             } else {
-                let log_vec: Vec<String> = app.sim.execution_log.iter().cloned().collect();
-                log_vec.join("\n")
-            };
-            let p =
-                Paragraph::new(content).block(Block::default().title(title).borders(Borders::ALL));
-            f.render_widget(p, area);
+                "Select a circuit and press Enter to execute.\nPress 'v' to run VQE optimization on H2.\nPress 'c' to cancel.\nPress 'q' to quit.".to_string()
+            }
         } else {
-            let data: Vec<(&str, u64)> = app
-                .sim
-                .probabilities
-                .iter()
-                .map(|(k, v)| (k.as_str(), *v))
-                .collect();
+            let log_vec: Vec<String> = app.sim.execution_log.iter().cloned().collect();
+            log_vec.join("\n")
+        };
+        let p = Paragraph::new(content).block(Block::default().title(title).borders(Borders::ALL));
+        f.render_widget(p, area);
+    } else {
+        let data: Vec<(&str, u64)> = app
+            .sim
+            .probabilities
+            .iter()
+            .map(|(k, v)| (k.as_str(), *v))
+            .collect();
 
-            let barchart = BarChart::default()
-                .block(Block::default().title(title).borders(Borders::ALL))
-                .data(&data)
-                .bar_width(9)
-                .bar_gap(1)
-                .bar_style(Style::default().fg(Color::Cyan))
-                .value_style(
-                    Style::default()
-                        .bg(Color::Cyan)
-                        .fg(Color::Black)
-                        .add_modifier(Modifier::BOLD),
-                )
-                .max(100);
+        let barchart = BarChart::default()
+            .block(Block::default().title(title).borders(Borders::ALL))
+            .data(&data)
+            .bar_width(9)
+            .bar_gap(1)
+            .bar_style(Style::default().fg(Color::Cyan))
+            .value_style(
+                Style::default()
+                    .bg(Color::Cyan)
+                    .fg(Color::Black)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .max(100);
 
-            f.render_widget(barchart, area);
-        }
+        f.render_widget(barchart, area);
     }
 }
 
