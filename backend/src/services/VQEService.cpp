@@ -85,7 +85,7 @@ grpc::Status VQEService::RunVQE(
 
   // --- SPSA hyperparameters (tuned for convergence within max_iters) ---
   double alpha_spsa = 0.602, gamma_spsa = 0.101;
-  double A_spsa = std::max(1.0, max_iters * 0.02);
+  double A_spsa = std::max(1.0, max_iters * 0.1);
   // Linear scaling with parameter count — more params need proportionally
   // larger steps to keep per-parameter effective step size constant.
   double a_spsa = learning_rate * static_cast<double>(total_params) * 1.5;
@@ -207,7 +207,7 @@ grpc::Status VQEService::RunVQE(
       double target_energy = -1.70;    // H2 (GS ≈ -1.916 with YY)
       if (num_qubits == 4) target_energy = -7.78;       // LiH (GS ≈ -7.852)
       else if (num_qubits == 6) target_energy = -15.58;  // BeH2 (GS ≈ -15.681)
-      else if (num_qubits == 8) target_energy = -74.99;  // H2O (GS ≈ -75.10)
+      else if (num_qubits == 10) target_energy = -75.05; // H2O
       if (current_energy < target_energy + 0.005) {
         is_converged = true;
       }

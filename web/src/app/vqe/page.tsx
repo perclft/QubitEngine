@@ -8,7 +8,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 export default function VQEPage() {
   const [molecule, setMolecule] = useState(0); // H2
-  const [maxIterations, setMaxIterations] = useState(50);
+  const [maxIterations, setMaxIterations] = useState(100);
   const [learningRate, setLearningRate] = useState(0.1);
   const [optimizer, setOptimizer] = useState(0); // SPSA
   const [isRunning, setIsRunning] = useState(false);

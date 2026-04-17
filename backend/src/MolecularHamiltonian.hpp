@@ -51,13 +51,13 @@ public:
       hamiltonian.push_back({-0.09, "ZZIIII"});
       hamiltonian.push_back({0.012, "XXXXXX"});
     } else if (type == H2O) {
-      // H2O (8-qubit simplified active space model)
+      // H2O (10-qubit simplified active space model)
       // Reference CCSD(T) ground state energy: ~ -75.00 Ha
-      hamiltonian.push_back({-74.90, "IIIIIIII"});
-      hamiltonian.push_back({0.05, "ZIIIIIII"});
-      hamiltonian.push_back({0.05, "IZIIIIII"});
-      hamiltonian.push_back({-0.10, "ZZIIIIII"});
-      hamiltonian.push_back({0.01, "XXXXXXXX"});
+      hamiltonian.push_back({-74.90, "IIIIIIIIII"});
+      hamiltonian.push_back({0.05, "ZIIIIIIIII"});
+      hamiltonian.push_back({0.05, "IZIIIIIIII"});
+      hamiltonian.push_back({-0.10, "ZZIIIIIIII"});
+      hamiltonian.push_back({0.01, "XXXXXXXXXX"});
     }
 
     return hamiltonian;
@@ -72,7 +72,7 @@ public:
     if (type == BEH2)
       return 6;
     if (type == H2O)
-      return 8;
+      return 10;
     return 2;
   }
 };
