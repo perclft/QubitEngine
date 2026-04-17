@@ -18,7 +18,7 @@ export function TopologyGraph({ topology }: Props) {
     >
       <h3 className="text-xs font-medium text-slate-500 mb-4 uppercase tracking-widest">Hardware Topology</h3>
       <div className="w-full h-[280px] flex items-center justify-center">
-        <svg viewBox="0 0 150 100" className="w-full h-full max-w-xl opacity-80">
+        <svg viewBox="-10 -15 170 130" className="w-full h-full max-w-xl opacity-80 overflow-visible">
           {topology.edges.map((edge, i) => {
             const n1 = topology.nodes.find((n) => n.id === edge.node1);
             const n2 = topology.nodes.find((n) => n.id === edge.node2);
