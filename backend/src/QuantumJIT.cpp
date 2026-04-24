@@ -199,6 +199,16 @@ bool QuantumJIT::is_identity(const Matrix2x2 &m, double tol) {
          std::abs(Complex(m[2])) < tol && std::abs(Complex(m[3]) - 1.0) < tol;
 }
 
+bool QuantumJIT::is_identity(const Matrix4x4 &m, double tol) {
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 0; j < 4; ++j) {
+      Complex expected = (i == j) ? Complex(1.0, 0.0) : Complex(0.0, 0.0);
+      if (std::abs(Complex(m[i * 4 + j]) - expected) > tol) return false;
+    }
+  }
+  return true;
+}
+
 // --- O1: Cancel Adjacent Inverse Gates ---
 std::vector<CompiledGate>
 QuantumJIT::cancel_adjacent_gates(const std::vector<CompiledGate> &gates) {
@@ -442,8 +452,16 @@ QuantumJIT::fuse_tensor_network(const std::vector<CompiledGate> &gates) {
                    : (current_block_qubits.size() == 2) ? CompiledGate::TWO_QUBIT 
                    : CompiledGate::FUSED_BLOCK;
         block.target_qubits = current_block_qubits;
-        block.fused_unitary = current_unitary;
-        block.fused_size = current_dim;
+        
+        if (block.type == CompiledGate::SINGLE_QUBIT) {
+            for (int i = 0; i < 4; ++i) block.single_matrix[i] = current_unitary[i];
+        } else if (block.type == CompiledGate::TWO_QUBIT) {
+            for (int i = 0; i < 16; ++i) block.two_matrix[i] = current_unitary[i];
+        } else {
+            block.fused_unitary = current_unitary;
+            block.fused_size = current_dim;
+        }
+        
         fused_circuit.push_back(block);
         current_block_qubits.clear();
         current_unitary.clear();
@@ -470,8 +488,16 @@ QuantumJIT::fuse_tensor_network(const std::vector<CompiledGate> &gates) {
                    : (current_block_qubits.size() == 2) ? CompiledGate::TWO_QUBIT 
                    : CompiledGate::FUSED_BLOCK;
         block.target_qubits = current_block_qubits;
-        block.fused_unitary = current_unitary;
-        block.fused_size = current_dim;
+        
+        if (block.type == CompiledGate::SINGLE_QUBIT) {
+            for (int i = 0; i < 4; ++i) block.single_matrix[i] = current_unitary[i];
+        } else if (block.type == CompiledGate::TWO_QUBIT) {
+            for (int i = 0; i < 16; ++i) block.two_matrix[i] = current_unitary[i];
+        } else {
+            block.fused_unitary = current_unitary;
+            block.fused_size = current_dim;
+        }
+        
         fused_circuit.push_back(block);
       }
 
@@ -494,8 +520,16 @@ QuantumJIT::fuse_tensor_network(const std::vector<CompiledGate> &gates) {
                : (current_block_qubits.size() == 2) ? CompiledGate::TWO_QUBIT 
                : CompiledGate::FUSED_BLOCK;
     block.target_qubits = current_block_qubits;
-    block.fused_unitary = current_unitary;
-    block.fused_size = current_dim;
+    
+    if (block.type == CompiledGate::SINGLE_QUBIT) {
+        for (int i = 0; i < 4; ++i) block.single_matrix[i] = current_unitary[i];
+    } else if (block.type == CompiledGate::TWO_QUBIT) {
+        for (int i = 0; i < 16; ++i) block.two_matrix[i] = current_unitary[i];
+    } else {
+        block.fused_unitary = current_unitary;
+        block.fused_size = current_dim;
+    }
+    
     fused_circuit.push_back(block);
   }
 
@@ -508,34 +542,65 @@ QuantumJIT::fuse_two_qubit_adjacent(const std::vector<CompiledGate> &gates) {
   if (gates.empty()) return gates;
 
   std::vector<CompiledGate> fused;
-  // A prototype for 2-qubit fusion: merge adjacent two-qubit gates
-  // that operate on the exact same pair of qubits.
+  std::unordered_map<int, int> last_gate;
+
   for (const auto &g : gates) {
-    if (g.type == CompiledGate::TWO_QUBIT && fused.size() > 0) {
-      auto &last = fused.back();
-      if (last.type == CompiledGate::TWO_QUBIT &&
-          ((last.target_qubits[0] == g.target_qubits[0] && last.target_qubits[1] == g.target_qubits[1]) ||
-           (last.target_qubits[0] == g.target_qubits[1] && last.target_qubits[1] == g.target_qubits[0]))) {
-        // We have adjacent gates on the same pair. We can fuse them by matrix multiplication.
-        // For a full KAK decomposition we'd break this back down into CNOTs and 1Q gates,
-        // but for now, we fuse them into a single 4x4 block to save a kernel call.
-        std::vector<Complex> m1 = {last.two_matrix.begin(), last.two_matrix.end()};
-        std::vector<Complex> m2 = {g.two_matrix.begin(), g.two_matrix.end()};
-        
-        // Ensure same target ordering for multiplication
-        if (last.target_qubits[0] != g.target_qubits[0]) {
-           // Swap matrix 2's basis to match last's basis
-           // (This is a simplified prototype; full permutation requires proper tensoring)
-        } else {
-           std::vector<Complex> m_fused = matrix_multiply(m2, m1, 4);
-           std::copy(m_fused.begin(), m_fused.end(), last.two_matrix.begin());
+    if (g.type == CompiledGate::TWO_QUBIT) {
+      int q0 = g.target_qubits[0];
+      int q1 = g.target_qubits[1];
+      
+      auto it0 = last_gate.find(q0);
+      auto it1 = last_gate.find(q1);
+      
+      if (it0 != last_gate.end() && it1 != last_gate.end() && it0->second == it1->second) {
+        int last_idx = it0->second;
+        if (last_idx >= 0 && last_idx < fused.size() && fused[last_idx].type == CompiledGate::TWO_QUBIT) {
+          auto &last = fused[last_idx];
+          
+          if ((last.target_qubits[0] == q0 && last.target_qubits[1] == q1) ||
+              (last.target_qubits[0] == q1 && last.target_qubits[1] == q0)) {
+            
+            std::vector<Complex> m1 = {last.two_matrix.begin(), last.two_matrix.end()};
+            std::vector<Complex> m2 = {g.two_matrix.begin(), g.two_matrix.end()};
+            std::vector<Complex> m_fused;
+            
+            if (last.target_qubits[0] != q0) {
+               std::vector<Complex> m2_swapped(16);
+               auto swap_idx = [](int i) { return (i == 1) ? 2 : (i == 2) ? 1 : i; };
+               for (int i = 0; i < 4; ++i) {
+                 for (int j = 0; j < 4; ++j) {
+                   m2_swapped[i * 4 + j] = m2[swap_idx(i) * 4 + swap_idx(j)];
+                 }
+               }
+               m_fused = matrix_multiply(m2_swapped, m1, 4);
+            } else {
+               m_fused = matrix_multiply(m2, m1, 4);
+            }
+            
+            std::copy(m_fused.begin(), m_fused.end(), last.two_matrix.begin());
+            continue;
+          }
         }
-        continue;
       }
     }
+    
+    // If no fusion occurred, push the gate and update last_gate tracker
+    int new_idx = fused.size();
     fused.push_back(g);
+    for (int q : g.target_qubits) {
+      last_gate[q] = new_idx;
+    }
   }
-  return fused;
+
+  // Final sweep: filter out Identity blocks from TWO_QUBIT fusions
+  std::vector<CompiledGate> cleaned;
+  for (const auto &g : fused) {
+      if (g.type == CompiledGate::TWO_QUBIT && is_identity(g.two_matrix)) {
+          continue; // Strip Identity block
+      }
+      cleaned.push_back(g);
+  }
+  return cleaned;
 }
 
 // --- Count Fused Blocks ---

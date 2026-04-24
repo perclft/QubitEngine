@@ -109,6 +109,8 @@ services:
       dockerfile: deploy/docker/Dockerfile.web
     ports:
       - "3000:3000"
+    env_file:
+      - ../../.env
     environment:
       - SCHEDULER_GRPC_ADDR=scheduler:50053
       - ENGINE_GRPC_ADDR=engine:50051

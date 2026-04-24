@@ -125,6 +125,7 @@ private:
 
   Matrix2x2 matmul2x2(const Matrix2x2 &a, const Matrix2x2 &b);
   bool is_identity(const Matrix2x2 &m, double tol = 1e-10);
+  bool is_identity(const Matrix4x4 &m, double tol = 1e-10);
 
   std::vector<CompiledGate>
   cancel_adjacent_gates(const std::vector<CompiledGate> &gates);

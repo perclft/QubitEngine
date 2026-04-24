@@ -214,3 +214,56 @@ TEST(JITTest, EmptyCircuit) {
   EXPECT_EQ(ir.stats.optimized_gates, 0);
   EXPECT_EQ(ir.gates.size(), 0);
 }
+
+// ===== Optimization: O4 Adjacent Two-Qubit Gate Fusion =====
+
+TEST(JITTest, FuseAdjacentTwoQubitGates_SameOrder_O4) {
+  QuantumJIT jit(QuantumJIT::O4);
+  std::vector<std::pair<std::string, std::vector<int>>> gates = {
+      {"CNOT", {0, 1}}, {"CZ", {0, 1}}};
+
+  auto ir = jit.compile(2, gates);
+
+  EXPECT_EQ(ir.stats.original_gates, 2);
+  EXPECT_EQ(ir.stats.optimized_gates, 1);
+  EXPECT_EQ(ir.gates.size(), 1);
+  EXPECT_EQ(ir.gates[0].type, CompiledGate::TWO_QUBIT);
+}
+
+TEST(JITTest, FuseAdjacentTwoQubitGates_SwappedOrder_O4) {
+  QuantumJIT jit(QuantumJIT::O4);
+  std::vector<std::pair<std::string, std::vector<int>>> gates = {
+      {"CNOT", {0, 1}}, {"CZ", {1, 0}}};
+
+  auto ir = jit.compile(2, gates);
+
+  EXPECT_EQ(ir.stats.original_gates, 2);
+  EXPECT_EQ(ir.stats.optimized_gates, 1);
+  EXPECT_EQ(ir.gates.size(), 1);
+  EXPECT_EQ(ir.gates[0].type, CompiledGate::TWO_QUBIT);
+}
+
+TEST(JITTest, FuseAdjacentTwoQubitGates_Commute_O4) {
+  QuantumJIT jit(QuantumJIT::O4);
+  std::vector<std::pair<std::string, std::vector<int>>> gates = {
+      {"CNOT", {0, 1}}, {"X", {2}}, {"CZ", {0, 1}}};
+
+  auto ir = jit.compile(3, gates);
+
+  EXPECT_EQ(ir.stats.original_gates, 3);
+  // CNOT and CZ should fuse. X(2) is independent. Total gates: 2
+  EXPECT_EQ(ir.stats.optimized_gates, 2);
+}
+
+TEST(JITTest, IdentityCancellation_O4) {
+  QuantumJIT jit(QuantumJIT::O4);
+  std::vector<std::pair<std::string, std::vector<int>>> gates = {
+      {"CNOT", {0, 1}}, {"CNOT", {0, 1}}};
+
+  auto ir = jit.compile(2, gates);
+
+  EXPECT_EQ(ir.stats.original_gates, 2);
+  // CNOT * CNOT = I, so they should be completely removed
+  EXPECT_EQ(ir.stats.optimized_gates, 0);
+  EXPECT_EQ(ir.gates.size(), 0);
+}

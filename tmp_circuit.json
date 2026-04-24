@@ -1,9 +1,0 @@
-{
-  "num_qubits": 1,
-  "operations": [
-    {
-      "type": "HADAMARD",
-      "target_qubit": 0
-    }
-  ]
-}

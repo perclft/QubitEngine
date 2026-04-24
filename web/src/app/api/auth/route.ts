@@ -15,6 +15,7 @@ export async function POST(request: Request) {
     const token = await new SignJWT()
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(userId)
+      .setIssuer('qubit-engine')
       .setIssuedAt()
       .setExpirationTime('24h')
       .sign(encodedSecret);
