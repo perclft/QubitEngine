@@ -220,9 +220,19 @@ void StabilizerBackend::applyRotationZ(size_t, Precision) {
   throw std::runtime_error("Error: Continuous Rz rotations are non-Clifford.");
 }
 
-void StabilizerBackend::applyDepolarizingNoise(Precision) {
-  throw std::runtime_error("Error: Continuous noise application pending "
-                           "stabilizer discrete measurement injection.");
+void StabilizerBackend::applyDepolarizingNoise(Precision probability) {
+  static thread_local std::mt19937 gen(std::random_device{}());
+  std::uniform_real_distribution<double> dis(0.0, 1.0);
+
+  for (size_t q = 0; q < num_qubits_; ++q) {
+    double r = dis(gen);
+    if (r < probability) {
+      double type = dis(gen);
+      if (type < 1.0 / 3.0) applyX(q);
+      else if (type < 2.0 / 3.0) applyY(q);
+      else applyZ(q);
+    }
+  }
 }
 
 void StabilizerBackend::applyNoiseChannel1Q(const NoiseChannel1Q&, size_t) {

@@ -16,7 +16,8 @@
     "hiredis",
     "nlohmann-json",
     "jwt-cpp",
-    "picojson"
+    "picojson",
+    "rapidcheck"
   ],
   "builtin-baseline": "ab2977be50c702126336e5088f4836060733c899"
 }

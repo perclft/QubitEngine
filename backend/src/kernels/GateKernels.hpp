@@ -46,6 +46,10 @@ void launchPauliExpectation(const void *deviceState, int num_qubits,
 void launchFusedUnitary(void *deviceState, int num_qubits, const int *d_targets,
                         int k, const void *h_unitary);
 
+// --- Kraus Channels ---
+void launchApplyKraus1Q(void *deviceState, int num_qubits, int target,
+                        const void *matrix, double inv_norm);
+
 // --- Memory Management Helpers ---
 void* allocateDeviceState(size_t size_bytes);
 void freeDeviceState(void* ptr);

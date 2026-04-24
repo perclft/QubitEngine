@@ -411,6 +411,13 @@ jobs:
         run: |
           cd services/scheduler && go run tests/e2e_ping/main.go
           
+      - name: Run Web Playwright Tests
+        working-directory: web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+          
       - name: Docker Compose Logs (on failure)
         if: failure()
         run: docker compose -f deploy/docker/docker-compose.yaml logs

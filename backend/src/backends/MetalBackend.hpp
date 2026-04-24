@@ -75,6 +75,7 @@ private:
   void *diagonalExpectationPipeline_ = nullptr;
   void *denseUnitary1qPipeline_ = nullptr;
   void *denseUnitary2qPipeline_ = nullptr;
+  void *kraus1qPipeline_ = nullptr;
 };
 
 } // namespace qubit_engine

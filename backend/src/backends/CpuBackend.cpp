@@ -856,7 +856,10 @@ double CpuBackend::expectationValue(const std::string &pauli_string) const {
 #endif
 
     // 2. Compute partial expectation value
-    for (size_t i = 0; i < local_dim; ++i) {
+#ifdef _OPENMP
+#pragma omp parallel for reduction(+:partial_expected_value) schedule(static)
+#endif
+    for (long long i = 0; i < static_cast<long long>(local_dim); ++i) {
       size_t global_idx = i + (local_rank * local_dim);
       size_t j_global = global_idx;
       Complex coeff = 1.0;

@@ -64,7 +64,7 @@ TEST(StabilizerBackendTest, ObservationMethodsThrow) {
 
 // --- Expected Exceptions (Noise) ---
 
-TEST(StabilizerBackendTest, DepolarizingNoiseThrows) {
+TEST(StabilizerBackendTest, DepolarizingNoiseDoesNotThrow) {
     StabilizerBackend stab(1);
-    EXPECT_THROW(stab.applyDepolarizingNoise(0.1), std::runtime_error);
+    EXPECT_NO_THROW(stab.applyDepolarizingNoise(0.1));
 }

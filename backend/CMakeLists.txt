@@ -292,6 +292,8 @@ add_library(qubit_engine_core STATIC
     src/backends/StabilizerBackend.cpp
     src/backends/CloudBackend.cpp
     src/backends/GPUQuantumRegister.cpp
+    src/transpiler/Router.cpp
+    src/parser/QASMParser.cpp
     src/CircuitOptimizer.cpp
     src/QuantumDifferentiator.cpp
     src/QuantumJIT.cpp
@@ -299,6 +301,8 @@ add_library(qubit_engine_core STATIC
     src/ipc/SharedMemory.cpp
     src/QuantumMetrics.cpp
     src/NoiseModel.cpp
+    src/qec/MWPMDecoder.cpp
+    src/qec/SurfaceCode.cpp
     src/auth/AuthInterceptor.cpp
     src/services/CircuitService.cpp
     src/services/VQEService.cpp
@@ -408,6 +412,7 @@ target_link_libraries(qubit_engine_module PRIVATE
 # =================================================================
 enable_testing()
 find_package(GTest CONFIG REQUIRED)
+find_package(rapidcheck CONFIG REQUIRED)
 
 add_executable(tests
     tests/QuantumTests.cpp
@@ -427,6 +432,8 @@ add_executable(tests
     tests/WorkerStressTests.cpp
     tests/MetalBackendTests.cpp
     tests/NoiseModelTests.cpp
+    tests/JITPropertyTests.cpp
+    tests/QECTests.cpp
 )
 
 # Service tests need gRPC generated headers + ServiceImpl sources
@@ -451,6 +458,7 @@ target_link_libraries(tests PRIVATE
     spdlog::spdlog
     ${REDIS_LIB}
     ${HIREDIS_LIB}
+    rapidcheck
 )
 
 add_test(NAME CoreTests COMMAND tests)
@@ -520,4 +528,16 @@ if(ENABLE_FUZZING)
         fmt::fmt
         spdlog::spdlog
     )
+
+    add_executable(JITFuzzTest tests/JITFuzzTest.cpp src/QuantumJIT.cpp)
+    target_include_directories(JITFuzzTest PRIVATE src)
+    target_compile_options(JITFuzzTest PRIVATE -fprofile-instr-generate -fcoverage-mapping -fsanitize=fuzzer,address,undefined)
+    target_link_options(JITFuzzTest PRIVATE -fsanitize=fuzzer,address,undefined)
+    target_link_libraries(JITFuzzTest PRIVATE qubit_engine_core)
+
+    add_executable(NoiseModelFuzzTest tests/NoiseModelFuzzTest.cpp src/NoiseModel.cpp)
+    target_include_directories(NoiseModelFuzzTest PRIVATE src)
+    target_compile_options(NoiseModelFuzzTest PRIVATE -fprofile-instr-generate -fcoverage-mapping -fsanitize=fuzzer,address,undefined)
+    target_link_options(NoiseModelFuzzTest PRIVATE -fsanitize=fuzzer,address,undefined)
+    target_link_libraries(NoiseModelFuzzTest PRIVATE qubit_engine_core)
 endif()

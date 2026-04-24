@@ -66,6 +66,14 @@ RUN cd /usr/src/gtest && \
     make && \
     cp lib/*.a /usr/lib
 
+# Build rapidcheck from source
+RUN git clone https://github.com/emil-e/rapidcheck.git && \
+    cd rapidcheck && \
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DRC_ENABLE_GTEST=ON -DRC_ENABLE_GMOCK=OFF . && \
+    cmake --build build --parallel 4 && \
+    cmake --install build && \
+    cd .. && rm -rf rapidcheck
+
 
 # Install Go (for generating stubs)
 RUN GO_VERSION=1.23.1 && \

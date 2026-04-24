@@ -25,6 +25,7 @@ protected:
   std::string generate_valid_token() {
     auto token = jwt::create()
         .set_issuer("qubit-engine")
+        .set_audience("qubit-engine-api")
         .set_type("JWT")
         .sign(jwt::algorithm::hs256{"test-secret-123"});
     return token;

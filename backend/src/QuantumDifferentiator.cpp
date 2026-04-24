@@ -129,7 +129,11 @@ double QuantumDifferentiator::evaluateEnergy(
   QuantumRegister qreg(num_qubits, true);
   applyAnsatz(params, qreg);
   double energy = 0.0;
-  for (const auto &term : hamiltonian) {
+#ifdef _OPENMP
+#pragma omp parallel for reduction(+:energy) schedule(static)
+#endif
+  for (int i = 0; i < static_cast<int>(hamiltonian.size()); ++i) {
+    const auto &term = hamiltonian[i];
     energy += term.coefficient * qreg.expectationValue(term.pauli_string);
   }
   return energy;
@@ -145,7 +149,10 @@ void QuantumDifferentiator::applyGateInverseToState(
   case QuantumRegister::RecordedGate::H: {
     size_t target = gate.qubits[0];
     P is2 = static_cast<P>(1.0 / std::sqrt(2.0));
-    for (size_t idx = 0; idx < dim / 2; ++idx) {
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+    for (long long idx = 0; idx < static_cast<long long>(dim / 2); ++idx) {
       size_t i0 =
           ((idx >> target) << (target + 1)) | (idx & ((1ULL << target) - 1));
       size_t i1 = i0 | (1ULL << target);
@@ -157,7 +164,10 @@ void QuantumDifferentiator::applyGateInverseToState(
   }
   case QuantumRegister::RecordedGate::X: {
     size_t target = gate.qubits[0];
-    for (size_t idx = 0; idx < dim / 2; ++idx) {
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+    for (long long idx = 0; idx < static_cast<long long>(dim / 2); ++idx) {
       size_t i0 =
           ((idx >> target) << (target + 1)) | (idx & ((1ULL << target) - 1));
       size_t i1 = i0 | (1ULL << target);
@@ -221,7 +231,10 @@ void QuantumDifferentiator::applyGateInverseToState(
     size_t target = gate.qubits[0];
     P angle = static_cast<P>(-gate.params[0]);
     P c = std::cos(angle / P(2)), s = std::sin(angle / P(2));
-    for (size_t idx = 0; idx < dim / 2; ++idx) {
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+    for (long long idx = 0; idx < static_cast<long long>(dim / 2); ++idx) {
       size_t i0 =
           ((idx >> target) << (target + 1)) | (idx & ((1ULL << target) - 1));
       size_t i1 = i0 | (1ULL << target);
@@ -277,7 +290,10 @@ void QuantumDifferentiator::applyGateDerivativeToState(
     P angle = static_cast<P>(gate.params[0]);
     P c = std::cos(angle / P(2)), s = std::sin(angle / P(2));
     P h = P(0.5);
-    for (size_t idx = 0; idx < dim / 2; ++idx) {
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+    for (long long idx = 0; idx < static_cast<long long>(dim / 2); ++idx) {
       size_t i0 =
           ((idx >> target) << (target + 1)) | (idx & ((1ULL << target) - 1));
       size_t i1 = i0 | (1ULL << target);

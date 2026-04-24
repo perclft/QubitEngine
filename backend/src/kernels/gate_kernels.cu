@@ -273,6 +273,29 @@ __global__ void kCZ(cuDoubleComplex *state, int num_qubits, int control,
   }
 }
 
+// Apply a 2x2 Kraus matrix and scale by inv_norm
+__global__ void kApplyKraus1Q(cuDoubleComplex *state, int num_qubits, int target,
+                              cuDoubleComplex m00, cuDoubleComplex m01, 
+                              cuDoubleComplex m10, cuDoubleComplex m11, 
+                              double inv_norm) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int half_dim = 1 << (num_qubits - 1);
+  if (idx >= half_dim)
+    return;
+
+  int i0 = ((idx >> target) << (target + 1)) | (idx & ((1 << target) - 1));
+  int i1 = i0 | (1 << target);
+
+  cuDoubleComplex a = state[i0];
+  cuDoubleComplex b = state[i1];
+
+  cuDoubleComplex out0 = add(mul(m00, a), mul(m01, b));
+  cuDoubleComplex out1 = add(mul(m10, a), mul(m11, b));
+
+  state[i0] = scale(out0, inv_norm);
+  state[i1] = scale(out1, inv_norm);
+}
+
 // Probability computation kernel: |state[i]|^2
 __global__ void kComputeProbabilities(const cuDoubleComplex *state,
                                       double *probs, int dim) {
@@ -398,6 +421,17 @@ void launchComputeProbabilities(const void *deviceState, double *deviceProbs,
   kComputeProbabilities<<<numBlocks, blockSize>>>(
       (const cuDoubleComplex *)deviceState, deviceProbs, dim);
   // cudaDeviceSynchronize(); // Phase 4: Async kernels
+}
+
+void launchApplyKraus1Q(void *deviceState, int num_qubits, int target,
+                        const void *matrix, double inv_norm) {
+  int half_dim = 1 << (num_qubits - 1);
+  int blockSize = 256;
+  int numBlocks = (half_dim + blockSize - 1) / blockSize;
+  
+  const cuDoubleComplex* m = (const cuDoubleComplex*)matrix;
+  kApplyKraus1Q<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits, target,
+                                          m[0], m[1], m[2], m[3], inv_norm);
 }
 
 // --- Memory Helpers ---

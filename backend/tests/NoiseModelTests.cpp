@@ -366,3 +366,41 @@ TEST(NoiseModelTest, CoherentRotationError) {
   EXPECT_NEAR(state[0].real(), std::cos(theta / 2.0), 1e-10);
   EXPECT_NEAR(state[1].imag(), -std::sin(theta / 2.0), 1e-10);
 }
+
+// ============================================================================
+// Statistical Validation Tests (Pearson's Chi-Squared)
+// ============================================================================
+
+TEST(NoiseModelTest, AmplitudeDamping_ChiSquaredTest) {
+  // We run a large number of shots to verify the actual output distribution
+  // matches the theoretical probabilities of the Kraus channel.
+  const int NUM_SHOTS = 10000;
+  int count_zero = 0;
+  int count_one = 0;
+  
+  double gamma = 0.3; // 30% chance of decay from |1> to |0>
+
+  for (int trial = 0; trial < NUM_SHOTS; ++trial) {
+    CpuBackend backend(1);
+    backend.applyX(0); // Start in |1>
+    
+    NoiseChannel1Q channel = makeAmplitudeDampingChannel(gamma);
+    backend.applyNoiseChannel1Q(channel, 0);
+    
+    int result = backend.measure(0);
+    if (result == 0) count_zero++;
+    else count_one++;
+  }
+
+  double expected_zero = NUM_SHOTS * gamma;
+  double expected_one = NUM_SHOTS * (1.0 - gamma);
+
+  double chi_squared = std::pow(count_zero - expected_zero, 2) / expected_zero +
+                       std::pow(count_one - expected_one, 2) / expected_one;
+
+  // For 1 degree of freedom, critical value at p=0.001 is 10.828.
+  // We use 15.0 to be very safe against flaky tests in CI.
+  EXPECT_LT(chi_squared, 15.0) << "Chi-Squared test failed! Distribution deviated too much. count_0=" 
+                               << count_zero << ", count_1=" << count_one;
+}
+

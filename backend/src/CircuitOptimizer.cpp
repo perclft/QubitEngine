@@ -1,4 +1,5 @@
 #include "CircuitOptimizer.hpp"
+#include "transpiler/Router.hpp"
 #include <spdlog/spdlog.h>
 
 namespace qubit_engine {
@@ -31,66 +32,20 @@ void CircuitOptimizer::optimize(
   }
 
   spdlog::info("CircuitOptimizer: Reduced {} gates to {}", tape.size(), optimizedTape.size());
+  // Maps a logical circuit to an arbitrary hardware topology by inserting SWAPs
   tape = std::move(optimizedTape);
 }
 
-void CircuitOptimizer::mapTo1DTopology(
-    std::vector<QuantumRegister::RecordedGate> &tape) {
+void CircuitOptimizer::mapToTopology(
+    std::vector<QuantumRegister::RecordedGate> &tape, const HardwareConfig& config) {
   if (tape.empty())
     return;
 
-  std::vector<QuantumRegister::RecordedGate> mappedTape;
-  // Heuristic buffer sizing
-  mappedTape.reserve(tape.size() * 2);
-
-  for (const auto &gate : tape) {
-    if (gate.qubits.size() == 2) {
-      int q1 = gate.qubits[0];
-      int q2 = gate.qubits[1];
-
-      if (std::abs(q1 - q2) > 1) {
-        // Need SWAP routing
-        int distance = std::abs(q1 - q2);
-        int direction = (q2 > q1) ? 1 : -1;
-
-        std::vector<QuantumRegister::RecordedGate> swaps;
-        int current_pos = q1;
-
-        // Route q1 towards q2 until they are adjacent
-        for (int i = 0; i < distance - 1; ++i) {
-          QuantumRegister::RecordedGate swapGate;
-          swapGate.type = QuantumRegister::RecordedGate::SWAP;
-          swapGate.qubits = {static_cast<size_t>(current_pos),
-                             static_cast<size_t>(current_pos + direction)};
-          mappedTape.push_back(swapGate);
-          swaps.push_back(swapGate);
-          current_pos += direction;
-        }
-
-        // Apply original gate on the adjacent positions
-        QuantumRegister::RecordedGate adjacentGate = gate;
-        adjacentGate.qubits[0] = static_cast<size_t>(current_pos);
-        mappedTape.push_back(adjacentGate);
-
-        // Reverse the SWAPs to restore logical state
-        for (auto it = swaps.rbegin(); it != swaps.rend(); ++it) {
-          mappedTape.push_back(*it);
-        }
-      } else {
-        mappedTape.push_back(gate);
-      }
-    } else if (gate.qubits.size() == 3) {
-      // TOFFOLI or similar 3-qubit gates need decomposition or more complex
-      // routing. Not natively supported in strict 1D MPS prototype without
-      // decomposition.
-      mappedTape.push_back(gate);
-    } else {
-      mappedTape.push_back(gate);
-    }
-  }
-
-  spdlog::info("CircuitOptimizer: Mapped 1D topology inserted {} SWAP gates.", (mappedTape.size() - tape.size()));
-  tape = std::move(mappedTape);
+  transpiler::Router router(config);
+  
+  auto routed_tape = router.route(tape);
+  spdlog::info("CircuitOptimizer: Mapped topology inserted {} SWAP gates.", (routed_tape.size() - tape.size()));
+  tape = std::move(routed_tape);
 }
 
 bool CircuitOptimizer::areInverses(const QuantumRegister::RecordedGate &g1,

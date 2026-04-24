@@ -54,24 +54,26 @@ export const BlochSphere: React.FC<BlochSphereProps> = ({ theta = 0, phi = 0, an
         <pointLight position={[5, 5, 5]} intensity={1} />
         <OrbitControls enableZoom={false} autoRotate={!animating} autoRotateSpeed={1} />
         
-        {/* Sphere shell */}
-        <Sphere args={[1, 32, 32]}>
-          <meshBasicMaterial color="#ffffff" transparent opacity={0.05} wireframe />
-        </Sphere>
-        
-        {/* Axes */}
-        <Line points={[[-1.2, 0, 0], [1.2, 0, 0]]} color="rgba(255,255,255,0.2)" lineWidth={1} />
-        <Line points={[[0, -1.2, 0], [0, 1.2, 0]]} color="rgba(255,255,255,0.2)" lineWidth={1} />
-        <Line points={[[0, 0, -1.2], [0, 0, 1.2]]} color="rgba(255,255,255,0.2)" lineWidth={1} />
-        
-        {/* Axis Labels */}
-        <Text position={[1.3, 0, 0]} fontSize={0.15} color="#94a3b8">x</Text>
-        <Text position={[0, 1.3, 0]} fontSize={0.15} color="#94a3b8">|0⟩ (z)</Text>
-        <Text position={[0, -1.3, 0]} fontSize={0.15} color="#94a3b8">|1⟩ (-z)</Text>
-        <Text position={[0, 0, 1.3]} fontSize={0.15} color="#94a3b8">y</Text>
-        
-        {/* The State Vector Arrow */}
-        <BlochVector theta={theta} phi={phi} animating={animating} />
+        <React.Suspense fallback={null}>
+          {/* Sphere shell */}
+          <Sphere args={[1, 32, 32]}>
+            <meshBasicMaterial color="#ffffff" transparent opacity={0.05} wireframe />
+          </Sphere>
+          
+          {/* Axes */}
+          <Line points={[[-1.2, 0, 0], [1.2, 0, 0]]} color="#ffffff" transparent opacity={0.2} lineWidth={1} />
+          <Line points={[[0, -1.2, 0], [0, 1.2, 0]]} color="#ffffff" transparent opacity={0.2} lineWidth={1} />
+          <Line points={[[0, 0, -1.2], [0, 0, 1.2]]} color="#ffffff" transparent opacity={0.2} lineWidth={1} />
+          
+          {/* Axis Labels */}
+          <Text position={[1.3, 0, 0]} fontSize={0.15} color="#94a3b8">x</Text>
+          <Text position={[0, 1.3, 0]} fontSize={0.15} color="#94a3b8">|0⟩ (z)</Text>
+          <Text position={[0, -1.3, 0]} fontSize={0.15} color="#94a3b8">|1⟩ (-z)</Text>
+          <Text position={[0, 0, 1.3]} fontSize={0.15} color="#94a3b8">y</Text>
+          
+          {/* The State Vector Arrow */}
+          <BlochVector theta={theta} phi={phi} animating={animating} />
+        </React.Suspense>
       </Canvas>
       <div className="absolute bottom-2 right-3 text-[10px] text-slate-500 font-mono">
         {animating ? "SUPERPOSITION" : `θ: ${theta.toFixed(2)}, φ: ${phi.toFixed(2)}`}

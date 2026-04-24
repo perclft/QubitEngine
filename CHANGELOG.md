@@ -7,23 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- **Noise Model**: Comprehensive Kraus-operator noise simulation system (`NoiseModel.hpp/cpp`).
-  - Depolarizing noise channel — single-qubit (4 Kraus operators: I, X, Y, Z) and two-qubit (full 16-operator Pauli tensor product {I,X,Y,Z}⊗{I,X,Y,Z}).
-  - Amplitude damping channel (T1) — models energy relaxation of |1⟩ → |0⟩.
-  - Phase damping channel (T2) — models dephasing / loss of coherence.
-  - Readout error — per-qubit confusion matrix with configurable P(0|1) and P(1|0).
-- **Automatic noise injection**: Noise channels are applied automatically after every gate operation when a `NoiseModel` is attached to a `QuantumRegister` via `setNoiseModel()`.
-- **Convenience builders**: `NoiseModel::Depolarizing(p1q, p2q)` and `NoiseModel::Realistic(p1q, p2q, t1, t2, readout)` for one-line noise model creation.
-- **Protobuf**: Added `AMPLITUDE_DAMPING` and `PHASE_DAMPING` gate types, `noise_gamma` field, and `NoiseConfig` message to `quantum.proto`.
-- **Python bindings**: Full pybind11 exposure of `NoiseModel`, `ReadoutError`, `NoiseChannel1Q/2Q`, and channel factory functions.
-- **Tests**: 17 new GTest cases covering Kraus completeness (Σ K†K = I), channel configuration, invalid input rejection, CpuBackend functional tests, and QuantumRegister integration.
+- **O4 Fusion Optimization**: Enhanced `QuantumJIT` to support single-to-two qubit gate fusion and identity pruning, significantly reducing gate count and bandwidth for large circuits.
+- **OpenMP Parallelization**: Implemented multi-threading for `CpuBackend::expectationValue`, `QuantumDifferentiator::evaluateEnergy`, and adjoint state update loops.
+- **Surface Code Finalization**: Implemented logical measurement ($Z_0 Z_3 Z_6$) and MWPM-matched Pauli correction logic for distance-3 rotated surface codes.
+- **OpenQASM 3.0 Parser**: New robust AST-based implementation with full statement lookahead and support for complex assignments.
+- **Security Hardening**: Added strict JWT audience validation (`qubit-engine-api`) in `AuthInterceptor`.
 
 ### Changed
-- **IQuantumBackend**: Extended interface with `applyNoiseChannel1Q()`, `applyNoiseChannel2Q()` (pure virtual), and `measureWithReadoutError()` (default implementation).
-- **CpuBackend**: Implemented stochastic Kraus operator selection and application with post-application renormalization for sub-unitary operators.
-- **QuantumRegister**: All gate methods now call `applyPostGateNoise1Q/2Q()` when a noise model is active. `measure()` routes through `measureWithReadoutError()` when readout error is configured.
-- **Backend stubs**: MPS, CUDA, Metal, Cloud, and Stabilizer backends received stub implementations for the new virtual noise methods.
+- **Surface Code Layout**: Switched to a standard distance-3 rotated layout to ensure stabilizer commutativity.
+- **Simulation Flow**: Updated the QEC simulation loop to treat the first cycle as a projection-only round, preventing false corrections.
+- **Tokenizer Logic**: Refactored tokenization to prioritize punctuation over numeric literals (fixing `->` parsing).
+
 ### Fixed
+- **QASM Roundtrip**: Resolved failures in measurement assignment parsing and roundtrip fidelity.
+- **JIT Property Flakiness**: Fixed race conditions and stability issues in JIT property-based tests.
+- **Stabilizer Noise Consistency**: Corrected noise threshold assertions in `StabilizerBackend` tests.
 
 ## [0.2.5] - 2026-04-12
 

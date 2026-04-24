@@ -209,6 +209,40 @@ bool QuantumJIT::is_identity(const Matrix4x4 &m, double tol) {
   return true;
 }
 
+void QuantumJIT::apply_single_to_two(Matrix4x4 &two, const Matrix2x2 &single, int qubit_idx) {
+    // qubit_idx 0 is the first target in the two-qubit gate, 1 is the second
+    Matrix4x4 result;
+    if (qubit_idx == 0) {
+        // M = (S \otimes I) * T
+        for (int i = 0; i < 4; ++i) {
+            for (int j = 0; j < 4; ++j) {
+                Complex sum = 0;
+                // (S \otimes I)_{ik} = S_{i>>1, k>>1} if (i&1)==(k&1)
+                for (int k = 0; k < 4; ++k) {
+                    if ((i & 1) == (k & 1)) {
+                        sum += Complex(single[(i >> 1) * 2 + (k >> 1)]) * Complex(two[k * 4 + j]);
+                    }
+                }
+                result[i * 4 + j] = sum;
+            }
+        }
+    } else {
+        // M = (I \otimes S) * T
+        for (int i = 0; i < 4; ++i) {
+            for (int j = 0; j < 4; ++j) {
+                Complex sum = 0;
+                for (int k = 0; k < 4; ++k) {
+                    if ((i >> 1) == (k >> 1)) {
+                        sum += Complex(single[(i & 1) * 2 + (k & 1)]) * Complex(two[k * 4 + j]);
+                    }
+                }
+                result[i * 4 + j] = sum;
+            }
+        }
+    }
+    two = result;
+}
+
 // --- O1: Cancel Adjacent Inverse Gates ---
 std::vector<CompiledGate>
 QuantumJIT::cancel_adjacent_gates(const std::vector<CompiledGate> &gates) {
@@ -582,6 +616,18 @@ QuantumJIT::fuse_two_qubit_adjacent(const std::vector<CompiledGate> &gates) {
           }
         }
       }
+    } else if (g.type == CompiledGate::SINGLE_QUBIT) {
+        int q = g.target_qubits[0];
+        auto it = last_gate.find(q);
+        if (it != last_gate.end() && it->second >= 0) {
+            int last_idx = it->second;
+            if (fused[last_idx].type == CompiledGate::TWO_QUBIT) {
+                auto &last = fused[last_idx];
+                int q_pos = (last.target_qubits[0] == q) ? 0 : 1;
+                apply_single_to_two(last.two_matrix, g.single_matrix, q_pos);
+                continue;
+            }
+        }
     }
     
     // If no fusion occurred, push the gate and update last_gate tracker

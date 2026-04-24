@@ -348,13 +348,20 @@ void QuantumRegister::optimize() {
   CircuitOptimizer::optimize(tape);
 }
 
-void QuantumRegister::mapTo1DTopology() {
+void QuantumRegister::mapToTopology() {
 #ifdef ENABLE_OPENTELEMETRY
   auto tracer = opentelemetry::trace::Provider::GetTracerProvider()->GetTracer("QubitEngine");
-  auto span = tracer->StartSpan("QuantumRegister::mapTo1DTopology");
+  auto span = tracer->StartSpan("QuantumRegister::mapToTopology");
   auto scope = tracer->WithActiveSpan(span);
 #endif
-  CircuitOptimizer::mapTo1DTopology(tape);
+  HardwareConfig config;
+  auto topology_path = ConfigManager::Instance().getTopologyPath();
+  if (topology_path.has_value() && config.loadFromFile(topology_path.value())) {
+      // Successfully loaded
+  } else {
+      config.loadDefaultHeavyHex();
+  }
+  CircuitOptimizer::mapToTopology(tape, config);
 }
 
 // --- Replay Logic (Kept purely on proxy as it uses public API) ---

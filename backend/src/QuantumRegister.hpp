@@ -89,7 +89,7 @@ public:
   const std::vector<RecordedGate> &getTape() const;
 
   void optimize();        // Optimizes the current tape
-  void mapTo1DTopology(); // Routes tape for MPS
+  void mapToTopology();   // Routes tape to physical topology
 
   // Helper to Replay Tape (Optional, for adjoint)
   void applyRegisteredGate(const RecordedGate &gate);

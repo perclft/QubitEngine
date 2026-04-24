@@ -131,6 +131,7 @@ void MetalBackend::buildPipelines(void *libPtr) {
   diagonalExpectationPipeline_ = createPipe(@"diagonal_expectation_kernel");
   denseUnitary1qPipeline_ = createPipe(@"dense_unitary_1q_kernel");
   denseUnitary2qPipeline_ = createPipe(@"dense_unitary_2q_kernel");
+  kraus1qPipeline_ = createPipe(@"apply_kraus_kernel");
 }
 
 // --- Memory Management ---
@@ -411,8 +412,60 @@ void MetalBackend::applyDepolarizingNoise(Precision p) {
   }
 }
 
-void MetalBackend::applyNoiseChannel1Q(const NoiseChannel1Q& /*channel*/, size_t /*target*/) {
-  // TODO: Implement Metal GPU Kraus channel application
+void MetalBackend::applyNoiseChannel1Q(const NoiseChannel1Q& channel, size_t target) {
+  if (channel.operators.empty()) return;
+
+  float total_p = 0.0f;
+  for (const auto& op : channel.operators) {
+      total_p += static_cast<float>(op.probability);
+  }
+
+  static thread_local std::mt19937 gen(std::random_device{}());
+  std::uniform_real_distribution<float> dis(0.0, total_p);
+  float r = dis(gen);
+
+  const KrausOperator1Q* selected = &channel.operators.back();
+  float cumulative = 0.0f;
+  for (size_t i = 0; i < channel.operators.size(); ++i) {
+    cumulative += static_cast<float>(channel.operators[i].probability);
+    if (r <= cumulative) {
+      selected = &channel.operators[i];
+      break;
+    }
+  }
+
+  if (selected->probability < 1e-20) return;
+
+  float inv_norm = 1.0f / std::sqrt(static_cast<float>(selected->probability));
+  
+  uint32_t stride = 1 << target;
+  std::vector<MetalComplex> m(4);
+  for (int i = 0; i < 4; ++i) {
+      m[i].real = static_cast<float>(selected->matrix[i].real());
+      m[i].imag = static_cast<float>(selected->matrix[i].imag());
+  }
+
+  id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
+  id<MTLBuffer> mBuf = [device newBufferWithBytes:m.data() length:4*sizeof(MetalComplex) options:MTLResourceStorageModeShared];
+  
+  id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)commandQueue_;
+  id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
+  id<MTLComputeCommandEncoder> enc = [cmdBuf computeCommandEncoder];
+  id<MTLComputePipelineState> pso = (__bridge id<MTLComputePipelineState>)kraus1qPipeline_;
+  
+  [enc setComputePipelineState:pso];
+  [enc setBuffer:(__bridge id<MTLBuffer>)gpuBuffer_ offset:0 atIndex:0];
+  [enc setBytes:&stride length:sizeof(uint32_t) atIndex:1];
+  [enc setBuffer:mBuf offset:0 atIndex:2];
+  [enc setBytes:&inv_norm length:sizeof(float) atIndex:3];
+  
+  size_t dim = 1ULL << num_qubits_;
+  [enc dispatchThreads:MTLSizeMake(dim/2, 1, 1) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
+  [enc endEncoding];
+  [cmdBuf commit];
+  
+  if (lastCommandBuffer_) CFRelease(lastCommandBuffer_);
+  lastCommandBuffer_ = (void*)CFBridgingRetain(cmdBuf);
 }
 
 void MetalBackend::applyNoiseChannel2Q(const NoiseChannel2Q& /*channel*/, size_t /*q1*/, size_t /*q2*/) {

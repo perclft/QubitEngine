@@ -53,7 +53,8 @@ void AuthInterceptor::ValidateAuthInternal(const std::map<std::string, std::stri
   std::string secret = env_secret;
   auto verifier = jwt::verify<jwt::traits::nlohmann_json>()
       .allow_algorithm(jwt::algorithm::hs256{secret})
-      .with_issuer("qubit-engine");
+      .with_issuer("qubit-engine")
+      .with_audience("qubit-engine-api");
   
   verifier.verify(decoded);
 }

@@ -146,7 +146,7 @@ grpc::Status CircuitService::RunCircuit(grpc::ServerContext *context,
         for (int i = 0; i < num_ops; ++i) {
           applyGate(qreg, request->operations(i), response);
         }
-        qreg.mapTo1DTopology();
+        qreg.mapToTopology();
         qreg.enableExecution(true);
         qreg.enableRecording(false);
 
