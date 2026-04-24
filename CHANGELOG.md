@@ -12,7 +12,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Surface Code Finalization**: Implemented logical measurement ($Z_0 Z_3 Z_6$) and MWPM-matched Pauli correction logic for distance-3 rotated surface codes.
 - **OpenQASM 3.0 Parser**: New robust AST-based implementation with full statement lookahead and support for complex assignments.
 - **Security Hardening**: Added strict JWT audience validation (`qubit-engine-api`) in `AuthInterceptor`.
-- **Codebase Audit**: Completed a comprehensive architectural and performance audit, documented in `docs/codebase_analysis.md`.
 
 
 ### Changed
