@@ -23,6 +23,7 @@ RUN npm run build
 # Stage 3: Production server
 FROM node:20-alpine AS runner
 WORKDIR /app
+RUN apk add --no-cache curl
 
 ENV NODE_ENV production
 # Uncomment the following line in case you want to disable telemetry during runtime.

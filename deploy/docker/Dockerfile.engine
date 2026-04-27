@@ -123,6 +123,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgflags2.2 libgoogle-glog0v6 \
     libopenmpi3 openmpi-bin libgomp1 \
     libspdlog1.10 libfmt9 \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 50051
