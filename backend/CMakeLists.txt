@@ -296,6 +296,7 @@ add_library(qubit_engine_core STATIC
     src/HardwareConfig.cpp
     src/QuantumRegister.cpp
     src/ConfigManager.cpp
+    src/BackendFactory.cpp
     src/backends/CpuBackend.cpp
     src/backends/MPSBackend.cpp
     src/backends/StabilizerBackend.cpp

@@ -466,7 +466,7 @@ jobs:
 
       - name: Build Docker Images
         run: |
-          docker build -t qubitengine/scheduler:scan -f deploy/docker/Dockerfile.scheduler .
+          docker build -t qubitengine/scheduler:scan -f services/scheduler/Dockerfile .
           docker build -t qubitengine/engine:scan -f deploy/docker/Dockerfile.engine .
           docker build -t qubitengine/web:scan -f deploy/docker/Dockerfile.web .
 
