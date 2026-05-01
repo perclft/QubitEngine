@@ -7,9 +7,16 @@ namespace qubit_engine {
 namespace auth {
 
 bool AuthInterceptor::ValidateAuth(grpc::ServerContext *context) const {
+#ifdef ENABLE_SKIP_AUTH
+  // Compile-time guarded: this code path only exists in debug/test builds.
+  // The ENABLE_SKIP_AUTH CMake option must be explicitly enabled.
   if (const char* skip_auth = std::getenv("QUBIT_ENGINE_SKIP_AUTH")) {
-      if (std::string(skip_auth) == "1") return true;
+      if (std::string(skip_auth) == "1") {
+          spdlog::warn("AUTH BYPASS ACTIVE — QUBIT_ENGINE_SKIP_AUTH=1 (debug build only)");
+          return true;
+      }
   }
+#endif
 
   if (const char* secret_env = std::getenv("QUBIT_ENGINE_JWT_SECRET")) {
       // Secret is set, verification is mandatory

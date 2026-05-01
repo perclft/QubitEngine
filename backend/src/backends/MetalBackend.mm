@@ -132,6 +132,9 @@ void MetalBackend::buildPipelines(void *libPtr) {
   denseUnitary1qPipeline_ = createPipe(@"dense_unitary_1q_kernel");
   denseUnitary2qPipeline_ = createPipe(@"dense_unitary_2q_kernel");
   kraus1qPipeline_ = createPipe(@"apply_kraus_kernel");
+  swapPipeline_ = createPipe(@"swap_kernel");
+  czPipeline_ = createPipe(@"cz_kernel");
+  kraus2qPipeline_ = createPipe(@"kraus_2q_kernel");
 }
 
 // --- Memory Management ---
@@ -238,6 +241,40 @@ void MetalBackend::dispatchHelper(void *queuePtr, void *psoPtr, void *bufPtr,
   lastCommandBuffer_ = (void *)CFBridgingRetain(cmdBuf);
 }
 
+void MetalBackend::dispatchWithBuffers(void *psoPtr, size_t threadCount,
+                                        std::vector<std::pair<int, void*>> bufferArgs,
+                                        std::vector<std::tuple<int, void*, size_t>> bytesArgs) {
+  id<MTLComputePipelineState> pso = (__bridge id<MTLComputePipelineState>)psoPtr;
+  if (!pso) return;
+
+  id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)commandQueue_;
+  id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
+  id<MTLComputeCommandEncoder> enc = [cmdBuf computeCommandEncoder];
+
+  [enc setComputePipelineState:pso];
+
+  // Bind MTLBuffer arguments
+  for (const auto& [index, bufPtr] : bufferArgs) {
+    [enc setBuffer:(__bridge id<MTLBuffer>)bufPtr offset:0 atIndex:index];
+  }
+
+  // Bind inline bytes arguments
+  for (const auto& [index, dataPtr, dataSize] : bytesArgs) {
+    [enc setBytes:dataPtr length:dataSize atIndex:index];
+  }
+
+  NSUInteger maxThreads = pso.maxTotalThreadsPerThreadgroup;
+  if (maxThreads > 256) maxThreads = 256;
+
+  [enc dispatchThreads:MTLSizeMake(threadCount, 1, 1)
+      threadsPerThreadgroup:MTLSizeMake(maxThreads, 1, 1)];
+  [enc endEncoding];
+  [cmdBuf commit];
+
+  if (lastCommandBuffer_) CFRelease(lastCommandBuffer_);
+  lastCommandBuffer_ = (void *)CFBridgingRetain(cmdBuf);
+}
+
 // --- Gate Implementations ---
 
 void MetalBackend::applyHadamard(size_t target) {
@@ -304,15 +341,19 @@ void MetalBackend::applyRotationX(size_t target, Precision angle) {
 }
 
 void MetalBackend::applySWAP(size_t qubit1, size_t qubit2) {
-  applyCNOT(qubit1, qubit2);
-  applyCNOT(qubit2, qubit1);
-  applyCNOT(qubit1, qubit2);
+  uint32_t s_low = static_cast<uint32_t>(std::min(qubit1, qubit2));
+  uint32_t s_high = static_cast<uint32_t>(std::max(qubit1, qubit2));
+  size_t dim = 1ULL << num_qubits_;
+  dispatchHelper(commandQueue_, swapPipeline_, gpuBuffer_, dim / 2,
+                 {&s_low, &s_high}, {sizeof(uint32_t), sizeof(uint32_t)});
 }
 
 void MetalBackend::applyCZ(size_t control, size_t target) {
-  applyHadamard(target);
-  applyCNOT(control, target);
-  applyHadamard(target);
+  uint32_t s_low = static_cast<uint32_t>(std::min(control, target));
+  uint32_t s_high = static_cast<uint32_t>(std::max(control, target));
+  size_t dim = 1ULL << num_qubits_;
+  dispatchHelper(commandQueue_, czPipeline_, gpuBuffer_, dim / 2,
+                 {&s_low, &s_high}, {sizeof(uint32_t), sizeof(uint32_t)});
 }
 
 void MetalBackend::applyPhaseS(size_t target) {
@@ -345,6 +386,8 @@ void MetalBackend::applyToffoli(size_t c1, size_t c2, size_t target) {
 void MetalBackend::applyDenseUnitary(const std::vector<size_t> &targets,
                                    const std::vector<Complex> &matrix) {
   size_t dim = 1ULL << num_qubits_;
+  id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
+
   if (targets.size() == 1) {
     uint32_t stride = 1 << targets[0];
     std::vector<MetalComplex> m(4);
@@ -352,21 +395,10 @@ void MetalBackend::applyDenseUnitary(const std::vector<size_t> &targets,
         m[i].real = (float)matrix[i].real();
         m[i].imag = (float)matrix[i].imag();
     }
-    id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
     id<MTLBuffer> mBuf = [device newBufferWithBytes:m.data() length:4*sizeof(MetalComplex) options:MTLResourceStorageModeShared];
-    id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)commandQueue_;
-    id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
-    id<MTLComputeCommandEncoder> enc = [cmdBuf computeCommandEncoder];
-    id<MTLComputePipelineState> pso = (__bridge id<MTLComputePipelineState>)denseUnitary1qPipeline_;
-    [enc setComputePipelineState:pso];
-    [enc setBuffer:(__bridge id<MTLBuffer>)gpuBuffer_ offset:0 atIndex:0];
-    [enc setBytes:&stride length:sizeof(uint32_t) atIndex:1];
-    [enc setBuffer:mBuf offset:0 atIndex:2];
-    [enc dispatchThreads:MTLSizeMake(dim/2, 1, 1) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
-    [enc endEncoding];
-    [cmdBuf commit];
-    if (lastCommandBuffer_) CFRelease(lastCommandBuffer_);
-    lastCommandBuffer_ = (void*)CFBridgingRetain(cmdBuf);
+    dispatchWithBuffers(denseUnitary1qPipeline_, dim / 2,
+                        {{0, gpuBuffer_}, {2, (__bridge void*)mBuf}},
+                        {{1, &stride, sizeof(uint32_t)}});
   } else if (targets.size() == 2) {
     uint32_t s_low = (uint32_t)targets[0];
     uint32_t s_high = (uint32_t)targets[1];
@@ -376,22 +408,10 @@ void MetalBackend::applyDenseUnitary(const std::vector<size_t> &targets,
         m[i].real = (float)matrix[i].real();
         m[i].imag = (float)matrix[i].imag();
     }
-    id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
     id<MTLBuffer> mBuf = [device newBufferWithBytes:m.data() length:16*sizeof(MetalComplex) options:MTLResourceStorageModeShared];
-    id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)commandQueue_;
-    id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
-    id<MTLComputeCommandEncoder> enc = [cmdBuf computeCommandEncoder];
-    id<MTLComputePipelineState> pso = (__bridge id<MTLComputePipelineState>)denseUnitary2qPipeline_;
-    [enc setComputePipelineState:pso];
-    [enc setBuffer:(__bridge id<MTLBuffer>)gpuBuffer_ offset:0 atIndex:0];
-    [enc setBytes:&s_low length:sizeof(uint32_t) atIndex:1];
-    [enc setBytes:&s_high length:sizeof(uint32_t) atIndex:2];
-    [enc setBuffer:mBuf offset:0 atIndex:3];
-    [enc dispatchThreads:MTLSizeMake(dim/4, 1, 1) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
-    [enc endEncoding];
-    [cmdBuf commit];
-    if (lastCommandBuffer_) CFRelease(lastCommandBuffer_);
-    lastCommandBuffer_ = (void*)CFBridgingRetain(cmdBuf);
+    dispatchWithBuffers(denseUnitary2qPipeline_, dim / 4,
+                        {{0, gpuBuffer_}, {3, (__bridge void*)mBuf}},
+                        {{1, &s_low, sizeof(uint32_t)}, {2, &s_high, sizeof(uint32_t)}});
   }
 }
 
@@ -438,7 +458,7 @@ void MetalBackend::applyNoiseChannel1Q(const NoiseChannel1Q& channel, size_t tar
 
   float inv_norm = 1.0f / std::sqrt(static_cast<float>(selected->probability));
   
-  uint32_t stride = 1 << target;
+   uint32_t stride = 1 << target;
   std::vector<MetalComplex> m(4);
   for (int i = 0; i < 4; ++i) {
       m[i].real = static_cast<float>(selected->matrix[i].real());
@@ -447,29 +467,58 @@ void MetalBackend::applyNoiseChannel1Q(const NoiseChannel1Q& channel, size_t tar
 
   id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
   id<MTLBuffer> mBuf = [device newBufferWithBytes:m.data() length:4*sizeof(MetalComplex) options:MTLResourceStorageModeShared];
-  
-  id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)commandQueue_;
-  id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
-  id<MTLComputeCommandEncoder> enc = [cmdBuf computeCommandEncoder];
-  id<MTLComputePipelineState> pso = (__bridge id<MTLComputePipelineState>)kraus1qPipeline_;
-  
-  [enc setComputePipelineState:pso];
-  [enc setBuffer:(__bridge id<MTLBuffer>)gpuBuffer_ offset:0 atIndex:0];
-  [enc setBytes:&stride length:sizeof(uint32_t) atIndex:1];
-  [enc setBuffer:mBuf offset:0 atIndex:2];
-  [enc setBytes:&inv_norm length:sizeof(float) atIndex:3];
-  
+
   size_t dim = 1ULL << num_qubits_;
-  [enc dispatchThreads:MTLSizeMake(dim/2, 1, 1) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
-  [enc endEncoding];
-  [cmdBuf commit];
-  
-  if (lastCommandBuffer_) CFRelease(lastCommandBuffer_);
-  lastCommandBuffer_ = (void*)CFBridgingRetain(cmdBuf);
+  dispatchWithBuffers(kraus1qPipeline_, dim / 2,
+                      {{0, gpuBuffer_}, {2, (__bridge void*)mBuf}},
+                      {{1, &stride, sizeof(uint32_t)}, {3, &inv_norm, sizeof(float)}});
 }
 
-void MetalBackend::applyNoiseChannel2Q(const NoiseChannel2Q& /*channel*/, size_t /*q1*/, size_t /*q2*/) {
-  // TODO: Implement Metal GPU 2Q Kraus channel application
+void MetalBackend::applyNoiseChannel2Q(const NoiseChannel2Q& channel, size_t q1, size_t q2) {
+  if (channel.operators.empty()) return;
+
+  // 1. Stochastic operator selection (same as 1Q pattern)
+  float total_p = 0.0f;
+  for (const auto& op : channel.operators) {
+      total_p += static_cast<float>(op.probability);
+  }
+
+  static thread_local std::mt19937 gen(std::random_device{}());
+  std::uniform_real_distribution<float> dis(0.0, total_p);
+  float r = dis(gen);
+
+  const KrausOperator2Q* selected = &channel.operators.back();
+  float cumulative = 0.0f;
+  for (size_t i = 0; i < channel.operators.size(); ++i) {
+    cumulative += static_cast<float>(channel.operators[i].probability);
+    if (r <= cumulative) {
+      selected = &channel.operators[i];
+      break;
+    }
+  }
+
+  if (selected->probability < 1e-20) return;
+
+  float inv_norm = 1.0f / std::sqrt(static_cast<float>(selected->probability));
+
+  // 2. Convert 4×4 Kraus matrix to Metal float format
+  std::vector<MetalComplex> m(16);
+  for (int i = 0; i < 16; ++i) {
+      m[i].real = static_cast<float>(selected->matrix[i].real());
+      m[i].imag = static_cast<float>(selected->matrix[i].imag());
+  }
+
+  // 3. Dispatch the 2Q Kraus kernel
+  uint32_t s_low = static_cast<uint32_t>(std::min(q1, q2));
+  uint32_t s_high = static_cast<uint32_t>(std::max(q1, q2));
+  size_t dim = 1ULL << num_qubits_;
+
+  id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
+  id<MTLBuffer> mBuf = [device newBufferWithBytes:m.data() length:16*sizeof(MetalComplex) options:MTLResourceStorageModeShared];
+
+  dispatchWithBuffers(kraus2qPipeline_, dim / 4,
+                      {{0, gpuBuffer_}, {3, (__bridge void*)mBuf}},
+                      {{1, &s_low, sizeof(uint32_t)}, {2, &s_high, sizeof(uint32_t)}, {4, &inv_norm, sizeof(float)}});
 }
 
 int MetalBackend::measure(size_t target) {

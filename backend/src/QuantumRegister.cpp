@@ -7,10 +7,7 @@
 #define _USE_MATH_DEFINES
 #include <cmath>
 #include "Exceptions.hpp"
-#include "backends/CpuBackend.hpp"
-#include "backends/CudaBackend.hpp"
-#include "backends/MPSBackend.hpp"
-#include "backends/CloudBackend.hpp"
+#include "BackendFactory.hpp"
 #include <cmath>
 #include <cstdint>
 #include <future>
@@ -34,50 +31,25 @@ namespace qubit_engine {
 QuantumRegister::QuantumRegister(size_t n, bool force_local) : num_qubits(n) {
   // Phase 25: Security Enforcement Check
   const char* secret = std::getenv("QUBIT_ENGINE_JWT_SECRET");
+#ifdef ENABLE_SKIP_AUTH
   const char* skip = std::getenv("QUBIT_ENGINE_SKIP_AUTH");
   if (!secret && (!skip || std::string(skip) != "1")) {
       spdlog::warn("QUBIT_ENGINE_JWT_SECRET is not set. Simulation security may be compromised.");
       spdlog::warn("Set QUBIT_ENGINE_SKIP_AUTH=1 to explicitly disable this warning during development.");
   }
-
-  // Check ConfigManager for force local execution override if not explicitly specified
-  bool use_local = force_local || ConfigManager::Instance().forceLocalExecution();
-
-  // Phase 4: Cloud Offloading Check
-  auto cloud_url = ConfigManager::Instance().getCloudUrl();
-  if (cloud_url.has_value() && !use_local) {
-    backend = std::make_unique<CloudBackend>(n, cloud_url.value());
-    spdlog::info("QuantumRegister: Using CloudBackend (Remote: {})", cloud_url.value());
-    return;
-  }
-
-  // Phase 4: Tensor Network Acceleration
-  int mps_threshold = ConfigManager::Instance().getMpsThreshold();
-  if (n >= static_cast<size_t>(mps_threshold) && !use_local) {
-    // Emulate using MPS for circuits >= threshold to showcase memory
-    // compression
-    int bond_dim = ConfigManager::Instance().getMpsBondDimension();
-    backend = std::make_unique<MPSBackend>(static_cast<int>(n), bond_dim);
-    spdlog::info("QuantumRegister: Using MPSBackend (bond_dim={})", bond_dim);
-    return;
-  }
-
-  // Factory Logic
-#ifdef ENABLE_CUDA
-  if (!use_local) {
-    try {
-      // Stub: In real imp, check device count e.g. cudaGetDeviceCount
-      backend = std::make_unique<CudaBackend>(n);
-      spdlog::info("QuantumRegister: Using CudaBackend (GPU)");
-      return;
-    } catch (...) {
-      spdlog::error("QuantumRegister: CudaBackend failed. Falling back.");
-    }
+#else
+  if (!secret) {
+      spdlog::warn("QUBIT_ENGINE_JWT_SECRET is not set. Simulation security may be compromised.");
   }
 #endif
 
-  // Default to CPU on macOS/Linux/Windows if CUDA not used
-  backend = std::make_unique<CpuBackend>(n, use_local);
+  // Delegate backend creation to the factory
+  backend = BackendFactory::create(n, force_local);
+}
+
+QuantumRegister::QuantumRegister(size_t n, std::unique_ptr<IQuantumBackend> injected_backend)
+    : num_qubits(n), backend(std::move(injected_backend)) {
+  // DI constructor — no backend selection, no auth check (test use only)
 }
 
 QuantumRegister::~QuantumRegister() {}

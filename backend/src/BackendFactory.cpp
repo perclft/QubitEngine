@@ -1,0 +1,47 @@
+#include "BackendFactory.hpp"
+#include "ConfigManager.hpp"
+#include "backends/CpuBackend.hpp"
+#include "backends/CudaBackend.hpp"
+#include "backends/MPSBackend.hpp"
+#include "backends/CloudBackend.hpp"
+#include <spdlog/spdlog.h>
+
+namespace qubit_engine {
+
+std::unique_ptr<IQuantumBackend> BackendFactory::create(size_t num_qubits,
+                                                         bool force_local) {
+  bool use_local = force_local || ConfigManager::Instance().forceLocalExecution();
+
+  // Priority 1: Cloud Offloading
+  auto cloud_url = ConfigManager::Instance().getCloudUrl();
+  if (cloud_url.has_value() && !use_local) {
+    spdlog::info("BackendFactory: Using CloudBackend (Remote: {})", cloud_url.value());
+    return std::make_unique<CloudBackend>(num_qubits, cloud_url.value());
+  }
+
+  // Priority 2: Tensor Network (MPS) for large qubit counts
+  int mps_threshold = ConfigManager::Instance().getMpsThreshold();
+  if (num_qubits >= static_cast<size_t>(mps_threshold) && !use_local) {
+    int bond_dim = ConfigManager::Instance().getMpsBondDimension();
+    spdlog::info("BackendFactory: Using MPSBackend (bond_dim={})", bond_dim);
+    return std::make_unique<MPSBackend>(static_cast<int>(num_qubits), bond_dim);
+  }
+
+  // Priority 3: CUDA GPU
+#ifdef ENABLE_CUDA
+  if (!use_local) {
+    try {
+      auto backend = std::make_unique<CudaBackend>(num_qubits);
+      spdlog::info("BackendFactory: Using CudaBackend (GPU)");
+      return backend;
+    } catch (...) {
+      spdlog::error("BackendFactory: CudaBackend failed. Falling back to CPU.");
+    }
+  }
+#endif
+
+  // Default: CPU
+  return std::make_unique<CpuBackend>(num_qubits, use_local);
+}
+
+} // namespace qubit_engine

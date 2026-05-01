@@ -1,6 +1,7 @@
 #pragma once
 
 #include "backends/IQuantumBackend.hpp"
+#include "BackendFactory.hpp"
 #include "NoiseModel.hpp"
 #include <complex>
 #include <cstddef>
@@ -15,7 +16,13 @@ namespace qubit_engine {
 class QuantumRegister {
 public:
   // --- Lifecycle ---
+  /// @brief Constructs a register with automatic backend selection via BackendFactory.
   QuantumRegister(size_t n, bool force_local = false);
+
+  /// @brief Dependency injection constructor — accepts a pre-built backend.
+  /// Use this in tests to inject mock/stub backends.
+  QuantumRegister(size_t n, std::unique_ptr<IQuantumBackend> injected_backend);
+
   ~QuantumRegister();
 
   // --- Core Gates ---

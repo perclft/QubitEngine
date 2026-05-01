@@ -454,3 +454,87 @@ kernel void expectation_z_kernel(device Complex* state [[buffer(0)]],
         partial_sums[gid] = local_sum[0];
     }
 }
+
+// Native SWAP Kernel — directly exchanges |01⟩ ↔ |10⟩ amplitudes
+// Eliminates the 3× CNOT dispatch overhead of the decomposed version.
+// Thread count: dim/4 (one thread per group of 4 basis states)
+kernel void swap_kernel(device Complex* state [[buffer(0)]],
+                        constant uint& stride_low [[buffer(1)]],
+                        constant uint& stride_high [[buffer(2)]],
+                        uint id [[thread_position_in_grid]]) {
+    uint low_mask = (1 << stride_low) - 1;
+    uint mid_mask = (1 << (stride_high - 1)) - 1;
+
+    uint i = ((id >> (stride_high - 1)) << stride_high) |
+             (((id & mid_mask) >> stride_low) << (stride_low + 1)) |
+             (id & low_mask);
+
+    // Only swap the |01⟩ and |10⟩ basis states; |00⟩ and |11⟩ stay unchanged
+    uint i01 = i | (1 << stride_low);
+    uint i10 = i | (1 << stride_high);
+
+    Complex temp = state[i01];
+    state[i01] = state[i10];
+    state[i10] = temp;
+}
+
+// Native CZ Kernel — applies phase flip to |11⟩ component
+// Eliminates the H-CNOT-H decomposition overhead.
+// Thread count: dim/4 (one thread per group of 4 basis states)
+kernel void cz_kernel(device Complex* state [[buffer(0)]],
+                      constant uint& stride_low [[buffer(1)]],
+                      constant uint& stride_high [[buffer(2)]],
+                      uint id [[thread_position_in_grid]]) {
+    uint low_mask = (1 << stride_low) - 1;
+    uint mid_mask = (1 << (stride_high - 1)) - 1;
+
+    uint i = ((id >> (stride_high - 1)) << stride_high) |
+             (((id & mid_mask) >> stride_low) << (stride_low + 1)) |
+             (id & low_mask);
+
+    // CZ: only negate the |11⟩ amplitude
+    uint i11 = i | (1 << stride_low) | (1 << stride_high);
+    state[i11].real = -state[i11].real;
+    state[i11].imag = -state[i11].imag;
+}
+
+// 2-Qubit Kraus Channel Kernel
+// Applies a 4×4 matrix to the (q1,q2) subspace and renormalizes.
+// Thread count: dim/4
+kernel void kraus_2q_kernel(device Complex* state [[buffer(0)]],
+                            constant uint& stride_low [[buffer(1)]],
+                            constant uint& stride_high [[buffer(2)]],
+                            constant Complex* matrix [[buffer(3)]],
+                            constant float& inv_norm [[buffer(4)]],
+                            uint id [[thread_position_in_grid]]) {
+    uint low_mask = (1 << stride_low) - 1;
+    uint mid_mask = (1 << (stride_high - 1)) - 1;
+
+    uint i = ((id >> (stride_high - 1)) << stride_high) |
+             (((id & mid_mask) >> stride_low) << (stride_low + 1)) |
+             (id & low_mask);
+
+    uint i00 = i;
+    uint i01 = i | (1 << stride_low);
+    uint i10 = i | (1 << stride_high);
+    uint i11 = i | (1 << stride_low) | (1 << stride_high);
+
+    Complex v[4] = { state[i00], state[i01], state[i10], state[i11] };
+    Complex res[4];
+
+    for (int r = 0; r < 4; ++r) {
+        res[r].real = 0; res[r].imag = 0;
+        for (int c = 0; c < 4; ++c) {
+            Complex m = matrix[r * 4 + c];
+            res[r].real += m.real * v[c].real - m.imag * v[c].imag;
+            res[r].imag += m.real * v[c].imag + m.imag * v[c].real;
+        }
+        res[r].real *= inv_norm;
+        res[r].imag *= inv_norm;
+    }
+
+    state[i00] = res[0];
+    state[i01] = res[1];
+    state[i10] = res[2];
+    state[i11] = res[3];
+}

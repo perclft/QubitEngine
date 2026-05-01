@@ -7,6 +7,15 @@ if(WIN32)
     add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
 endif()
 
+# --- Auth Skip (Testing Only) ---
+# This compile-time flag controls whether the QUBIT_ENGINE_SKIP_AUTH env var
+# bypass is available. Must be OFF for production builds.
+option(ENABLE_SKIP_AUTH "Enable auth skip via QUBIT_ENGINE_SKIP_AUTH env var (testing only)" OFF)
+if(ENABLE_SKIP_AUTH)
+    add_compile_definitions(ENABLE_SKIP_AUTH)
+    message(WARNING "ENABLE_SKIP_AUTH is ON — auth bypass is available. Do NOT use in production!")
+endif()
+
 # --- CMake Modules ---
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 

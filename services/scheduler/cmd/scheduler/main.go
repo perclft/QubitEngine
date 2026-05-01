@@ -137,13 +137,16 @@ func main() {
 		} else {
 			p, ok := peer.FromContext(ctx)
 			if ok && p.Addr != nil {
-				// We strip port from remote IP addr string for rate limiting
 				addrStr := p.Addr.String()
-				if host, _, err := net.SplitHostPort(addrStr); err == nil {
-					key = "rl:ip:" + host + ":" + time.Now().Format("200601021504")
-				} else {
-					key = "rl:ip:" + addrStr + ":" + time.Now().Format("200601021504")
+				// Always extract just the host/IP, stripping any port.
+				// This prevents rate-limit bypass via different source ports.
+				host, _, err := net.SplitHostPort(addrStr)
+				if err != nil {
+					// SplitHostPort failed — addr may be a bare IP or IPv6 without port.
+					// Use the raw address but strip any IPv6 brackets.
+					host = strings.TrimRight(strings.TrimLeft(addrStr, "["), "]")
 				}
+				key = "rl:ip:" + host + ":" + time.Now().Format("200601021504")
 			} else {
 				key = "rl:unknown:" + time.Now().Format("200601021504")
 			}

@@ -45,3 +45,19 @@ cli-rs/target/
 
 # Compiled Python Extensions
 *.pyd
+
+# Compiled Build Artifacts
+a.out
+
+# Helm Dry Run Output
+helm_dry_run.yaml
+
+# Go Workspace (machine-local)
+go.work.sum
+
+# Metal Compiled Libraries
+*.metallib
+
+# Coverage Reports
+coverage/
+*.lcov

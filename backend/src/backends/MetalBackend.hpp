@@ -6,6 +6,23 @@
 
 namespace qubit_engine {
 
+/// @brief Metal GPU backend for quantum simulation on Apple Silicon.
+///
+/// @warning **Precision Notice**: This backend uses **float32** arithmetic internally
+/// (Metal Shading Language does not natively support double-precision on most Apple GPUs).
+/// All state vector data is converted from double64 → float32 on upload and float32 → double64
+/// on download. This introduces ~7 decimal digits of precision (vs ~15 for the CPU backend).
+///
+/// **Impact on variational algorithms (VQE)**:
+/// - For circuits under ~100 iterations, float32 is generally sufficient.
+/// - For high-iteration VQE convergence (>200 iterations) or near-degenerate energy
+///   landscapes, the CPU backend is recommended for final production runs.
+/// - Gradient calculations via the Adjoint method accumulate rounding errors
+///   proportional to circuit depth × parameter count.
+///
+/// **Noise model precision**: Kraus operator probabilities are computed in float32,
+/// which may cause minor deviations from the CPU backend's noise trajectory for
+/// identical random seeds.
 class MetalBackend : public IQuantumBackend {
 public:
   explicit MetalBackend(size_t num_qubits);
@@ -48,6 +65,14 @@ private:
   void dispatchHelper(void *queue, void *pso, void *buffer, size_t dim,
                       std::vector<void *> args, std::vector<size_t> sizes);
 
+  /// @brief Enhanced dispatch helper that supports both inline bytes and MTLBuffer args.
+  /// @param threadCount Exact thread count (not divided by 2 like dispatchHelper)
+  /// @param bufferArgs Map of buffer index -> MTLBuffer pointer (for setBuffer calls)
+  /// @param bytesArgs Map of buffer index -> {data_ptr, size} (for setBytes calls)
+  void dispatchWithBuffers(void *pso, size_t threadCount,
+                           std::vector<std::pair<int, void*>> bufferArgs,
+                           std::vector<std::tuple<int, void*, size_t>> bytesArgs);
+
   size_t num_qubits_;
   size_t capacity_;
 
@@ -76,6 +101,11 @@ private:
   void *denseUnitary1qPipeline_ = nullptr;
   void *denseUnitary2qPipeline_ = nullptr;
   void *kraus1qPipeline_ = nullptr;
+  void *swapPipeline_ = nullptr;
+  void *czPipeline_ = nullptr;
+  void *kraus2qPipeline_ = nullptr;
+
+  size_t getNumQubits() const override { return num_qubits_; }
 };
 
 } // namespace qubit_engine

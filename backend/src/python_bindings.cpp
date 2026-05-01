@@ -107,10 +107,10 @@ PYBIND11_MODULE(core, m) {
           );
       })
       .def("__repr__", [](const QuantumRegister &q) {
-          return "<qubit_engine.QuantumRegister qubits=" + std::to_string(q.getSize()) + " rank=" + std::to_string(q.getRank()) + ">";
+          return "<qubit_engine.QuantumRegister qubits=" + std::to_string(q.getNumQubits()) + " rank=" + std::to_string(q.getRank()) + ">";
       })
       .def("__str__", [](const QuantumRegister &q) {
-          return "QuantumRegister(qubits=" + std::to_string(q.getSize()) + " mpi_rank=" + std::to_string(q.getRank()) + ")";
+          return "QuantumRegister(qubits=" + std::to_string(q.getNumQubits()) + " mpi_rank=" + std::to_string(q.getRank()) + ")";
       })
       .def("setNoiseModel", &QuantumRegister::setNoiseModel,
            py::arg("model"), "Attach a noise model for automatic post-gate noise injection")

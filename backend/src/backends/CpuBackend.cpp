@@ -698,7 +698,10 @@ void CpuBackend::applyNoiseChannel1Q(const NoiseChannel1Q& channel,
 
   // 5. Renormalize: |ψ'⟩ = Ki|ψ⟩ / sqrt(P(i))
   Precision inv_norm = 1.0 / std::sqrt(selected_prob);
-  for (size_t i = 0; i < dim; ++i) {
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+  for (long long i = 0; i < static_cast<long long>(dim); ++i) {
     state[i] *= inv_norm;
   }
 }
@@ -778,7 +781,10 @@ void CpuBackend::applyNoiseChannel2Q(const NoiseChannel2Q& channel,
 
   // 5. Renormalize
   Precision inv_norm = 1.0 / std::sqrt(selected_prob);
-  for (size_t i = 0; i < dim; ++i) {
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+  for (long long i = 0; i < static_cast<long long>(dim); ++i) {
     state[i] *= inv_norm;
   }
 }
@@ -788,7 +794,13 @@ void CpuBackend::applyNoiseChannel2Q(const NoiseChannel2Q& channel,
 int CpuBackend::measure(size_t target) {
   Precision prob0 = 0.0;
   size_t stride = 1ULL << target;
-  for (size_t i = 0; i < state.size(); ++i) {
+  long long dim = static_cast<long long>(state.size());
+
+  // Parallel probability accumulation
+#ifdef _OPENMP
+#pragma omp parallel for reduction(+:prob0) schedule(static)
+#endif
+  for (long long i = 0; i < dim; ++i) {
     if (!(i & stride))
       prob0 += std::norm(state[i]);
   }
@@ -797,16 +809,23 @@ int CpuBackend::measure(size_t target) {
   std::uniform_real_distribution<> dis(0.0, 1.0);
   int outcome = (dis(gen) > prob0) ? 1 : 0;
 
+  // Parallel projection and norm accumulation
   Precision norm = 0.0;
   if (outcome == 0) {
-    for (size_t i = 0; i < state.size(); ++i) {
+#ifdef _OPENMP
+#pragma omp parallel for reduction(+:norm) schedule(static)
+#endif
+    for (long long i = 0; i < dim; ++i) {
       if (i & stride)
         state[i] = 0.0;
       else
         norm += std::norm(state[i]);
     }
   } else {
-    for (size_t i = 0; i < state.size(); ++i) {
+#ifdef _OPENMP
+#pragma omp parallel for reduction(+:norm) schedule(static)
+#endif
+    for (long long i = 0; i < dim; ++i) {
       if (!(i & stride))
         state[i] = 0.0;
       else
@@ -815,8 +834,12 @@ int CpuBackend::measure(size_t target) {
   }
   norm = std::sqrt(norm);
   if (norm > 1e-9) {
-    for (auto &val : state)
-      val /= norm;
+    // Parallel renormalization
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+    for (long long i = 0; i < dim; ++i)
+      state[i] /= norm;
   }
   return outcome;
 }

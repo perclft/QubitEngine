@@ -58,7 +58,8 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DCMAKE_BUILD_TYPE=Release \
             -DMPI_ENABLED=ON \
-            -DENABLE_CUDA=OFF
+            -DENABLE_CUDA=OFF \
+            -DENABLE_SKIP_AUTH=ON
 
       - name: Build
         run: cmake --build build --parallel $(nproc)
@@ -72,12 +73,16 @@ jobs:
           cd build
           ctest --output-on-failure --timeout 300
 
-      - name: Run Benchmarks
+      - name: Run Benchmarks (3-run average)
         env:
           QUBIT_ENGINE_SKIP_AUTH: "1"
         run: |
           export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/build/vcpkg_installed/x64-linux/lib:$LD_LIBRARY_PATH
-          ./bin/benchmark > benchmark_results.txt
+          for i in 1 2 3; do
+            ./bin/benchmark > benchmark_run_$i.txt
+          done
+          # Use the last run as the primary output for artifact upload
+          cp benchmark_run_3.txt benchmark_results.txt
           cat benchmark_results.txt
 
       - name: Upload Benchmark Results
@@ -90,18 +95,22 @@ jobs:
         run: |
           python3 -c "
           import re, sys
-          with open('benchmark_results.txt', 'r') as f:
-              results = f.read()
-          match = re.search(r'Effective Bandwidth:\s+([\d.]+)', results)
-          if not match:
-              print('Could not find benchmark bandwidth')
+          bandwidths = []
+          for i in range(1, 4):
+              with open(f'benchmark_run_{i}.txt', 'r') as f:
+                  results = f.read()
+              match = re.search(r'Effective Bandwidth:\s+([\d.]+)', results)
+              if match:
+                  bandwidths.append(float(match.group(1)))
+          if not bandwidths:
+              print('Could not find any benchmark bandwidth values')
               sys.exit(1)
-          bw = float(match.group(1))
+          avg_bw = sum(bandwidths) / len(bandwidths)
           with open('benchmarks/baseline.txt', 'r') as f:
               baseline = float(f.read().strip())
-          print(f'Baseline: {baseline} GB/s, Current: {bw} GB/s')
-          if bw < baseline * 0.5: # 50% tolerance due to github runner variability
-              print('Regression detected!')
+          print(f'Baseline: {baseline} GB/s, Average ({len(bandwidths)} runs): {avg_bw:.2f} GB/s')
+          if avg_bw < baseline * 0.8:  # 20% tolerance with multi-run averaging
+              print('Regression detected! Average is below 80% of baseline.')
               sys.exit(1)
           print('Benchmark passed.')
           "
@@ -156,7 +165,8 @@ jobs:
             -DVCPKG_TARGET_TRIPLET=arm64-osx \
             -DCMAKE_BUILD_TYPE=Release \
             -DMPI_ENABLED=OFF \
-            -DENABLE_CUDA=OFF
+            -DENABLE_CUDA=OFF \
+            -DENABLE_SKIP_AUTH=ON
 
       - name: Build
         run: cmake --build build --parallel $(sysctl -n hw.ncpu)
@@ -222,7 +232,8 @@ jobs:
             -DVCPKG_TARGET_TRIPLET=x64-windows `
             -DCMAKE_BUILD_TYPE=Release `
             -DENABLE_CUDA=OFF `
-            -DMPI_ENABLED=OFF
+            -DMPI_ENABLED=OFF `
+            -DENABLE_SKIP_AUTH=ON
 
       - name: Build
         run: cmake --build build --parallel $env:NUMBER_OF_PROCESSORS
@@ -341,6 +352,10 @@ jobs:
         working-directory: cli-rs
         run: cargo build --release
 
+      - name: Run Tests
+        working-directory: cli-rs
+        run: cargo test --release
+
       - name: Clippy Lint
         working-directory: cli-rs
         run: cargo clippy -- -D warnings
@@ -406,9 +421,24 @@ jobs:
         
       - name: Wait for services to be ready
         run: |
-          echo "Waiting for services to initialize..."
-          sleep 20
+          echo "Waiting for services to become healthy..."
+          MAX_RETRIES=30
+          RETRY_INTERVAL=2
+          for i in $(seq 1 $MAX_RETRIES); do
+            WEB_OK=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null || echo "000")
+            GRPC_OK=$(nc -z localhost 50051 2>/dev/null && echo "ok" || echo "fail")
+            if [ "$WEB_OK" = "200" ] && [ "$GRPC_OK" = "ok" ]; then
+              echo "All services healthy after $((i * RETRY_INTERVAL))s"
+              docker compose -f deploy/docker/docker-compose.yaml ps
+              exit 0
+            fi
+            echo "Attempt $i/$MAX_RETRIES: web=$WEB_OK grpc=$GRPC_OK — retrying in ${RETRY_INTERVAL}s..."
+            sleep $RETRY_INTERVAL
+          done
+          echo "ERROR: Services failed to become healthy within $((MAX_RETRIES * RETRY_INTERVAL))s"
           docker compose -f deploy/docker/docker-compose.yaml ps
+          docker compose -f deploy/docker/docker-compose.yaml logs
+          exit 1
           
       - name: Verify Web Frontend is up
         run: |
@@ -428,3 +458,41 @@ jobs:
       - name: Docker Compose Logs (on failure)
         if: failure()
         run: docker compose -f deploy/docker/docker-compose.yaml logs
+
+  container-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker Images
+        run: |
+          docker build -t qubitengine/scheduler:scan -f deploy/docker/Dockerfile.scheduler .
+          docker build -t qubitengine/engine:scan -f deploy/docker/Dockerfile.engine .
+          docker build -t qubitengine/web:scan -f deploy/docker/Dockerfile.web .
+
+      - name: Scan Scheduler Image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'qubitengine/scheduler:scan'
+          format: 'table'
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+
+      - name: Scan Engine Image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'qubitengine/engine:scan'
+          format: 'table'
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+
+      - name: Scan Web Image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'qubitengine/web:scan'
+          format: 'table'
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
