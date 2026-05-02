@@ -255,13 +255,17 @@ jobs:
       VCPKG_FORCE_SYSTEM_BINARIES: 1
     steps:
       - name: Install system dependencies needed for checkout
-        run: apt-get update && apt-get install -y git curl zip unzip tar
+        run: |
+          echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries
+          echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
+          for i in 1 2 3; do apt-get update && break || sleep 5; done
+          apt-get install -y git curl zip unzip tar
         
       - uses: actions/checkout@v4
 
       - name: Install build tools and MPI
         run: |
-          apt-get update
+          for i in 1 2 3; do apt-get update && break || sleep 5; done
           apt-get install -y --allow-change-held-packages libopenmpi-dev ninja-build autoconf autoconf-archive automake libtool pkg-config python3-pip default-jre libnccl2 libnccl-dev
           pip3 install cmake
 
