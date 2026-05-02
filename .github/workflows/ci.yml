@@ -248,7 +248,9 @@ jobs:
 
   build-cuda:
     runs-on: ubuntu-latest
-    container: nvidia/cuda:12.2.2-devel-ubuntu22.04
+    container:
+      image: nvidia/cuda:12.2.2-devel-ubuntu22.04
+      options: --dns 8.8.8.8
     env:
       VCPKG_FORCE_SYSTEM_BINARIES: 1
     steps:
