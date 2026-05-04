@@ -1,6 +1,6 @@
 module github.com/perclft/QubitEngine/services/scheduler
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/go-redis/redis/v8 v8.11.5
