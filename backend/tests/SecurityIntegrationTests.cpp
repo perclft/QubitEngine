@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <map>
 #include <string>
+#include <chrono>
 
 using namespace qubit_engine;
 
@@ -27,6 +28,7 @@ protected:
         .set_issuer("qubit-engine")
         .set_audience("qubit-engine-api")
         .set_type("JWT")
+        .set_expires_at(std::chrono::system_clock::now() + std::chrono::hours{1})
         .sign(jwt::algorithm::hs256{"test-secret-123"});
     return token;
   }
