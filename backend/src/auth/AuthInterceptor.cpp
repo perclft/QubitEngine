@@ -54,6 +54,10 @@ void AuthInterceptor::ValidateAuthInternal(const std::map<std::string, std::stri
   }
   
   auto decoded = jwt::decode<jwt::traits::nlohmann_json>(token);
+  if (!decoded.has_payload_claim("exp")) {
+      throw std::runtime_error("Missing exp claim in JWT");
+  }
+
   const char* env_secret = std::getenv("QUBIT_ENGINE_JWT_SECRET");
   if (!env_secret) throw std::runtime_error("Internal server error: JWT secret misconfigured");
   

@@ -115,6 +115,9 @@ void MPSBackend::applyTwoQubitGate(size_t q1, size_t q2,
   }
 
   // 4. Perform SVD
+  // Decompose the intermediate tensor M into U * S * V^\dagger.
+  // U represents the new left tensor block, V^\dagger represents the right.
+  // The singular values S represent the entanglement spectrum across the bond.
   Eigen::JacobiSVD<Eigen::MatrixXcd> svd(M, Eigen::ComputeThinU |
                                                 Eigen::ComputeThinV);
   Eigen::VectorXd S = svd.singularValues();
@@ -123,6 +126,9 @@ void MPSBackend::applyTwoQubitGate(size_t q1, size_t q2,
       svd.matrixV(); // this is V, not V^dagger. SVD is M = U * S * V.adjoint()
 
   // 5. Truncate singular values
+  // To prevent the bond dimension (D) from growing exponentially to 2^N,
+  // we discard singular values below a certain threshold or beyond the max_bond_dimension.
+  // This effectively compresses the state by discarding low-weight entanglement branches.
   int D_new = 0;
   double threshold = 1e-6;
   for (int i = 0; i < S.size(); ++i) {
@@ -135,6 +141,8 @@ void MPSBackend::applyTwoQubitGate(size_t q1, size_t q2,
     D_new = 1;
 
   // 6. Absorb S into V^\dagger (or V.adjoint())
+  // The new bond connects U_trunc and (S_trunc * V_adj_trunc).
+  // Absorbing S into the right side pushes the canonical center to the right.
   Eigen::MatrixXcd U_trunc = U.leftCols(D_new);
   Eigen::MatrixXcd S_trunc = S.head(D_new).asDiagonal();
   Eigen::MatrixXcd V_adj_trunc = V.leftCols(D_new).adjoint(); // (D_new x cols)

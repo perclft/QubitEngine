@@ -595,21 +595,16 @@ std::vector<double> MetalBackend::getProbabilities() const {
 
 double MetalBackend::expectationValue(const std::string &pauli) const {
   uint64_t z_mask = 0;
-  bool is_diagonal = true;
   for (size_t i = 0; i < pauli.length(); ++i) {
     if (pauli[i] == 'Z') {
       z_mask |= (1ULL << i);
-    } else if (pauli[i] != 'I') {
-      is_diagonal = false;
-      break;
+    } else if (pauli[i] == 'X') {
+      z_mask |= (1ULL << i);
+      const_cast<MetalBackend*>(this)->applyHadamard(i);
+    } else if (pauli[i] == 'Y') {
+      z_mask |= (1ULL << i);
+      const_cast<MetalBackend*>(this)->applyRotationX(i, -M_PI / 2.0);
     }
-  }
-
-  if (!is_diagonal) {
-    // For non-diagonal, we could perform basis rotation on GPU, 
-    // but for now we fallback or return 0 for unsupported non-diagonal on Metal
-    spdlog::warn("MetalBackend: Non-diagonal expectation values not yet supported on GPU.");
-    return 0.0;
   }
 
   size_t dim = 1ULL << num_qubits_;
@@ -641,6 +636,16 @@ double MetalBackend::expectationValue(const std::string &pauli) const {
   for (size_t i = 0; i < numGroups; ++i) {
     expected_val += sums[i];
   }
+
+  // Restore state vector basis
+  for (size_t i = 0; i < pauli.length(); ++i) {
+    if (pauli[i] == 'X') {
+      const_cast<MetalBackend*>(this)->applyHadamard(i);
+    } else if (pauli[i] == 'Y') {
+      const_cast<MetalBackend*>(this)->applyRotationX(i, M_PI / 2.0);
+    }
+  }
+
   return (double)expected_val;
 }
 
