@@ -311,6 +311,9 @@ jobs:
         with:
           go-version: '1.24'
 
+      - name: Force GOTOOLCHAIN Auto
+        run: echo "GOTOOLCHAIN=auto" >> $GITHUB_ENV
+
       - name: Install Protoc
         run: |
           sudo apt-get update
@@ -434,6 +437,9 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+
+      - name: Force GOTOOLCHAIN Auto
+        run: echo "GOTOOLCHAIN=auto" >> $GITHUB_ENV
           
       - name: Create .env file
         run: |
