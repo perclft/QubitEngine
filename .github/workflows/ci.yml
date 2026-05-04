@@ -87,11 +87,21 @@ jobs:
           name: code-coverage-linux
           path: build/coverage.xml
 
+      - name: Build Benchmark (No Coverage)
+        run: |
+          cmake -S backend -B build-bench -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DMPI_ENABLED=ON \
+            -DENABLE_CUDA=OFF \
+            -DENABLE_SKIP_AUTH=ON
+          cmake --build build-bench --target benchmark --parallel $(nproc)
+
       - name: Run Benchmarks (3-run average)
         env:
           QUBIT_ENGINE_SKIP_AUTH: "1"
         run: |
-          export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/build/vcpkg_installed/x64-linux/lib:$LD_LIBRARY_PATH
+          export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/build-bench/vcpkg_installed/x64-linux/lib:$LD_LIBRARY_PATH
           for i in 1 2 3; do
             ./bin/benchmark > benchmark_run_$i.txt
           done
