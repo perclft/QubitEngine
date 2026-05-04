@@ -301,6 +301,8 @@ jobs:
 
   test-services:
     runs-on: ubuntu-latest
+    env:
+      GOTOOLCHAIN: auto
     steps:
       - uses: actions/checkout@v4
 
@@ -416,6 +418,8 @@ jobs:
 
   e2e-test:
     runs-on: ubuntu-latest
+    env:
+      GOTOOLCHAIN: auto
     steps:
       - uses: actions/checkout@v4
  
