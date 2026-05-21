@@ -140,10 +140,18 @@ PYBIND11_MODULE(core, m) {
            py::arg("t1_gamma"), py::arg("t2_gamma"),
            py::arg("readout"),
            "Create a realistic noise model with depolarizing, T1, T2, and readout error")
-      .def("add_single_qubit_noise", &qubit_engine::NoiseModel::addSingleQubitNoise,
+      .def_static("IBMBrisbane", &qubit_engine::NoiseModel::IBMBrisbane,
+           "Create a noise model configured with median calibration data for IBM Brisbane (127Q)")
+      .def_static("GoogleSycamore", &qubit_engine::NoiseModel::GoogleSycamore,
+           "Create a noise model configured with median calibration data for Google Sycamore (53Q)")
+      .def("add_single_qubit_noise", static_cast<void (qubit_engine::NoiseModel::*)(qubit_engine::NoiseChannel1Q)>(&qubit_engine::NoiseModel::addSingleQubitNoise),
            py::arg("channel"), "Add a single-qubit noise channel")
-      .def("add_two_qubit_noise", &qubit_engine::NoiseModel::addTwoQubitNoise,
+      .def("add_two_qubit_noise", static_cast<void (qubit_engine::NoiseModel::*)(qubit_engine::NoiseChannel2Q)>(&qubit_engine::NoiseModel::addTwoQubitNoise),
            py::arg("channel"), "Add a two-qubit noise channel")
+      .def("add_single_qubit_noise", static_cast<void (qubit_engine::NoiseModel::*)(size_t, qubit_engine::NoiseChannel1Q)>(&qubit_engine::NoiseModel::addSingleQubitNoise),
+           py::arg("qubit"), py::arg("channel"), "Add a per-qubit noise channel")
+      .def("add_two_qubit_noise", static_cast<void (qubit_engine::NoiseModel::*)(size_t, size_t, qubit_engine::NoiseChannel2Q)>(&qubit_engine::NoiseModel::addTwoQubitNoise),
+           py::arg("q1"), py::arg("q2"), py::arg("channel"), "Add a per-edge two-qubit noise channel")
       .def("set_readout_error", &qubit_engine::NoiseModel::setReadoutError,
            py::arg("qubit"), py::arg("error"), "Set readout error for a specific qubit")
       .def("set_readout_error_all", &qubit_engine::NoiseModel::setReadoutErrorAll,

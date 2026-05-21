@@ -17,17 +17,27 @@ interface CircuitDiagramProps {
 }
 
 const GATE_COLORS: Record<string, string> = {
-  'H': 'bg-indigo-500',
-  'X': 'bg-rose-500',
-  'Y': 'bg-emerald-500',
-  'Z': 'bg-amber-500',
-  'CNOT': 'bg-sky-500',
-  'CZ': 'bg-cyan-500',
-  'S': 'bg-violet-500',
-  'T': 'bg-purple-500',
-  'RX': 'bg-fuchsia-500',
-  'RY': 'bg-pink-500',
-  'RZ': 'bg-orange-500',
+  'H': 'fill-indigo-600',
+  'X': 'fill-rose-600',
+  'Y': 'fill-emerald-600',
+  'Z': 'fill-amber-600',
+  'CX': 'fill-sky-600',
+  'CNOT': 'fill-sky-600',
+  'CZ': 'fill-cyan-600',
+  'SW': 'fill-violet-600',
+  'SWAP': 'fill-violet-600',
+  'S': 'fill-pink-600',
+  'T': 'fill-teal-600',
+  'Rx': 'fill-orange-600',
+  'RX': 'fill-orange-600',
+  'Ry': 'fill-lime-600',
+  'RY': 'fill-lime-600',
+  'Rz': 'fill-sky-600',
+  'RZ': 'fill-sky-600',
+  'CCX': 'fill-fuchsia-600',
+  'TOFFOLI': 'fill-fuchsia-600',
+  'M': 'fill-slate-600',
+  'MEASURE': 'fill-slate-600',
 };
 
 export function CircuitDiagram({ numQubits, gates, width = 800 }: CircuitDiagramProps) {
@@ -97,10 +107,12 @@ export function CircuitDiagram({ numQubits, gates, width = 800 }: CircuitDiagram
               ))}
 
               {gate.targets.map(target => {
-                const isCNOT = gate.type === 'CNOT';
-                const color = GATE_COLORS[gate.type] || 'bg-slate-600';
+                const isCNOT = gate.type === 'CNOT' || gate.type === 'CX';
+                const isCCX = gate.type === 'CCX' || gate.type === 'TOFFOLI';
+                const isTargetWithPlus = isCNOT || isCCX;
+                const color = GATE_COLORS[gate.type] || 'fill-slate-600';
                 
-                if (isCNOT) {
+                if (isTargetWithPlus) {
                   return (
                     <g key={`target-${target}`}>
                       <circle
@@ -134,7 +146,7 @@ export function CircuitDiagram({ numQubits, gates, width = 800 }: CircuitDiagram
                 textAnchor="middle"
                 className="fill-white text-[9px] font-bold pointer-events-none"
               >
-                {gate.type === 'CNOT' ? '' : gate.type}
+                {(gate.type === 'CNOT' || gate.type === 'CX' || gate.type === 'CCX' || gate.type === 'TOFFOLI') ? '' : gate.type}
               </text>
             </motion.g>
           );

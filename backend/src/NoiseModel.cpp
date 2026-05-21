@@ -1,4 +1,5 @@
 #include "NoiseModel.hpp"
+#include "HardwareConfig.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -293,6 +294,16 @@ void NoiseModel::addTwoQubitNoise(NoiseChannel2Q channel) {
   two_qubit_channels_.push_back(std::move(channel));
 }
 
+void NoiseModel::addSingleQubitNoise(size_t qubit, NoiseChannel1Q channel) {
+  per_qubit_channels_[qubit].push_back(std::move(channel));
+}
+
+void NoiseModel::addTwoQubitNoise(size_t q1, size_t q2, NoiseChannel2Q channel) {
+  per_edge_channels_[{q1, q2}].push_back(std::move(channel));
+  // Also add reverse edge to be safe, since physical edges are bidirectional for noise
+  per_edge_channels_[{q2, q1}].push_back(channel);
+}
+
 void NoiseModel::setReadoutError(size_t qubit, ReadoutError error) {
   per_qubit_readout_[qubit] = error;
   has_readout_ = true;
@@ -315,7 +326,10 @@ void NoiseModel::setCoherentError(int gate_type_int, Precision epsilon) {
 
 bool NoiseModel::isEnabled() const {
   return enabled_ && (!single_qubit_channels_.empty() ||
-                       !two_qubit_channels_.empty() || has_readout_);
+                       !two_qubit_channels_.empty() || 
+                       !per_qubit_channels_.empty() || 
+                       !per_edge_channels_.empty() || 
+                       has_readout_);
 }
 
 const std::vector<NoiseChannel1Q>& NoiseModel::getSingleQubitChannels() const {
@@ -324,6 +338,24 @@ const std::vector<NoiseChannel1Q>& NoiseModel::getSingleQubitChannels() const {
 
 const std::vector<NoiseChannel2Q>& NoiseModel::getTwoQubitChannels() const {
   return two_qubit_channels_;
+}
+
+const std::vector<NoiseChannel1Q>& NoiseModel::getSingleQubitChannels(size_t qubit) const {
+  auto it = per_qubit_channels_.find(qubit);
+  if (it != per_qubit_channels_.end()) {
+    return it->second;
+  }
+  static const std::vector<NoiseChannel1Q> empty;
+  return empty;
+}
+
+const std::vector<NoiseChannel2Q>& NoiseModel::getTwoQubitChannels(size_t q1, size_t q2) const {
+  auto it = per_edge_channels_.find({q1, q2});
+  if (it != per_edge_channels_.end()) {
+    return it->second;
+  }
+  static const std::vector<NoiseChannel2Q> empty;
+  return empty;
 }
 
 bool NoiseModel::hasReadoutError() const { return has_readout_; }
@@ -388,6 +420,49 @@ NoiseModel NoiseModel::Realistic(Precision p1q, Precision p2q,
   }
 
   return model;
+}
+
+NoiseModel NoiseModel::FromCalibration(const DeviceCalibration& cal) {
+  NoiseModel model;
+  
+  // Add per-qubit noise (T1, T2, readout, 1Q depolarizing)
+  for (size_t i = 0; i < cal.qubit_calibrations.size(); ++i) {
+    const auto& qcal = cal.qubit_calibrations[i];
+    
+    if (qcal.t1_us > 0.0 && qcal.t2_us > 0.0) {
+      // gate_time is in ns, convert to us
+      double gate_time_us = cal.single_qubit_gate_time_ns / 1000.0;
+      model.addSingleQubitNoise(i, makeThermalRelaxationChannel(qcal.t1_us, qcal.t2_us, gate_time_us));
+    }
+    
+    if (qcal.gate_error_1q > 0.0) {
+      model.addSingleQubitNoise(i, makeDepolarizingChannel1Q(qcal.gate_error_1q));
+    }
+    
+    if (qcal.readout_error > 0.0) {
+      ReadoutError err;
+      err.p0_given_1 = qcal.readout_error;
+      err.p1_given_0 = qcal.readout_error;
+      model.setReadoutError(i, err);
+    }
+  }
+  
+  // Add per-edge noise (2Q depolarizing)
+  for (const auto& ccal : cal.coupler_calibrations) {
+    if (ccal.cx_error > 0.0) {
+      model.addTwoQubitNoise(ccal.qubit1, ccal.qubit2, makeDepolarizingChannel2Q(ccal.cx_error));
+    }
+  }
+  
+  return model;
+}
+
+NoiseModel NoiseModel::IBMBrisbane() {
+    return FromCalibration(HardwareConfig::ibmBrisbane());
+}
+
+NoiseModel NoiseModel::GoogleSycamore() {
+    return FromCalibration(HardwareConfig::googleSycamore());
 }
 
 } // namespace qubit_engine

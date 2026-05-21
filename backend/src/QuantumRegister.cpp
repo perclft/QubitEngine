@@ -252,6 +252,9 @@ void QuantumRegister::applyPostGateNoise1Q(size_t target) {
   for (const auto& channel : noise_model_->getSingleQubitChannels()) {
     backend->applyNoiseChannel1Q(channel, target);
   }
+  for (const auto& channel : noise_model_->getSingleQubitChannels(target)) {
+    backend->applyNoiseChannel1Q(channel, target);
+  }
 }
 
 void QuantumRegister::applyPostGateNoise2Q(size_t q1, size_t q2) {
@@ -261,8 +264,17 @@ void QuantumRegister::applyPostGateNoise2Q(size_t q1, size_t q2) {
     backend->applyNoiseChannel1Q(channel, q1);
     backend->applyNoiseChannel1Q(channel, q2);
   }
+  for (const auto& channel : noise_model_->getSingleQubitChannels(q1)) {
+    backend->applyNoiseChannel1Q(channel, q1);
+  }
+  for (const auto& channel : noise_model_->getSingleQubitChannels(q2)) {
+    backend->applyNoiseChannel1Q(channel, q2);
+  }
   // Apply two-qubit channels to the pair
   for (const auto& channel : noise_model_->getTwoQubitChannels()) {
+    backend->applyNoiseChannel2Q(channel, q1, q2);
+  }
+  for (const auto& channel : noise_model_->getTwoQubitChannels(q1, q2)) {
     backend->applyNoiseChannel2Q(channel, q1, q2);
   }
 }

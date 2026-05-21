@@ -6,6 +6,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <utility>
 
 namespace qubit_engine {
 
@@ -89,6 +90,8 @@ public:
 
   void addSingleQubitNoise(NoiseChannel1Q channel);
   void addTwoQubitNoise(NoiseChannel2Q channel);
+  void addSingleQubitNoise(size_t qubit, NoiseChannel1Q channel);
+  void addTwoQubitNoise(size_t q1, size_t q2, NoiseChannel2Q channel);
   void setReadoutError(size_t qubit, ReadoutError error);
   void setReadoutErrorAll(ReadoutError error);
   void setEnabled(bool enabled);
@@ -103,6 +106,8 @@ public:
   [[nodiscard]] bool isEnabled() const;
   [[nodiscard]] const std::vector<NoiseChannel1Q>& getSingleQubitChannels() const;
   [[nodiscard]] const std::vector<NoiseChannel2Q>& getTwoQubitChannels() const;
+  [[nodiscard]] const std::vector<NoiseChannel1Q>& getSingleQubitChannels(size_t qubit) const;
+  [[nodiscard]] const std::vector<NoiseChannel2Q>& getTwoQubitChannels(size_t q1, size_t q2) const;
   [[nodiscard]] bool hasReadoutError() const;
   [[nodiscard]] ReadoutError getReadoutError(size_t qubit) const;
 
@@ -115,11 +120,30 @@ public:
   static NoiseModel Realistic(Precision p1q, Precision p2q,
                                 Precision t1_gamma, Precision t2_gamma,
                                 ReadoutError readout);
+  
+  static NoiseModel IBMBrisbane();
+  static NoiseModel GoogleSycamore();
+  
+  // Forward declare DeviceCalibration since we didn't include HardwareConfig.hpp
+  // Actually, we can just use the struct name
+  static NoiseModel FromCalibration(const struct DeviceCalibration& cal);
 
 private:
   bool enabled_ = true;
   std::vector<NoiseChannel1Q> single_qubit_channels_;
   std::vector<NoiseChannel2Q> two_qubit_channels_;
+  
+  struct PairHash {
+      template <class T1, class T2>
+      std::size_t operator () (const std::pair<T1,T2> &p) const {
+          auto h1 = std::hash<T1>{}(p.first);
+          auto h2 = std::hash<T2>{}(p.second);
+          return h1 ^ (h2 << 1);
+      }
+  };
+  std::unordered_map<size_t, std::vector<NoiseChannel1Q>> per_qubit_channels_;
+  std::unordered_map<std::pair<size_t, size_t>, std::vector<NoiseChannel2Q>, PairHash> per_edge_channels_;
+
   std::unordered_map<size_t, ReadoutError> per_qubit_readout_;
   std::unordered_map<int, Precision> coherent_errors_;
   ReadoutError default_readout_;

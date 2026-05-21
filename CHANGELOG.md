@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **Pythonic Circuit-Builder API**: Introduced fluent `Circuit` builder (`circuit.py`) with support for basic quantum gates, `Result` metadata wrapping, high-level noise wrapper, and VQE execution.
+- **Circuit Presets (Web)**: Integrated standard quantum algorithm presets (Bell, GHZ, QFT, Teleportation) for quick loading in the Circuit Lab.
+- **Hardware-Specific Noise Presets**: Added calibration configurations for `IBM Brisbane` and `Google Sycamore` with customized per-qubit and per-edge noise channel application.
 - **MPS Backend Noise & Scaling**: Implemented top-k sampling for `getProbabilities()` and full stochastic Kraus operator support for applying noise channels (`applyNoiseChannel1Q`, `applyNoiseChannel2Q`, `applyDepolarizingNoise`).
 - **OpenQASM 3.0 Tier 1**: Expanded `QASMParser` to support control flow (`if`/`else`), custom `gate` declarations, `barrier`, and `reset` commands. Updated exporter to round-trip these features.
 - **Validation Suite**: Added `AlgorithmValidation.cpp` and `MirrorCircuitTests.cpp` for large-scale cross-simulator correctness checking.
@@ -18,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Security Hardening**: Added strict JWT audience validation (`qubit-engine-api`) in `AuthInterceptor`.
 
 ### Changed
+- **Circuit Lab Visualizer Polish**: Refactored `CircuitDiagram.tsx` to support native SVG `fill-` classes, rendering correct vibrant gate colors. Added standard circle-with-plus target representation for CNOT (`CX`) and Toffoli (`CCX`) gates.
+- **Go Toolchain Security Hardening**: Upgraded Go compiler version to `1.25.10` in all Go services and the root workspace to fix high-severity vulnerabilities (`CVE-2026-33811`, `CVE-2026-33814`, `CVE-2026-39820`, `CVE-2026-39836`, `CVE-2026-42499`).
 - **Surface Code Layout**: Switched to a standard distance-3 rotated layout to ensure stabilizer commutativity.
 - **Simulation Flow**: Updated the QEC simulation loop to treat the first cycle as a projection-only round, preventing false corrections.
 - **Tokenizer Logic**: Refactored tokenization to prioritize punctuation over numeric literals (fixing `->` parsing).

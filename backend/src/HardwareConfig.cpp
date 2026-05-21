@@ -63,3 +63,86 @@ void HardwareConfig::loadDefaultHeavyHex() {
 }
 
 } // namespace qubit_engine
+
+namespace qubit_engine {
+
+DeviceCalibration HardwareConfig::ibmBrisbane() {
+    DeviceCalibration cal;
+    cal.device_name = "IBM Brisbane (Eagle r3)";
+    cal.num_qubits = 127;
+    cal.single_qubit_gate_time_ns = 35.0; // Typical SX gate time
+    
+    // Median values
+    double median_t1 = 260.0;
+    double median_t2 = 175.0;
+    double median_readout = 0.014; // 1.4%
+    double median_1q_error = 0.00024; // 0.024%
+    
+    for (int i = 0; i < cal.num_qubits; ++i) {
+        cal.qubit_calibrations.push_back({
+            median_t1,
+            median_t2,
+            median_readout,
+            median_1q_error
+        });
+        cal.topology_nodes.push_back({i, (double)(i % 10), (double)(i / 10)}); // Dummy generic grid
+    }
+    
+    // Simple line connectivity for mock (full HeavyHex would be large)
+    for (int i = 0; i < cal.num_qubits - 1; ++i) {
+        cal.coupler_calibrations.push_back({
+            i, i + 1,
+            0.0076, // 0.76% median 2Q error
+            500.0   // 500ns ECR time
+        });
+        cal.topology_edges.push_back({i, i + 1});
+    }
+    return cal;
+}
+
+DeviceCalibration HardwareConfig::googleSycamore() {
+    DeviceCalibration cal;
+    cal.device_name = "Google Sycamore";
+    cal.num_qubits = 53;
+    cal.single_qubit_gate_time_ns = 25.0;
+    
+    for (int i = 0; i < cal.num_qubits; ++i) {
+        cal.qubit_calibrations.push_back({
+            15.0,   // 15us
+            12.0,   // 12us
+            0.038,  // 3.8%
+            0.0015  // 0.15%
+        });
+        cal.topology_nodes.push_back({i, (double)(i % 10), (double)(i / 10)});
+    }
+    
+    for (int i = 0; i < cal.num_qubits - 1; ++i) {
+        cal.coupler_calibrations.push_back({
+            i, i + 1,
+            0.006,  // 0.6%
+            32.0    // 32ns
+        });
+        cal.topology_edges.push_back({i, i + 1});
+    }
+    return cal;
+}
+
+DeviceCalibration HardwareConfig::genericDevice(int n) {
+    DeviceCalibration cal;
+    cal.device_name = "Generic " + std::to_string(n) + "Q";
+    cal.num_qubits = n;
+    cal.single_qubit_gate_time_ns = 50.0;
+    
+    for (int i = 0; i < n; ++i) {
+        cal.qubit_calibrations.push_back({50.0, 30.0, 0.01, 0.001});
+        cal.topology_nodes.push_back({i, (double)(i % 5), (double)(i / 5)});
+    }
+    
+    for (int i = 0; i < n - 1; ++i) {
+        cal.coupler_calibrations.push_back({i, i + 1, 0.01, 100.0});
+        cal.topology_edges.push_back({i, i + 1});
+    }
+    return cal;
+}
+
+} // namespace qubit_engine
