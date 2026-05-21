@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Circuit Lab Visualizer Polish**: Refactored `CircuitDiagram.tsx` to support native SVG `fill-` classes, rendering correct vibrant gate colors. Added standard circle-with-plus target representation for CNOT (`CX`) and Toffoli (`CCX`) gates.
 - **Go Toolchain Security Hardening**: Upgraded Go compiler version to `1.25.10` in all Go services and the root workspace to fix high-severity vulnerabilities (`CVE-2026-33811`, `CVE-2026-33814`, `CVE-2026-39820`, `CVE-2026-39836`, `CVE-2026-42499`).
+- **Debian Engine Image Security Hardening**: Added `apt-get upgrade -y` to the engine container runtime stage, resolving critical vulnerabilities in `libgnutls30` (`CVE-2026-33845`, `CVE-2026-42010`, `CVE-2026-33846`, `CVE-2026-3833`, `CVE-2026-42009`).
 - **Surface Code Layout**: Switched to a standard distance-3 rotated layout to ensure stabilizer commutativity.
 - **Simulation Flow**: Updated the QEC simulation loop to treat the first cycle as a projection-only round, preventing false corrections.
 - **Tokenizer Logic**: Refactored tokenization to prioritize punctuation over numeric literals (fixing `->` parsing).

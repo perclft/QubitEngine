@@ -29,7 +29,7 @@ RUN cmake -B build -S backend \
 # --- Stage 2: Runtime (Debian Slim) ---
 FROM debian:bookworm-slim
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     libgrpc++1.51 libprotobuf32 libssl3 \
     && rm -rf /var/lib/apt/lists/*
 

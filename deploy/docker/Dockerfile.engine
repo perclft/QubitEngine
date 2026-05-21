@@ -118,7 +118,7 @@ RUN ldconfig
 # But for now libcudart is the main one linked.
 
 # Install runtime libs
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libstdc++6 libgrpc++1.51 libprotobuf32 libssl3 zlib1g libc-ares2 \
     libgflags2.2 libgoogle-glog0v6 \
     libopenmpi3 openmpi-bin libgomp1 \
