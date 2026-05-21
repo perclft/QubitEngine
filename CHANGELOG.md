@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tokenizer Logic**: Refactored tokenization to prioritize punctuation over numeric literals (fixing `->` parsing).
 
 ### Fixed
+- **Web Lockfile Restorations**: Explicitly declared `@testing-library/dom` as a devDependency in the frontend to prevent lockfile pruning of peer dependencies under `--legacy-peer-deps` installation policies.
 - **QASM Roundtrip**: Resolved failures in measurement assignment parsing and roundtrip fidelity.
 - **JIT Property Flakiness**: Fixed race conditions and stability issues in JIT property-based tests.
 - **Stabilizer Noise Consistency**: Corrected noise threshold assertions in `StabilizerBackend` tests.
