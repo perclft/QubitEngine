@@ -27,7 +27,7 @@
     "jose": "^6.2.2",
     "lucide-react": "^0.577.0",
     "minimatch": "^9.0.7",
-    "next": "^16.2.3",
+    "next": "^16.2.6",
     "picomatch": "^4.0.4",
     "protobufjs": "^7.5.5",
     "react": "19.2.3",
