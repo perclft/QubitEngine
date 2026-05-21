@@ -14,7 +14,12 @@ enum class ASTNodeType {
     MEASURE,
     INCLUDE,
     QREG_DECL,
-    CREG_DECL
+    CREG_DECL,
+    BARRIER,
+    RESET,
+    IF_STMT,
+    BLOCK,
+    GATE_DEFINITION
 };
 
 struct ASTNode {
@@ -54,6 +59,39 @@ struct ASTCRegDecl : public ASTNode {
     int size;
     
     ASTCRegDecl() { type = ASTNodeType::CREG_DECL; }
+};
+
+struct ASTBarrier : public ASTNode {
+    std::vector<std::string> qubits;
+    ASTBarrier() { type = ASTNodeType::BARRIER; }
+};
+
+struct ASTReset : public ASTNode {
+    std::string qubit;
+    ASTReset() { type = ASTNodeType::RESET; }
+};
+
+struct ASTBlock : public ASTNode {
+    std::vector<std::shared_ptr<ASTNode>> statements;
+    ASTBlock() { type = ASTNodeType::BLOCK; }
+};
+
+struct ASTIfStmt : public ASTNode {
+    std::string condition_var;
+    int condition_value;
+    std::shared_ptr<ASTBlock> then_block;
+    std::shared_ptr<ASTBlock> else_block; // optional
+    
+    ASTIfStmt() { type = ASTNodeType::IF_STMT; }
+};
+
+struct ASTGateDefinition : public ASTNode {
+    std::string name;
+    std::vector<std::string> params;
+    std::vector<std::string> qubits;
+    std::shared_ptr<ASTBlock> body;
+    
+    ASTGateDefinition() { type = ASTNodeType::GATE_DEFINITION; }
 };
 
 } // namespace parser

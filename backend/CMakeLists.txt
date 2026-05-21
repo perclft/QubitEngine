@@ -474,6 +474,47 @@ target_link_libraries(tests PRIVATE
 add_test(NAME CoreTests COMMAND tests)
 
 # =================================================================
+# Validation Tests
+# =================================================================
+add_executable(validation_tests
+    tests/validation/AlgorithmValidation.cpp
+    tests/validation/MirrorCircuitTests.cpp
+    tests/validation/CrossSimulatorValidation.cpp
+)
+
+target_sources(validation_tests PRIVATE
+    src/ServiceImpl.cpp
+    ${PROTO_SRC_GENERATED_CPP}
+    ${GRPC_SRC_GENERATED_CPP}
+)
+
+target_include_directories(validation_tests PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(validation_tests PRIVATE
+    qubit_engine_core
+    GTest::gtest
+    GTest::gtest_main
+    gRPC::grpc++
+    protobuf::libprotobuf
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    $<$<BOOL:${UNIX}>:dl>
+    $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::pull>
+    $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
+    spdlog::spdlog
+    ${REDIS_LIB}
+    ${HIREDIS_LIB}
+    nlohmann_json::nlohmann_json
+)
+
+# Absolute golden-vector path so ctest (CWD = build/) always finds Qiskit references.
+file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/tests/validation/golden" QUBIT_ENGINE_GOLDEN_DIR)
+target_compile_definitions(validation_tests PRIVATE
+    "QUBIT_ENGINE_GOLDEN_DIR=\"${QUBIT_ENGINE_GOLDEN_DIR}\"")
+
+add_test(NAME ValidationTests COMMAND validation_tests
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+# =================================================================
 # Benchmark
 # =================================================================
 add_executable(benchmark tests/Benchmark.cpp)
@@ -527,10 +568,10 @@ endif()
 # =================================================================
 # Fuzzing
 # =================================================================
-option(ENABLE_FUZZING "Enable LLVM libFuzzer for OpenQASM3Parser" OFF)
+option(ENABLE_FUZZING "Enable LLVM libFuzzer for OpenQASMParser" OFF)
 if(ENABLE_FUZZING)
     message(STATUS "Fuzzing enabled. Building OpenQASMFuzzTest.")
-    add_executable(OpenQASMFuzzTest tests/OpenQASMFuzzTest.cpp src/OpenQASM3Parser.cpp src/OpenQASM.cpp)
+    add_executable(OpenQASMFuzzTest tests/OpenQASMFuzzTest.cpp src/parser/QASMParser.cpp src/OpenQASM.cpp)
     target_include_directories(OpenQASMFuzzTest PRIVATE src)
     target_compile_options(OpenQASMFuzzTest PRIVATE -fprofile-instr-generate -fcoverage-mapping -fsanitize=fuzzer,address,undefined)
     target_link_options(OpenQASMFuzzTest PRIVATE -fsanitize=fuzzer,address,undefined)

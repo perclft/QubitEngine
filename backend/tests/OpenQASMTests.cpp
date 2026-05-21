@@ -133,6 +133,72 @@ TEST(QASMParserTest, ParseClassicalBits) {
   EXPECT_EQ(circuit.num_classical, 2);
 }
 
+TEST(QASMParserTest, ParseBarrier) {
+  QASMParser parser;
+  std::string code = R"(
+    OPENQASM 3.0;
+    qubit[2] q;
+    barrier q[0], q[1];
+  )";
+  auto circuit = parser.parse(code);
+  ASSERT_EQ(circuit.gates.size(), 1);
+  EXPECT_EQ(circuit.gates[0].name, "barrier");
+  EXPECT_EQ(circuit.gates[0].qubits.size(), 2);
+}
+
+TEST(QASMParserTest, ParseReset) {
+  QASMParser parser;
+  std::string code = R"(
+    OPENQASM 3.0;
+    qubit[1] q;
+    reset q[0];
+  )";
+  auto circuit = parser.parse(code);
+  ASSERT_EQ(circuit.gates.size(), 1);
+  EXPECT_EQ(circuit.gates[0].name, "reset");
+}
+
+TEST(QASMParserTest, ParseGateDefinition) {
+  QASMParser parser;
+  std::string code = R"(
+    OPENQASM 3.0;
+    gate bell q0, q1 {
+        h q0;
+        cx q0, q1;
+    }
+    qubit[2] q;
+    bell q[0], q[1];
+  )";
+  auto circuit = parser.parse(code);
+  EXPECT_EQ(circuit.gate_definitions.size(), 1);
+  EXPECT_TRUE(circuit.gate_definitions.count("bell"));
+  EXPECT_EQ(circuit.gates.size(), 1);
+  EXPECT_EQ(circuit.gates[0].name, "bell");
+}
+
+TEST(QASMParserTest, ParseIfElse) {
+  QASMParser parser;
+  std::string code = R"(
+    OPENQASM 3.0;
+    qubit[1] q;
+    bit[1] c;
+    if (c[0] == 1) {
+        x q[0];
+    } else {
+        h q[0];
+    }
+  )";
+  auto circuit = parser.parse(code);
+  ASSERT_EQ(circuit.gates.size(), 2);
+  EXPECT_EQ(circuit.gates[0].name, "x");
+  EXPECT_EQ(circuit.gates[0].condition_var, "c[0]");
+  EXPECT_EQ(circuit.gates[0].condition_val, 1);
+  
+  EXPECT_EQ(circuit.gates[1].name, "h");
+  EXPECT_EQ(circuit.gates[1].condition_var, "c[0]");
+  EXPECT_EQ(circuit.gates[1].condition_val, 0);
+}
+
 // ===== Exporter Tests =====
 
 TEST(QASMExporterTest, ExportQASM3_Header) {
@@ -188,6 +254,26 @@ TEST(QASMExporterTest, ExportQASM3_MeasureAll) {
 
   EXPECT_NE(output.find("c[0] = measure q[0]"), std::string::npos);
   EXPECT_NE(output.find("c[1] = measure q[1]"), std::string::npos);
+}
+
+TEST(QASMExporterTest, ExportQASM3_ObjectApi) {
+  QASMParser parser;
+  std::string code = R"(
+    OPENQASM 3.0;
+    qubit[1] q;
+    bit[1] c;
+    if (c[0] == 1) x q[0];
+    barrier q[0];
+    reset q[0];
+  )";
+  auto circuit = parser.parse(code);
+  
+  QASMExporter exporter;
+  auto output = exporter.to_qasm3(circuit);
+  
+  EXPECT_NE(output.find("if (c[0] == 1) x q[0];"), std::string::npos);
+  EXPECT_NE(output.find("barrier q[0];"), std::string::npos);
+  EXPECT_NE(output.find("reset q[0];"), std::string::npos);
 }
 
 // ===== Roundtrip Test: Export -> Parse -> Verify =====

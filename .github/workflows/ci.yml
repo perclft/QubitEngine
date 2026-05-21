@@ -66,6 +66,13 @@ jobs:
       - name: Build
         run: cmake --build build --parallel $(nproc)
 
+      - name: Generate Golden State Vectors
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip
+          pip3 install --break-system-packages qiskit qiskit-aer
+          python3 scripts/generate_golden_vectors.py
+
       - name: Run Tests
         env:
           QUBIT_ENGINE_SKIP_AUTH: "1"

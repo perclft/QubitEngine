@@ -13,9 +13,10 @@ protected:
 #else
     setenv("QUBIT_ENGINE_SKIP_AUTH", "1", 1);
 #endif
+    service = std::make_unique<QubitEngineServiceImpl>();
   }
 
-  QubitEngineServiceImpl service;
+  std::unique_ptr<QubitEngineServiceImpl> service;
   grpc::ServerContext context;
 };
 
@@ -40,7 +41,7 @@ TEST_F(ServiceTest, RunCircuit_BellState) {
   StateResponse response;
 
   // 3. Execute
-  grpc::Status status = service.RunCircuit(&context, &request, &response);
+  grpc::Status status = service->RunCircuit(&context, &request, &response);
 
   // 4. Verify Status
   EXPECT_TRUE(status.ok()) << "RPC failed: " << status.error_message();
@@ -67,7 +68,7 @@ TEST_F(ServiceTest, RunCircuit_InvalidQubits) {
   request.set_num_qubits(31); // Limit is 30
   StateResponse response;
 
-  grpc::Status status = service.RunCircuit(&context, &request, &response);
+  grpc::Status status = service->RunCircuit(&context, &request, &response);
 
   EXPECT_EQ(status.error_code(), grpc::StatusCode::INVALID_ARGUMENT);
 }

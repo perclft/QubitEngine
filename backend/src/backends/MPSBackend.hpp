@@ -31,6 +31,10 @@ private:
   // Truncates the bond between node_i and node_i+1 using SVD
   void contractAndTruncate(size_t left_qubit);
 
+  // Density matrix helpers for noise models
+  [[nodiscard]] std::array<Complex, 4> getReducedDensityMatrix1Q(size_t target) const;
+  [[nodiscard]] std::array<Complex, 16> getReducedDensityMatrix2Q(size_t q1, size_t q2) const;
+
 public:
   MPSBackend(int num_qubits, int max_bond_dimension = 64);
   ~MPSBackend() override = default;
@@ -51,9 +55,11 @@ public:
   void applyRotationZ(size_t target, Precision angle) override;
   void applySWAP(size_t qubit1, size_t qubit2) override;
   void applyCZ(size_t control, size_t target) override;
-  void applyDepolarizingNoise(Precision p) override {}
-  void applyNoiseChannel1Q(const NoiseChannel1Q& /*channel*/, size_t /*target*/) override {}
-  void applyNoiseChannel2Q(const NoiseChannel2Q& /*channel*/, size_t /*q1*/, size_t /*q2*/) override {}
+
+  // --- Noise ---
+  void applyDepolarizingNoise(Precision p) override;
+  void applyNoiseChannel1Q(const NoiseChannel1Q& channel, size_t target) override;
+  void applyNoiseChannel2Q(const NoiseChannel2Q& channel, size_t q1, size_t q2) override;
 
   int measure(size_t target) override;
   std::vector<double> getProbabilities() const override;

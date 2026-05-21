@@ -1,18 +1,17 @@
-#include "OpenQASM3Parser.hpp"
+#include "parser/QASMParser.hpp"
 #include <cstdint>
 #include <string>
+#include <memory>
 
 // Fuzzer entry point
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-  // Convert input data to string
   std::string input(reinterpret_cast<const char *>(data), size);
 
   try {
-    qubit_engine::qasm3::OpenQASM3Parser parser(input);
-    parser.parse();
+    qubit_engine::parser::QASMParser parser(input);
+    std::shared_ptr<qubit_engine::parser::ASTNode> ast = parser.parse();
   } catch (...) {
-    // Ignore exceptions, we only care about crashes (e.g., memory corruption, segfaults)
   }
 
-  return 0; // Return 0 to indicate successful execution of the fuzzer iteration
+  return 0;
 }

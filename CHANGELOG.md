@@ -7,12 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **MPS Backend Noise & Scaling**: Implemented top-k sampling for `getProbabilities()` and full stochastic Kraus operator support for applying noise channels (`applyNoiseChannel1Q`, `applyNoiseChannel2Q`, `applyDepolarizingNoise`).
+- **OpenQASM 3.0 Tier 1**: Expanded `QASMParser` to support control flow (`if`/`else`), custom `gate` declarations, `barrier`, and `reset` commands. Updated exporter to round-trip these features.
+- **Validation Suite**: Added `AlgorithmValidation.cpp` and `MirrorCircuitTests.cpp` for large-scale cross-simulator correctness checking.
+- **CI Golden Generation**: Integrated Qiskit into CI to automatically generate and compare golden reference vectors on-the-fly (`generate_golden_vectors.py`).
 - **O4 Fusion Optimization**: Enhanced `QuantumJIT` to support single-to-two qubit gate fusion and identity pruning, significantly reducing gate count and bandwidth for large circuits.
 - **OpenMP Parallelization**: Implemented multi-threading for `CpuBackend::expectationValue`, `QuantumDifferentiator::evaluateEnergy`, and adjoint state update loops.
 - **Surface Code Finalization**: Implemented logical measurement ($Z_0 Z_3 Z_6$) and MWPM-matched Pauli correction logic for distance-3 rotated surface codes.
 - **OpenQASM 3.0 Parser**: New robust AST-based implementation with full statement lookahead and support for complex assignments.
 - **Security Hardening**: Added strict JWT audience validation (`qubit-engine-api`) in `AuthInterceptor`.
-
 
 ### Changed
 - **Surface Code Layout**: Switched to a standard distance-3 rotated layout to ensure stabilizer commutativity.

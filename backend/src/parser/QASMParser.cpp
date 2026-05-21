@@ -29,7 +29,7 @@ void QASMParser::tokenize(const std::string& source) {
             while (i < source.length() && (std::isalnum(source[i]) || source[i] == '_')) {
                 val += source[i++];
             }
-            if (val == "qreg" || val == "creg" || val == "qubit" || val == "bit" || val == "measure" || val == "include") {
+            if (val == "qreg" || val == "creg" || val == "qubit" || val == "bit" || val == "measure" || val == "include" || val == "gate" || val == "if" || val == "else" || val == "barrier" || val == "reset") {
                 tokens_.push_back({Token::KEYWORD, val});
             } else {
                 tokens_.push_back({Token::IDENTIFIER, val});
@@ -37,10 +37,20 @@ void QASMParser::tokenize(const std::string& source) {
             continue;
         }
 
-        if (c == ';' || c == ',' || c == '(' || c == ')' || c == '[' || c == ']' || c == '+' || c == '*' || c == '/' || c == '-' || c == '>' || c == '=') {
+        if (c == ';' || c == ',' || c == '(' || c == ')' || c == '[' || c == ']' || c == '{' || c == '}' || c == '+' || c == '*' || c == '/' || c == '-' || c == '>' || c == '=' || c == '!') {
             // handle "->"
             if (c == '-' && i + 1 < source.length() && source[i+1] == '>') {
                 tokens_.push_back({Token::PUNCTUATION, "->"});
+                i += 2;
+                continue;
+            }
+            if (c == '=' && i + 1 < source.length() && source[i+1] == '=') {
+                tokens_.push_back({Token::PUNCTUATION, "=="});
+                i += 2;
+                continue;
+            }
+            if (c == '!' && i + 1 < source.length() && source[i+1] == '=') {
+                tokens_.push_back({Token::PUNCTUATION, "!="});
                 i += 2;
                 continue;
             }
@@ -119,6 +129,11 @@ std::shared_ptr<ASTNode> QASMParser::parseStatement() {
     if (match(Token::KEYWORD, "qreg") || match(Token::KEYWORD, "qubit")) return parseQReg();
     if (match(Token::KEYWORD, "creg") || match(Token::KEYWORD, "bit")) return parseCReg();
     if (match(Token::KEYWORD, "measure")) return parseMeasure();
+    if (match(Token::KEYWORD, "barrier")) return parseBarrier();
+    if (match(Token::KEYWORD, "reset")) return parseReset();
+    if (match(Token::KEYWORD, "if")) return parseIfStmt();
+    if (match(Token::KEYWORD, "gate")) return parseGateDefinition();
+    if (peek().type == Token::PUNCTUATION && peek().value == "{") return parseBlock();
     
     if (peek().type == Token::IDENTIFIER) {
         if (peek().value == "OPENQASM") {
@@ -347,6 +362,103 @@ std::shared_ptr<ASTMeasure> QASMParser::parseMeasure() {
     
     consume(Token::PUNCTUATION, ";", "Expected ';'");
     return m;
+}
+
+std::shared_ptr<ASTBarrier> QASMParser::parseBarrier() {
+    auto b = std::make_shared<ASTBarrier>();
+    if (peek().type == Token::IDENTIFIER || (peek().type == Token::KEYWORD && peek().value == "qreg")) {
+        do {
+            if (peek().type == Token::KEYWORD && peek().value == "qreg") {
+                advance(); // some parsers allow 'barrier qreg;'
+                b->qubits.push_back(advance().value);
+            } else {
+                std::string q = advance().value;
+                if (match(Token::PUNCTUATION, "[")) {
+                    q += "[" + advance().value + "]";
+                    consume(Token::PUNCTUATION, "]", "Expected ']'");
+                }
+                b->qubits.push_back(q);
+            }
+        } while (match(Token::PUNCTUATION, ","));
+    }
+    consume(Token::PUNCTUATION, ";", "Expected ';'");
+    return b;
+}
+
+std::shared_ptr<ASTReset> QASMParser::parseReset() {
+    auto r = std::make_shared<ASTReset>();
+    std::string q = advance().value;
+    if (match(Token::PUNCTUATION, "[")) {
+        q += "[" + advance().value + "]";
+        consume(Token::PUNCTUATION, "]", "Expected ']'");
+    }
+    r->qubit = q;
+    consume(Token::PUNCTUATION, ";", "Expected ';'");
+    return r;
+}
+
+std::shared_ptr<ASTBlock> QASMParser::parseBlock() {
+    auto block = std::make_shared<ASTBlock>();
+    consume(Token::PUNCTUATION, "{", "Expected '{'");
+    while (!isAtEnd() && !(peek().type == Token::PUNCTUATION && peek().value == "}")) {
+        auto stmt = parseStatement();
+        if (stmt) block->statements.push_back(stmt);
+    }
+    consume(Token::PUNCTUATION, "}", "Expected '}'");
+    return block;
+}
+
+std::shared_ptr<ASTIfStmt> QASMParser::parseIfStmt() {
+    auto if_stmt = std::make_shared<ASTIfStmt>();
+    consume(Token::PUNCTUATION, "(", "Expected '('");
+    if_stmt->condition_var = advance().value;
+    if (match(Token::PUNCTUATION, "[")) {
+        if_stmt->condition_var += "[" + advance().value + "]";
+        consume(Token::PUNCTUATION, "]", "Expected ']'");
+    }
+    consume(Token::PUNCTUATION, "==", "Expected '=='");
+    if_stmt->condition_value = std::stoi(advance().value);
+    consume(Token::PUNCTUATION, ")", "Expected ')'");
+    
+    if (peek().type == Token::PUNCTUATION && peek().value == "{") {
+        if_stmt->then_block = parseBlock();
+    } else {
+        auto b = std::make_shared<ASTBlock>();
+        auto stmt = parseStatement();
+        if (stmt) b->statements.push_back(stmt);
+        if_stmt->then_block = b;
+    }
+    
+    if (match(Token::KEYWORD, "else")) {
+        if (peek().type == Token::PUNCTUATION && peek().value == "{") {
+            if_stmt->else_block = parseBlock();
+        } else {
+            auto b = std::make_shared<ASTBlock>();
+            auto stmt = parseStatement();
+            if (stmt) b->statements.push_back(stmt);
+            if_stmt->else_block = b;
+        }
+    }
+    return if_stmt;
+}
+
+std::shared_ptr<ASTGateDefinition> QASMParser::parseGateDefinition() {
+    auto def = std::make_shared<ASTGateDefinition>();
+    def->name = advance().value;
+    if (match(Token::PUNCTUATION, "(")) {
+        if (!match(Token::PUNCTUATION, ")")) {
+            do {
+                def->params.push_back(advance().value);
+            } while (match(Token::PUNCTUATION, ","));
+            consume(Token::PUNCTUATION, ")", "Expected ')'");
+        }
+    }
+    do {
+        def->qubits.push_back(advance().value);
+    } while (match(Token::PUNCTUATION, ","));
+    
+    def->body = parseBlock();
+    return def;
 }
 
 } // namespace parser

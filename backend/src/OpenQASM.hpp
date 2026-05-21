@@ -19,6 +19,16 @@ struct QASMGate {
   std::string name;
   std::vector<int> qubits;
   std::vector<double> params;
+  std::string condition_var = "";
+  int condition_val = 0;
+};
+
+// Parsed gate definition
+struct QASMGateDef {
+    std::string name;
+    std::vector<std::string> params;
+    std::vector<std::string> qubits;
+    std::vector<QASMGate> body;
 };
 
 // Parsed circuit
@@ -28,6 +38,7 @@ struct QASMCircuit {
   std::vector<QASMGate> gates;
   std::string version;
   std::map<std::string, int> qubit_map;
+  std::map<std::string, QASMGateDef> gate_definitions;
 };
 
 // OpenQASM Parser
@@ -49,6 +60,8 @@ public:
   to_qasm3(int num_qubits,
            const std::vector<std::pair<std::string, std::vector<int>>> &gates,
            const std::vector<double> &params = {});
+           
+  std::string to_qasm3(const QASMCircuit &circuit);
 
   std::string
   to_qasm2(int num_qubits,

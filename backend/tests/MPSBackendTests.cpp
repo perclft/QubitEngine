@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "backends/MPSBackend.hpp"
+#include "NoiseModel.hpp"
 #include <stdexcept>
 
 using namespace qubit_engine;
@@ -30,24 +31,54 @@ TEST(MPSBackendTest, TooLargeStateVectorThrows) {
     EXPECT_THROW(mps.getStateVector(), std::runtime_error);
 }
 
-// --- API Surface Existence (Stubs / Incomplete) ---
-// Since the prototype returns stubbed 0s or empty vectors for observation
-// methods, we just test that invoking them doesn't segfault.
-
-TEST(MPSBackendTest, ObservationMethodsStubbed) {
-    MPSBackend mps(3);
-    
-    // measure() returns 0
+TEST(MPSBackendTest, MPS_MeasureBasicStates) {
+    MPSBackend mps(1);
     EXPECT_EQ(mps.measure(0), 0);
-    
-    // expectationValue() returns 0.0
-    EXPECT_EQ(mps.expectationValue("Z"), 0.0);
-    
-    // getProbabilities() returns empty
-    EXPECT_TRUE(mps.getProbabilities().empty());
-    
-    // getStateVector() returns empty for <= 30 qubits
-    EXPECT_TRUE(mps.getStateVector().empty());
+    MPSBackend mps2(1);
+    mps2.applyX(0);
+    EXPECT_EQ(mps2.measure(0), 1);
+}
+
+TEST(MPSBackendTest, MPS_GetProbabilities) {
+    MPSBackend mps(1);
+    mps.applyHadamard(0);
+    auto probs = mps.getProbabilities();
+    ASSERT_EQ(probs.size(), 2);
+    EXPECT_NEAR(probs[0], 0.5, 1e-6);
+    EXPECT_NEAR(probs[1], 0.5, 1e-6);
+}
+
+TEST(MPSBackendTest, MPS_ZeroNoisePreservesState) {
+    MPSBackend mps(1);
+    mps.applyHadamard(0);
+    mps.applyDepolarizingNoise(0.0);
+    auto probs = mps.getProbabilities();
+    EXPECT_NEAR(probs[0], 0.5, 1e-6);
+    EXPECT_NEAR(probs[1], 0.5, 1e-6);
+}
+
+TEST(MPSBackendTest, MPS_ADPhysicalCorrectness) {
+    MPSBackend mps(1);
+    auto ad = makeAmplitudeDampingChannel(0.8);
+    for (int i = 0; i < 100; ++i) {
+        mps.applyNoiseChannel1Q(ad, 0);
+    }
+    auto probs = mps.getProbabilities();
+    EXPECT_NEAR(probs[0], 1.0, 1e-6);
+    EXPECT_NEAR(probs[1], 0.0, 1e-6);
+}
+
+TEST(MPSBackendTest, MPS_DepolarizingNormalization) {
+    MPSBackend mps(2);
+    mps.applyHadamard(0);
+    mps.applyCNOT(0, 1);
+    for (int i = 0; i < 10; ++i) {
+        mps.applyDepolarizingNoise(0.1);
+    }
+    auto probs = mps.getProbabilities();
+    double sum = 0.0;
+    for (double p : probs) sum += p;
+    EXPECT_NEAR(sum, 1.0, 1e-6);
 }
 
 // --- Gate Execution (No-Throw Verification) ---

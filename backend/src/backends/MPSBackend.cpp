@@ -4,6 +4,9 @@
 #include <Eigen/SVD>
 #include <cmath>
 #include <stdexcept>
+#include <random>
+#include <algorithm>
+#include <vector>
 
 
 namespace qubit_engine {
@@ -248,8 +251,259 @@ void MPSBackend::applyCZ(size_t control, size_t target) {
   applyTwoQubitGate(control, target, CZ);
 }
 
-int MPSBackend::measure(size_t target) { return 0; }
-std::vector<double> MPSBackend::getProbabilities() const { return {}; }
+// --- Density Matrix Helpers ---
+
+std::array<Complex, 4> MPSBackend::getReducedDensityMatrix1Q(size_t target) const {
+  const auto& tensor = nodes[target];
+  Complex r00(0,0), r01(0,0), r10(0,0), r11(0,0);
+  int L = tensor.left_dim;
+  int R = tensor.right_dim;
+  for (int l = 0; l < L; ++l) {
+    for (int r = 0; r < R; ++r) {
+      Complex a0 = tensor.data[l * 2 * R + 0 * R + r];
+      Complex a1 = tensor.data[l * 2 * R + 1 * R + r];
+      r00 += a0 * std::conj(a0);
+      r01 += a0 * std::conj(a1);
+      r10 += a1 * std::conj(a0);
+      r11 += a1 * std::conj(a1);
+    }
+  }
+  return {r00, r01, r10, r11};
+}
+
+std::array<Complex, 16> MPSBackend::getReducedDensityMatrix2Q(size_t q1, size_t q2) const {
+  if (std::abs((int)q1 - (int)q2) != 1) {
+    throw std::runtime_error("MPS two-qubit density matrix requires adjacent qubits.");
+  }
+  size_t left = std::min(q1, q2);
+  bool swap_indices = (q1 > q2);
+  
+  const auto& nodeL = nodes[left];
+  const auto& nodeR = nodes[left + 1];
+  
+  int L1 = nodeL.left_dim;
+  int D = nodeL.right_dim;
+  int R2 = nodeR.right_dim;
+  
+  std::vector<Complex> C(L1 * 4 * R2, Complex(0,0));
+  for (int l = 0; l < L1; ++l) {
+    for (int p1 = 0; p1 < 2; ++p1) {
+      for (int p2 = 0; p2 < 2; ++p2) {
+        for (int r = 0; r < R2; ++r) {
+          Complex sum(0,0);
+          for (int d = 0; d < D; ++d) {
+            sum += nodeL.data[l * 2 * D + p1 * D + d] * nodeR.data[d * 2 * R2 + p2 * R2 + r];
+          }
+          C[l * 4 * R2 + p1 * 2 * R2 + p2 * R2 + r] = sum;
+        }
+      }
+    }
+  }
+  
+  std::array<Complex, 16> rdm{};
+  rdm.fill(Complex(0,0));
+  
+  for (int l = 0; l < L1; ++l) {
+    for (int r = 0; r < R2; ++r) {
+      for (int p1 = 0; p1 < 2; ++p1) {
+        for (int p2 = 0; p2 < 2; ++p2) {
+          for (int p1_prime = 0; p1_prime < 2; ++p1_prime) {
+            for (int p2_prime = 0; p2_prime < 2; ++p2_prime) {
+              int row = swap_indices ? (p2 * 2 + p1) : (p1 * 2 + p2);
+              int col = swap_indices ? (p2_prime * 2 + p1_prime) : (p1_prime * 2 + p2_prime);
+              Complex a = C[l * 4 * R2 + p1 * 2 * R2 + p2 * R2 + r];
+              Complex b = C[l * 4 * R2 + p1_prime * 2 * R2 + p2_prime * R2 + r];
+              rdm[row * 4 + col] += a * std::conj(b);
+            }
+          }
+        }
+      }
+    }
+  }
+  return rdm;
+}
+
+// --- Noise ---
+
+void MPSBackend::applyDepolarizingNoise(Precision p) {
+  static thread_local std::mt19937 gen(std::random_device{}());
+  std::uniform_real_distribution<> dis(0.0, 1.0);
+  for (size_t i = 0; i < num_qubits; ++i) {
+    if (dis(gen) < p) {
+      double type = dis(gen);
+      if (type < 0.333) applyX(i);
+      else if (type < 0.666) applyY(i);
+      else applyZ(i);
+    }
+  }
+}
+
+void MPSBackend::applyNoiseChannel1Q(const NoiseChannel1Q& channel, size_t target) {
+  if (channel.operators.empty()) return;
+  auto rdm = getReducedDensityMatrix1Q(target);
+  
+  std::vector<Precision> probs;
+  probs.reserve(channel.operators.size());
+  Precision total_p = 0.0;
+  
+  for (const auto& op : channel.operators) {
+    const auto& M = op.matrix_dag_self;
+    Complex tr = M[0] * rdm[0] + M[1] * rdm[2] + M[2] * rdm[1] + M[3] * rdm[3];
+    Precision p = std::abs(tr.real());
+    probs.push_back(p);
+    total_p += p;
+  }
+  
+  static thread_local std::mt19937 gen(std::random_device{}());
+  std::uniform_real_distribution<Precision> dis(0.0, total_p);
+  Precision r = dis(gen);
+  
+  const KrausOperator1Q* selected = &channel.operators.back();
+  Precision selected_prob = probs.back();
+  Precision cum = 0.0;
+  for (size_t i = 0; i < channel.operators.size(); ++i) {
+    cum += probs[i];
+    if (r <= cum) {
+      selected = &channel.operators[i];
+      selected_prob = probs[i];
+      break;
+    }
+  }
+  
+  if (selected_prob < 1e-20) return;
+  
+  std::vector<Complex> m(selected->matrix.begin(), selected->matrix.end());
+  applySingleQubitGate(target, m);
+  
+  Precision inv_norm = 1.0 / std::sqrt(selected_prob);
+  auto& tensor = nodes[target];
+  for (auto& val : tensor.data) {
+    val *= inv_norm;
+  }
+}
+
+void MPSBackend::applyNoiseChannel2Q(const NoiseChannel2Q& channel, size_t q1, size_t q2) {
+  if (channel.operators.empty()) return;
+  auto rdm = getReducedDensityMatrix2Q(q1, q2);
+  
+  std::vector<Precision> probs;
+  probs.reserve(channel.operators.size());
+  Precision total_p = 0.0;
+  
+  for (const auto& op : channel.operators) {
+    const auto& M = op.matrix_dag_self;
+    Complex tr(0,0);
+    for (int r = 0; r < 4; ++r) {
+      for (int c = 0; c < 4; ++c) {
+        tr += M[r * 4 + c] * rdm[c * 4 + r];
+      }
+    }
+    Precision p = std::abs(tr.real());
+    probs.push_back(p);
+    total_p += p;
+  }
+  
+  static thread_local std::mt19937 gen(std::random_device{}());
+  std::uniform_real_distribution<Precision> dis(0.0, total_p);
+  Precision r = dis(gen);
+  
+  const KrausOperator2Q* selected = &channel.operators.back();
+  Precision selected_prob = probs.back();
+  Precision cum = 0.0;
+  for (size_t i = 0; i < channel.operators.size(); ++i) {
+    cum += probs[i];
+    if (r <= cum) {
+      selected = &channel.operators[i];
+      selected_prob = probs[i];
+      break;
+    }
+  }
+  
+  if (selected_prob < 1e-20) return;
+  
+  std::vector<Complex> m(selected->matrix.begin(), selected->matrix.end());
+  applyTwoQubitGate(q1, q2, m);
+  
+  Precision inv_norm = 1.0 / std::sqrt(selected_prob);
+  auto& tensorL = nodes[std::min(q1, q2)];
+  for (auto& val : tensorL.data) {
+    val *= inv_norm;
+  }
+}
+
+int MPSBackend::measure(size_t target) {
+  auto rdm = getReducedDensityMatrix1Q(target);
+  Precision prob0 = std::abs(rdm[0].real());
+  
+  thread_local std::mt19937 gen(std::random_device{}());
+  std::uniform_real_distribution<> dis(0.0, 1.0);
+  int outcome = (dis(gen) > prob0) ? 1 : 0;
+  
+  std::vector<Complex> proj;
+  if (outcome == 0) {
+    proj = {1.0, 0.0, 0.0, 0.0};
+  } else {
+    proj = {0.0, 0.0, 0.0, 1.0};
+  }
+  applySingleQubitGate(target, proj);
+  
+  Precision norm = (outcome == 0) ? std::sqrt(prob0) : std::sqrt(1.0 - prob0);
+  if (norm > 1e-9) {
+    auto& tensor = nodes[target];
+    for (auto& val : tensor.data) {
+      val /= norm;
+    }
+  }
+  return outcome;
+}
+
+std::vector<double> MPSBackend::getProbabilities() const {
+  if (num_qubits > 25) {
+    throw std::runtime_error("Cannot return full 2^N probabilities for > 25 qubits.");
+  }
+  
+  size_t dim = 1ULL << num_qubits;
+  std::vector<double> probs(dim, 0.0);
+  
+  std::vector<Complex> state = {1.0};
+  for (int q = 0; q < num_qubits; ++q) {
+    const auto& tensor = nodes[q];
+    int L = tensor.left_dim;
+    int R = tensor.right_dim;
+    std::vector<Complex> new_state(R * (1ULL << (q + 1)), Complex(0,0));
+    
+    for (size_t s = 0; s < (1ULL << q); ++s) {
+      for (int l = 0; l < L; ++l) {
+        Complex v = state[l * (1ULL << q) + s];
+        for (int p = 0; p < 2; ++p) {
+          for (int r = 0; r < R; ++r) {
+            new_state[r * (1ULL << (q + 1)) + s + (p << q)] += v * tensor.data[l * 2 * R + p * R + r];
+          }
+        }
+      }
+    }
+    state = std::move(new_state);
+  }
+  
+  int k = 100;
+  std::vector<std::pair<double, size_t>> prob_pairs;
+  for (size_t i = 0; i < dim; ++i) {
+    double p = std::norm(state[i]);
+    if (p > 1e-10) {
+      prob_pairs.push_back({p, i});
+    }
+  }
+  
+  std::sort(prob_pairs.begin(), prob_pairs.end(), [](const auto& a, const auto& b) {
+    return a.first > b.first;
+  });
+  
+  for (size_t i = 0; i < std::min((size_t)k, prob_pairs.size()); ++i) {
+    probs[prob_pairs[i].second] = prob_pairs[i].first;
+  }
+  
+  return probs;
+}
 void MPSBackend::applyDenseUnitary(const std::vector<size_t> &targets,
                                    const std::vector<Complex> &matrix) {
   throw FeatureNotSupportedException(

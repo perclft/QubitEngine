@@ -43,6 +43,11 @@ private:
     std::shared_ptr<ASTCRegDecl> parseCReg();
     std::shared_ptr<ASTGateCall> parseGateCall();
     std::shared_ptr<ASTMeasure> parseMeasure();
+    std::shared_ptr<ASTBarrier> parseBarrier();
+    std::shared_ptr<ASTReset> parseReset();
+    std::shared_ptr<ASTBlock> parseBlock();
+    std::shared_ptr<ASTIfStmt> parseIfStmt();
+    std::shared_ptr<ASTGateDefinition> parseGateDefinition();
 };
 
 } // namespace parser
