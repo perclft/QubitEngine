@@ -12,7 +12,7 @@ export async function GET() {
   meta.add('authorization', `Bearer ${token}`);
 
   let isClosed = false;
-  let stream: any = null;
+  let stream: grpc.ClientReadableStream<ClusterMetricsResponse> | null = null;
 
   const customReadable = new ReadableStream({
     start(controller) {
