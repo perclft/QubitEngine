@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Zap, LayoutDashboard, Cpu, FlaskConical, ListTodo, Settings, Waves } from "lucide-react";
+import { Zap, LayoutDashboard, Cpu, FlaskConical, ListTodo, Settings, Waves, BookOpen } from "lucide-react";
 import { motion } from "framer-motion";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/circuit-lab", label: "Circuit Lab", icon: Cpu },
+  { href: "/tutorial", label: "Tutorial Mode", icon: BookOpen },
   { href: "/vqe", label: "VQE Explorer", icon: FlaskConical },
   { href: "/visualizer", label: "Visualizer", icon: Waves },
   { href: "/jobs", label: "Job Queue", icon: ListTodo },

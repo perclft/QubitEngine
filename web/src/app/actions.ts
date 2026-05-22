@@ -16,7 +16,7 @@ import {
   HardwareTopologyResponse
 } from '../api/quantum';
 import { JobStatus, JobList } from '../api/scheduler';
-import { ExecutionResult, TopologyData, ClusterMetricsData } from '../components/types';
+import { ExecutionResult, TopologyData, ClusterMetricsData, ComplexNumber } from '../components/types';
 
 // --- Types ---
 
@@ -254,6 +254,52 @@ export async function visualizeCircuit(numQubits: number): Promise<{ steps: { pr
     stream.on('data', (response: StateResponse) => {
       const probabilities = response.stateVector.map((sv: StateResponse_ComplexNumber) => sv.real * sv.real + sv.imag * sv.imag);
       steps.push({ probabilities, serverId: response.serverId });
+    });
+    stream.on('error', (err: grpc.ServiceError) => {
+      if (steps.length > 0) {
+        resolve({ steps });
+      } else {
+        resolve({ error: err.message });
+      }
+    });
+    stream.on('end', () => {
+      resolve({ steps });
+    });
+  });
+}
+
+// ─── Visualizer: Step-by-step Custom Circuit (streaming) ─────────────────
+export async function visualizeCustomCircuit(
+  numQubits: number,
+  ops: { type: string; targetQubit: number; controlQubit: number; angle: number }[]
+): Promise<{ steps: { stateVector: ComplexNumber[]; probabilities: number[]; serverId: string }[] } | { error: string }> {
+  return new Promise((resolve) => {
+    const client = getClient();
+    const req: CircuitRequest = {
+      numQubits,
+      operations: ops.map(op => ({
+        type: GATE_MAP[op.type] ?? GateOperation_GateType.HADAMARD,
+        targetQubit: op.targetQubit,
+        controlQubit: op.controlQubit,
+        classicalRegister: 0,
+        angle: op.angle || 0,
+        secondControlQubit: 0,
+        secondTargetQubit: 0,
+        noiseProbability: 0,
+        noiseGamma: 0,
+      })),
+      noiseProbability: 0,
+      noiseConfig: undefined,
+      executionBackend: 0,
+      measurementStrategy: 0, // FULL_STATE
+      useShm: false,
+    };
+    const steps: { stateVector: ComplexNumber[]; probabilities: number[]; serverId: string }[] = [];
+    const stream = client.visualizeCircuit(req, getMetadata());
+    stream.on('data', (response: StateResponse) => {
+      const stateVector = response.stateVector.map((sv: StateResponse_ComplexNumber) => ({ real: sv.real, imag: sv.imag }));
+      const probabilities = response.stateVector.map((sv: StateResponse_ComplexNumber) => sv.real * sv.real + sv.imag * sv.imag);
+      steps.push({ stateVector, probabilities, serverId: response.serverId });
     });
     stream.on('error', (err: grpc.ServiceError) => {
       if (steps.length > 0) {

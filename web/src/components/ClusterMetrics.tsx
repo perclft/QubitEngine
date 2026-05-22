@@ -10,25 +10,55 @@ export function ClusterMetrics() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const eventSource = new EventSource('/api/metrics');
+    let eventSource: EventSource | null = null;
+    let timeoutId: NodeJS.Timeout | null = null;
+    let isMounted = true;
 
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data) as ClusterMetricsData;
-        setMetrics(data);
-        setError(null);
-      } catch (err) {
-        console.error("Failed to parse metrics", err);
+    const connect = () => {
+      if (!isMounted) return;
+
+      if (eventSource) {
+        eventSource.close();
       }
+
+      eventSource = new EventSource('/api/metrics');
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data) as ClusterMetricsData;
+          setMetrics(data);
+          setError(null);
+        } catch (err) {
+          console.error("Failed to parse metrics", err);
+        }
+      };
+
+      eventSource.onerror = (err) => {
+        console.error("EventSource failed:", err);
+        setError("Lost connection to metric stream");
+        
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+
+        // Retry connection after 5 seconds
+        if (isMounted) {
+          timeoutId = setTimeout(connect, 5000);
+        }
+      };
     };
 
-    eventSource.onerror = () => {
-      setError("Lost connection to metric stream");
-      eventSource.close();
-    };
+    connect();
 
     return () => {
-      eventSource.close();
+      isMounted = false;
+      if (eventSource) {
+        eventSource.close();
+      }
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     };
   }, []);
 

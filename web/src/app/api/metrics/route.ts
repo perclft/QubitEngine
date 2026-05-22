@@ -10,10 +10,13 @@ export async function GET() {
   const meta = new grpc.Metadata();
   const token = process.env.QUBIT_ENGINE_AUTH_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJpYXQiOjE3NzQ3MzYwNzcsImV4cCI6MjA5MDA5NjA3N30.1nKrhtvdTUoaAL8wzWGNHQhk40cHRpbxWjbAbS1lNSA';
   meta.add('authorization', `Bearer ${token}`);
+
+  let isClosed = false;
+  let stream: any = null;
+
   const customReadable = new ReadableStream({
     start(controller) {
-      const stream = client.streamClusterMetrics({}, meta);
-      let isClosed = false;
+      stream = client.streamClusterMetrics({}, meta);
       
       stream.on('data', (response: ClusterMetricsResponse) => {
         if (isClosed) return;
@@ -44,15 +47,12 @@ export async function GET() {
           isClosed = true;
         }
       });
-
-      // Handle client disconnect
-      return () => {
-        isClosed = true;
-        stream.cancel();
-      };
     },
     cancel() {
-      // This is called when the consumer cancels the stream
+      isClosed = true;
+      if (stream) {
+        stream.cancel();
+      }
     }
   });
 
