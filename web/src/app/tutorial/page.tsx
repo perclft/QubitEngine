@@ -22,6 +22,8 @@ import {
   BookOpenCheck
 } from "lucide-react";
 import { BlochSphere } from "../../components/BlochSphere";
+import { stateToBloch } from "../../lib/quantum-math";
+import { TutorialWavefunctionChart } from "../../components/TutorialWavefunctionChart";
 
 // --- Types ---
 interface GateEntry {
@@ -139,88 +141,6 @@ const GATE_PALETTE = [
 ];
 
 const MAX_STEPS = 8;
-
-// Derive Bloch sphere angles (theta, phi) from a multi-qubit state vector
-// by computing the single-qubit reduced density matrix via partial trace.
-function stateToBloch(
-  stateVector: ComplexNumber[],
-  qubit: number,
-  numQubits: number
-): { theta: number; phi: number } {
-  const dim = 1 << numQubits;
-  if (!stateVector || stateVector.length !== dim) {
-    return { theta: 0, phi: 0 }; // |0⟩
-  }
-
-  let rho00 = 0, rho01_r = 0, rho01_i = 0, rho11 = 0;
-  for (let i = 0; i < dim; i++) {
-    const bit_i = (i >> qubit) & 1;
-    const ai_r = stateVector[i].real;
-    const ai_i = stateVector[i].imag;
-    if (bit_i === 0) {
-      rho00 += ai_r * ai_r + ai_i * ai_i;
-      const j = i | (1 << qubit);
-      const aj_r = stateVector[j].real;
-      const aj_i = stateVector[j].imag;
-      rho01_r += ai_r * aj_r + ai_i * aj_i;
-      rho01_i += ai_r * aj_i - ai_i * aj_r;
-    } else {
-      rho11 += ai_r * ai_r + ai_i * ai_i;
-    }
-  }
-
-  const sx = 2 * rho01_r;
-  const sy = 2 * rho01_i;
-  const sz = rho00 - rho11;
-
-  const r = Math.sqrt(sx * sx + sy * sy + sz * sz);
-  const theta = r > 1e-9 ? Math.acos(Math.max(-1, Math.min(1, sz / r))) : 0;
-  const phi = Math.atan2(sy, sx);
-
-  return { theta, phi };
-}
-
-// Custom wavefunction chart to pad index dynamically based on qubit size
-function TutorialWavefunctionChart({ 
-  stateVector, 
-  numQubits 
-}: { 
-  stateVector: ComplexNumber[] | undefined; 
-  numQubits: number;
-}) {
-  if (!stateVector) {
-    return (
-      <div className="m-auto flex flex-col items-center justify-center gap-2 opacity-30 py-12">
-        <div className="w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm">Awaiting simulation...</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex-grow overflow-x-auto custom-scrollbar w-full">
-      <div className="flex items-end justify-start min-w-max gap-6 h-36 border-b border-white/5 pb-4 px-4 mx-auto w-fit">
-        {stateVector.map((sv, i) => {
-          const prob = sv.real * sv.real + sv.imag * sv.imag;
-          const height = Math.max(prob * 100, 3);
-          const bitstring = i.toString(2).padStart(numQubits, "0");
-          return (
-            <div key={i} className="flex flex-col items-center gap-1.5 min-w-[48px]">
-              <span className="text-[10px] text-indigo-300 font-mono">{(prob * 100).toFixed(0)}%</span>
-              <motion.div
-                initial={{ height: 0 }}
-                animate={{ height: `${height}%` }}
-                transition={{ type: "spring", bounce: 0.4 }}
-                className="w-8 rounded-t bg-gradient-to-t from-indigo-600/30 to-indigo-400 border border-indigo-400/40 shadow-[0_0_10px_rgba(99,102,241,0.2)]"
-              />
-              <span className="text-[11px] font-mono text-slate-400">|{bitstring}⟩</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 export default function TutorialPage() {
   const [activeLessonIdx, setActiveLessonIdx] = useState(0);

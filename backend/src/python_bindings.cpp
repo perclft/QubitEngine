@@ -220,9 +220,11 @@ PYBIND11_MODULE(core, m) {
 
         QuantumDifferentiator::AnsatzFunc<QuantumRegister> cpp_ansatz =
             [&](const std::vector<double> &p, QuantumRegister &q) {
+              py::gil_scoped_acquire acquire;
               ansatz_func(p, &q);
             };
 
+        py::gil_scoped_release release;
         return QuantumDifferentiator::calculateGradients(
             num_qubits, params, cpp_ansatz, hamiltonian);
       },
@@ -267,9 +269,11 @@ PYBIND11_MODULE(core, m) {
 
         QuantumDifferentiator::AnsatzFunc<QuantumRegister> cpp_ansatz =
             [&](const std::vector<double> &p, QuantumRegister &q) {
+              py::gil_scoped_acquire acquire;
               ansatz_func(p, &q);
             };
 
+        py::gil_scoped_release release;
         // Note: verify_mpi.py and unit tests show we want the Parallel
         // Gradients logic which is inside
         // QuantumDifferentiator::calculateGradients.
@@ -288,8 +292,10 @@ PYBIND11_MODULE(core, m) {
         }
         QuantumDifferentiator::AnsatzFunc<QuantumRegister> cpp_ansatz =
             [&](const std::vector<double> &p, QuantumRegister &q) {
+              py::gil_scoped_acquire acquire;
               ansatz_func(p, &q);
             };
+        py::gil_scoped_release release;
         return QuantumDifferentiator::calculateGradientsAdjoint<
             QuantumRegister>(num_qubits, params, cpp_ansatz, hamiltonian);
       },
@@ -306,8 +312,10 @@ PYBIND11_MODULE(core, m) {
         
         QuantumDifferentiator::AnsatzFunc<QuantumRegister> cpp_ansatz =
             [&](const std::vector<double> &p, QuantumRegister &q) {
+              py::gil_scoped_acquire acquire;
               ansatz_func(p, &q);
             };
+        py::gil_scoped_release release;
         return QuantumDifferentiator::calculateGradientsAdjointGPU(
             num_qubits, params, cpp_ansatz, hamiltonian);
       },
@@ -328,9 +336,11 @@ PYBIND11_MODULE(core, m) {
             }
             QuantumDifferentiator::AnsatzFunc<QuantumRegister> cpp_ansatz =
                 [&](const std::vector<double> &p, QuantumRegister &q) {
+                  py::gil_scoped_acquire acquire;
                   ansatz_func(p, &q);
                 };
 
+            py::gil_scoped_release release;
             return optimizer.minimize(cpp_ansatz, hamiltonian, num_qubits,
                                       initial_params);
           },
@@ -351,9 +361,11 @@ PYBIND11_MODULE(core, m) {
             }
             QuantumDifferentiator::AnsatzFunc<QuantumRegister> cpp_ansatz =
                 [&](const std::vector<double> &p, QuantumRegister &q) {
+                  py::gil_scoped_acquire acquire;
                   ansatz_func(p, &q);
                 };
 
+            py::gil_scoped_release release;
             return optimizer.minimize(cpp_ansatz, hamiltonian, num_qubits,
                                       initial_params);
           },

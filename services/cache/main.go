@@ -128,7 +128,7 @@ func (s *CacheServer) GetCachedResult(ctx context.Context, req *pb.CacheLookup) 
 
 	// Update the entry with new hit count
 	updatedData, _ := proto.Marshal(&entry)
-	s.rdb.Set(ctx, cacheKey, updatedData, 0) // Keep existing TTL
+	s.rdb.Set(ctx, cacheKey, updatedData, redis.KeepTTL) // Keep existing TTL
 
 	slog.Info("Cache HIT", "hash", req.CircuitHash[:16], "hits", entry.HitCount)
 

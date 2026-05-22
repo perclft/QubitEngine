@@ -7,10 +7,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/alicebob/miniredis/v2/server"
 	"github.com/perclft/QubitEngine/api/auth"
 	pb "github.com/perclft/QubitEngine/api/generated"
 	"google.golang.org/grpc"
@@ -53,12 +55,72 @@ func TestFullStackIntegration(t *testing.T) {
 	}
 	defer mr.Close()
 
+	// Register custom BZPOPMAX handler since miniredis doesn't support it natively
+	mr.Server().Register("BZPOPMAX", func(c *server.Peer, cmd string, args []string) {
+		if len(args) < 2 {
+			c.WriteError("ERR wrong number of arguments for 'bzpopmax' command")
+			return
+		}
+		keys := args[:len(args)-1]
+		timeoutStr := args[len(args)-1]
+		timeoutSecs, err := strconv.ParseFloat(timeoutStr, 64)
+		if err != nil {
+			c.WriteError("ERR timeout is not a float")
+			return
+		}
+
+		startTime := time.Now()
+		timeoutDuration := time.Duration(timeoutSecs * float64(time.Second))
+		if timeoutDuration <= 0 {
+			timeoutDuration = 10 * time.Second
+		}
+
+		for {
+			var foundKey string
+			var foundMember string
+			var maxScore float64
+			hasElement := false
+
+			for _, key := range keys {
+				members, _ := mr.ZMembers(key)
+				if len(members) > 0 {
+					// Find member with highest score
+					for _, m := range members {
+						score, _ := mr.ZScore(key, m)
+						if !hasElement || score > maxScore {
+							maxScore = score
+							foundMember = m
+							foundKey = key
+							hasElement = true
+						}
+					}
+				}
+			}
+
+			if hasElement {
+				mr.ZRem(foundKey, foundMember)
+
+				c.WriteLen(3)
+				c.WriteBulk(foundKey)
+				c.WriteBulk(foundMember)
+				c.WriteBulk(strconv.FormatFloat(maxScore, 'f', -1, 64))
+				return
+			}
+
+			if time.Since(startTime) >= timeoutDuration {
+				c.WriteNull()
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	})
+
 	// 3. Start C++ Engine
 	enginePort := 50061
 	cmdEngine := exec.Command(enginePath)
 	cmdEngine.Env = append(os.Environ(),
 		fmt.Sprintf("PORT=%d", enginePort),
-		"REDIS_ADDR="+mr.Addr(),
+		"REDIS_ADDR=redis://"+mr.Addr(),
 		"QUBIT_ENGINE_JWT_SECRET=e2e_test_secret_key_1234567890",
 		"QUBIT_ENGINE_SKIP_AUTH=0",
 	)

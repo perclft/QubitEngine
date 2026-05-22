@@ -44,5 +44,4 @@ def test_surface_code_logical_x():
     backend.applyHadamard(2)
     
     # Assuming measurment isn't strictly implemented for state collapse,
-    # the tableau successfully tracks the binary symplectic mutations!
-    assert backend.num_qubits() == 0 # Dummy test output assuming `getRank()` is mapped to `num_qubits` currently
+    assert backend.num_qubits() == 5

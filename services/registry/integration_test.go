@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"regexp"
 	"testing"
@@ -10,6 +11,8 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	api "github.com/perclft/QubitEngine/api/generated"
 	pb "github.com/perclft/QubitEngine/services/registry/generated"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestSaveCircuit(t *testing.T) {
@@ -159,3 +162,89 @@ func TestListCircuits(t *testing.T) {
 		t.Errorf("there were unfulfilled expectations: %s", err)
 	}
 }
+
+func TestDeleteCircuit(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	server := NewRegistryServer(db)
+	circuitId := "test-uuid-1234"
+
+	// 1. Unauthenticated request
+	{
+		req := &pb.DeleteCircuitRequest{CircuitId: circuitId}
+		_, err := server.DeleteCircuit(context.Background(), req)
+		if err == nil {
+			t.Error("expected error for unauthenticated delete, got nil")
+		} else {
+			st, ok := status.FromError(err)
+			if !ok || st.Code() != codes.Unauthenticated {
+				t.Errorf("expected Unauthenticated error, got %v", err)
+			}
+		}
+	}
+
+	// 2. Owner ID matches (successful delete)
+	{
+		ctx := context.WithValue(context.Background(), ownerIDKey, "owner-user")
+		mock.ExpectQuery("SELECT owner_id FROM circuits WHERE id = \\$1").
+			WithArgs(circuitId).
+			WillReturnRows(sqlmock.NewRows([]string{"owner_id"}).AddRow("owner-user"))
+
+		mock.ExpectExec("DELETE FROM circuits WHERE id = \\$1").
+			WithArgs(circuitId).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		req := &pb.DeleteCircuitRequest{CircuitId: circuitId}
+		_, err := server.DeleteCircuit(ctx, req)
+		if err != nil {
+			t.Errorf("expected no error for owner delete, got %v", err)
+		}
+	}
+
+	// 3. Owner ID mismatch (permission denied)
+	{
+		ctx := context.WithValue(context.Background(), ownerIDKey, "other-user")
+		mock.ExpectQuery("SELECT owner_id FROM circuits WHERE id = \\$1").
+			WithArgs(circuitId).
+			WillReturnRows(sqlmock.NewRows([]string{"owner_id"}).AddRow("owner-user"))
+
+		req := &pb.DeleteCircuitRequest{CircuitId: circuitId}
+		_, err := server.DeleteCircuit(ctx, req)
+		if err == nil {
+			t.Error("expected error for unauthorized delete, got nil")
+		} else {
+			st, ok := status.FromError(err)
+			if !ok || st.Code() != codes.PermissionDenied {
+				t.Errorf("expected PermissionDenied error, got %v", err)
+			}
+		}
+	}
+
+	// 4. Circuit not found
+	{
+		ctx := context.WithValue(context.Background(), ownerIDKey, "owner-user")
+		mock.ExpectQuery("SELECT owner_id FROM circuits WHERE id = \\$1").
+			WithArgs(circuitId).
+			WillReturnError(sql.ErrNoRows)
+
+		req := &pb.DeleteCircuitRequest{CircuitId: circuitId}
+		_, err := server.DeleteCircuit(ctx, req)
+		if err == nil {
+			t.Error("expected error for non-existent circuit delete, got nil")
+		} else {
+			st, ok := status.FromError(err)
+			if !ok || st.Code() != codes.NotFound {
+				t.Errorf("expected NotFound error, got %v", err)
+			}
+		}
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
+

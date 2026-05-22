@@ -94,7 +94,6 @@ func InitDB(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_circuits_tags ON circuits USING gin(tags);
 	CREATE INDEX IF NOT EXISTS idx_circuits_owner ON circuits(owner_id);
 	`
-	db.Exec(`DROP TABLE IF EXISTS circuits CASCADE;`)
 	_, err := db.Exec(schema)
 	return err
 }
@@ -298,6 +297,23 @@ func (s *RegistryServer) ForkCircuit(ctx context.Context, req *pb.ForkCircuitReq
 
 // DeleteCircuit removes a circuit from the registry
 func (s *RegistryServer) DeleteCircuit(ctx context.Context, req *pb.DeleteCircuitRequest) (*pb.RegistryEmpty, error) {
+	ownerID, ok := ctx.Value(ownerIDKey).(string)
+	if !ok || ownerID == "" {
+		return nil, status.Error(codes.Unauthenticated, "missing user identity")
+	}
+
+	var dbOwnerID string
+	err := s.db.QueryRowContext(ctx, `SELECT owner_id FROM circuits WHERE id = $1`, req.CircuitId).Scan(&dbOwnerID)
+	if err == sql.ErrNoRows {
+		return nil, status.Errorf(codes.NotFound, "circuit not found")
+	} else if err != nil {
+		return nil, status.Errorf(codes.Internal, "database error: %v", err)
+	}
+
+	if dbOwnerID != ownerID {
+		return nil, status.Error(codes.PermissionDenied, "access denied: you do not own this circuit")
+	}
+
 	result, err := s.db.ExecContext(ctx, `DELETE FROM circuits WHERE id = $1`, req.CircuitId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "delete failed: %v", err)
