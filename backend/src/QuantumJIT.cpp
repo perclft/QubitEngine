@@ -1,5 +1,8 @@
 #include "QuantumJIT.hpp"
 #include <algorithm>
+#include <iostream>
+#include <Eigen/Dense>
+#include <Eigen/Eigenvalues>
 
 namespace qubit_engine {
 namespace jit {
@@ -638,15 +641,414 @@ QuantumJIT::fuse_two_qubit_adjacent(const std::vector<CompiledGate> &gates) {
     }
   }
 
-  // Final sweep: filter out Identity blocks from TWO_QUBIT fusions
+  // Final sweep: run KAK decomposition on remaining TWO_QUBIT gates and expand them
   std::vector<CompiledGate> cleaned;
   for (const auto &g : fused) {
-      if (g.type == CompiledGate::TWO_QUBIT && is_identity(g.two_matrix)) {
-          continue; // Strip Identity block
+      if (g.type == CompiledGate::TWO_QUBIT) {
+          if (is_identity(g.two_matrix)) {
+              continue; // Strip Identity block
+          }
+          auto kak = decompose_unitary_kak(g.two_matrix);
+          auto synthesized = synthesize_kak(kak, g.target_qubits[0], g.target_qubits[1]);
+          cleaned.insert(cleaned.end(), synthesized.begin(), synthesized.end());
+      } else {
+          cleaned.push_back(g);
       }
-      cleaned.push_back(g);
   }
   return cleaned;
+}
+
+// --- KAK Decomposition and Synthesis ---
+
+struct ProductGateDecomposition {
+    Eigen::Matrix2cd L, R;
+    double phase;
+};
+
+static ProductGateDecomposition decompose_two_qubit_product_gate(const Eigen::Matrix4cd &W) {
+    Eigen::Matrix2cd R = W.block<2,2>(0,0);
+    Complex detR = R(0,0)*R(1,1) - R(0,1)*R(1,0);
+    if (std::abs(detR) < 0.1) {
+        R = W.block<2,2>(2,0);
+        detR = R(0,0)*R(1,1) - R(0,1)*R(1,0);
+    }
+    R /= std::sqrt(detR);
+
+    Eigen::Matrix4cd temp = Eigen::Matrix4cd::Zero();
+    Eigen::Matrix2cd R_adj = R.adjoint();
+    temp.block<4,2>(0,0) = W.block<4,2>(0,0) * R_adj;
+    temp.block<4,2>(0,2) = W.block<4,2>(0,2) * R_adj;
+
+    Eigen::Matrix2cd L;
+    L(0,0) = temp(0,0);
+    L(0,1) = temp(0,2);
+    L(1,0) = temp(2,0);
+    L(1,1) = temp(2,2);
+
+    Complex detL = L(0,0)*L(1,1) - L(0,1)*L(1,0);
+    L /= std::sqrt(detL);
+    double phase = std::arg(detL) / 2.0;
+
+    return {L, R, phase};
+}
+
+static Matrix2x2 eigen_to_matrix2x2(const Eigen::Matrix2cd &m) {
+    Matrix2x2 res;
+    res[0] = m(0,0);
+    res[1] = m(0,1);
+    res[2] = m(1,0);
+    res[3] = m(1,1);
+    return res;
+}
+
+QuantumJIT::KAKDecomposition QuantumJIT::decompose_unitary_kak(const Matrix4x4 &U) {
+  Eigen::Matrix4cd U_eigen;
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 0; j < 4; ++j) {
+      U_eigen(i, j) = U[i * 4 + j];
+    }
+  }
+
+  // 1. Make U be in SU(4)
+  Complex detU = U_eigen.determinant();
+  U_eigen *= std::pow(detU, -0.25);
+  double global_phase = std::arg(detU) / 4.0;
+
+  // Construct magic basis matrix M
+  Eigen::Matrix4cd M;
+  double r2 = 1.0 / std::sqrt(2.0);
+  M << Complex(r2, 0), Complex(0, r2), Complex(0, 0), Complex(0, 0),
+       Complex(0, 0), Complex(0, 0), Complex(0, r2), Complex(r2, 0),
+       Complex(0, 0), Complex(0, 0), Complex(0, r2), Complex(-r2, 0),
+       Complex(r2, 0), Complex(0, -r2), Complex(0, 0), Complex(0, 0);
+
+  Eigen::Matrix4cd Up = M.adjoint() * U_eigen * M;
+  Eigen::Matrix4cd M2 = Up.transpose() * Up;
+
+  // Diagonalize M2 = P * D * P^T using the commuting real/imag parts method
+  Eigen::Matrix4d P;
+  
+  // Mix real and imaginary parts deterministically.
+  double c_mix = std::cos(0.6);
+  double s_mix = std::sin(0.6);
+  Eigen::Matrix4d M2real = c_mix * M2.real() + s_mix * M2.imag();
+  
+  Eigen::SelfAdjointEigenSolver<Eigen::Matrix4d> saes(M2real);
+  P = saes.eigenvectors();
+
+  Eigen::Matrix4cd D_mat = P.transpose().cast<std::complex<double>>() * M2 * P.cast<std::complex<double>>();
+  Eigen::Vector4cd D = D_mat.diagonal();
+
+  std::vector<double> d(4);
+  for (int i = 0; i < 3; ++i) {
+    d[i] = -std::arg(D[i]) / 2.0;
+  }
+  d[3] = -d[0] - d[1] - d[2];
+
+  std::vector<double> cs(3);
+  for (int i = 0; i < 3; ++i) {
+    cs[i] = std::fmod((d[i] + d[3]) / 2.0, 2.0 * M_PI);
+    if (cs[i] < 0) cs[i] += 2.0 * M_PI;
+  }
+
+  // Reorder eigenvalues to get in the Weyl chamber
+  std::vector<double> cstemp(3);
+  for (int i = 0; i < 3; ++i) {
+    double val = std::fmod(cs[i], M_PI / 2.0);
+    if (val < 0) val += M_PI / 2.0;
+    cstemp[i] = std::min(val, M_PI / 2.0 - val);
+  }
+
+  // Sort order
+  std::vector<int> order = {0, 1, 2};
+  std::sort(order.begin(), order.end(), [&](int i, int j) {
+    return cstemp[i] < cstemp[j];
+  });
+  
+  std::vector<int> qiskit_order = {order[1], order[2], order[0]};
+
+  std::vector<double> cs_sorted(3);
+  std::vector<double> d_sorted(4);
+  Eigen::Matrix4d P_sorted = P;
+  for (int i = 0; i < 3; ++i) {
+    cs_sorted[i] = cs[qiskit_order[i]];
+    d_sorted[i] = d[qiskit_order[i]];
+    P_sorted.col(i) = P.col(qiskit_order[i]);
+  }
+  d_sorted[3] = d[3];
+  P_sorted.col(3) = P.col(3);
+
+  cs = cs_sorted;
+  d = d_sorted;
+  P = P_sorted;
+
+  // Fix sign of P to be in SO(4)
+  if (P.determinant() < 0) {
+    P.col(3) *= -1.0;
+  }
+
+  // Find K1, K2
+  Eigen::Matrix4cd diag_exp = Eigen::Matrix4cd::Zero();
+  for (int i = 0; i < 4; ++i) {
+    diag_exp(i, i) = std::exp(Complex(0, d[i]));
+  }
+
+  Eigen::Matrix4cd K1_tensor = M * (Up * P.cast<std::complex<double>>() * diag_exp) * M.adjoint();
+  Eigen::Matrix4cd K2_tensor = M * P.transpose().cast<std::complex<double>>() * M.adjoint();
+
+  auto dec1 = decompose_two_qubit_product_gate(K1_tensor);
+  auto dec2 = decompose_two_qubit_product_gate(K2_tensor);
+
+  Eigen::Matrix2cd K1l = dec1.L;
+  Eigen::Matrix2cd K1r = dec1.R;
+  Eigen::Matrix2cd K2l = dec2.L;
+  Eigen::Matrix2cd K2r = dec2.R;
+
+  global_phase += dec1.phase + dec2.phase;
+
+  // Weyl chamber flips
+  Eigen::Matrix2cd ipx, ipy, ipz;
+  ipx << 0, Complex(0, 1), Complex(0, 1), 0;
+  ipy << 0, 1, -1, 0;
+  ipz << Complex(0, 1), 0, 0, Complex(0, -1);
+
+  double pi = M_PI;
+  double pi2 = M_PI / 2.0;
+  double pi4 = M_PI / 4.0;
+
+  if (cs[0] > pi2) {
+    cs[0] -= 3.0 * pi2;
+    K1l = K1l * ipy;
+    K1r = K1r * ipy;
+    global_phase += pi2;
+  }
+  if (cs[1] > pi2) {
+    cs[1] -= 3.0 * pi2;
+    K1l = K1l * ipx;
+    K1r = K1r * ipx;
+    global_phase += pi2;
+  }
+  int conjs = 0;
+  if (cs[0] > pi4) {
+    cs[0] = pi2 - cs[0];
+    K1l = K1l * ipy;
+    K2r = ipy * K2r;
+    conjs += 1;
+    global_phase -= pi2;
+  }
+  if (cs[1] > pi4) {
+    cs[1] = pi2 - cs[1];
+    K1l = K1l * ipx;
+    K2r = ipx * K2r;
+    conjs += 1;
+    global_phase += pi2;
+    if (conjs == 1) {
+      global_phase -= pi;
+    }
+  }
+  if (cs[2] > pi2) {
+    cs[2] -= 3.0 * pi2;
+    K1l = K1l * ipz;
+    K1r = K1r * ipz;
+    global_phase += pi2;
+    if (conjs == 1) {
+      global_phase -= pi;
+    }
+  }
+  if (conjs == 1) {
+    cs[2] = pi2 - cs[2];
+    K1l = K1l * ipz;
+    K2r = ipz * K2r;
+    global_phase += pi2;
+  }
+  if (cs[2] > pi4) {
+    cs[2] -= pi2;
+    K1l = K1l * ipz;
+    K1r = K1r * ipz;
+    global_phase -= pi2;
+  }
+
+  KAKDecomposition kak;
+  kak.x = cs[1];
+  kak.y = cs[0];
+  kak.z = cs[2];
+
+  Complex phase_factor = std::exp(Complex(0, global_phase));
+  K1l *= phase_factor;
+
+  kak.A1 = eigen_to_matrix2x2(K1l);
+  kak.A2 = eigen_to_matrix2x2(K1r);
+  kak.B1 = eigen_to_matrix2x2(K2l);
+  kak.B2 = eigen_to_matrix2x2(K2r);
+  return kak;
+}
+
+std::vector<CompiledGate> QuantumJIT::synthesize_kak(const KAKDecomposition &kak, int q0, int q1) {
+  std::vector<CompiledGate> synthesized;
+
+  auto make_single_gate = [](int target, const Matrix2x2 &m) {
+    CompiledGate g;
+    g.type = CompiledGate::SINGLE_QUBIT;
+    g.target_qubits = {target};
+    g.single_matrix = m;
+    return g;
+  };
+
+  // Helper to map single qubit matrices back to named/discrete Clifford gates to preserve compatibility
+  auto map_to_clifford_gates = [make_single_gate, this](int target, const Matrix2x2 &m) {
+    double tol = 1e-9;
+    auto trace_prod = [](const Matrix2x2 &a, const Matrix2x2 &b) {
+        Complex sum = 0.0;
+        for (int i = 0; i < 4; ++i) {
+            sum += std::conj(Complex(a[i])) * Complex(b[i]);
+        }
+        return std::abs(sum);
+    };
+
+    Matrix2x2 S_DAGGER = {1, 0, 0, Complex(0, -1)};
+    Matrix2x2 H_S = matmul2x2(HADAMARD, S_GATE);
+    Matrix2x2 S_H = matmul2x2(S_GATE, HADAMARD);
+    Matrix2x2 H_S_H = matmul2x2(HADAMARD, matmul2x2(S_GATE, HADAMARD));
+
+    std::vector<CompiledGate> res;
+    if (trace_prod(m, IDENTITY) > 2.0 - tol) return res;
+    if (trace_prod(m, HADAMARD) > 2.0 - tol) { res.push_back(make_single_gate(target, HADAMARD)); return res; }
+    if (trace_prod(m, PAULI_X) > 2.0 - tol) { res.push_back(make_single_gate(target, PAULI_X)); return res; }
+    if (trace_prod(m, PAULI_Y) > 2.0 - tol) { res.push_back(make_single_gate(target, PAULI_Y)); return res; }
+    if (trace_prod(m, PAULI_Z) > 2.0 - tol) { res.push_back(make_single_gate(target, PAULI_Z)); return res; }
+    if (trace_prod(m, S_GATE) > 2.0 - tol) { res.push_back(make_single_gate(target, S_GATE)); return res; }
+    if (trace_prod(m, S_DAGGER) > 2.0 - tol) { res.push_back(make_single_gate(target, S_DAGGER)); return res; }
+    if (trace_prod(m, H_S) > 2.0 - tol) { 
+        res.push_back(make_single_gate(target, S_GATE)); 
+        res.push_back(make_single_gate(target, HADAMARD)); 
+        return res; 
+    }
+    if (trace_prod(m, S_H) > 2.0 - tol) { 
+        res.push_back(make_single_gate(target, HADAMARD)); 
+        res.push_back(make_single_gate(target, S_GATE)); 
+        return res; 
+    }
+    if (trace_prod(m, H_S_H) > 2.0 - tol) { 
+        res.push_back(make_single_gate(target, HADAMARD)); 
+        res.push_back(make_single_gate(target, S_GATE)); 
+        res.push_back(make_single_gate(target, HADAMARD)); 
+        return res; 
+    }
+
+    res.push_back(make_single_gate(target, m));
+    return res;
+  };
+
+  auto insert_clifford_gates = [&](int target, const Matrix2x2 &m) {
+    auto gates = map_to_clifford_gates(target, m);
+    synthesized.insert(synthesized.end(), gates.begin(), gates.end());
+  };
+
+  // Helper to compute adjoint of Matrix2x2
+  auto adjoint2x2 = [](const Matrix2x2 &m) -> Matrix2x2 {
+    return {std::conj(Complex(m[0])), std::conj(Complex(m[2])),
+            std::conj(Complex(m[1])), std::conj(Complex(m[3]))};
+  };
+
+  // Pre-computed constant matrices for CNOT-based Weyl/Cartan decomposition
+  const Matrix2x2 CX_K1L = {Complex(0.8478065680, 0.0000000000), Complex(0.0000000000, 0.5303055943), Complex(0.0000000000, 0.5303055943), Complex(0.8478065680, 0.0000000000)};
+  const Matrix2x2 CX_K1R = {Complex(-0.5000000000, 0.5000000000), Complex(-0.5000000000, 0.5000000000), Complex(0.5000000000, 0.5000000000), Complex(-0.5000000000, -0.5000000000)};
+  const Matrix2x2 CX_K2L = {Complex(0.2245070915, 0.0000000000), Complex(0.0000000000, -0.9744724552), Complex(0.0000000000, -0.9744724552), Complex(0.2245070915, 0.0000000000)};
+  const Matrix2x2 CX_K2R = {Complex(0.7071067812, 0.0000000000), Complex(-0.7071067812, 0.0000000000), Complex(0.7071067812, 0.0000000000), Complex(0.7071067812, 0.0000000000)};
+
+  const Matrix2x2 Q0L = {Complex(0.1587504869, -0.1587504869), Complex(-0.6890560811, -0.6890560811), Complex(0.6890560811, -0.6890560811), Complex(0.1587504869, 0.1587504869)};
+  const Matrix2x2 Q0R = {Complex(0.0000000000, -0.7071067812), Complex(-0.0000000000, -0.7071067812), Complex(0.0000000000, -0.7071067812), Complex(0.0000000000, 0.7071067812)};
+  const Matrix2x2 Q1LA = {Complex(-0.5994897733, 0.5994897733), Complex(0.3749826818, -0.3749826818), Complex(-0.3749826818, -0.3749826818), Complex(-0.5994897733, -0.5994897733)};
+  const Matrix2x2 Q1LB = {Complex(-0.6890560811, -0.6890560811), Complex(0.1587504869, -0.1587504869), Complex(-0.1587504869, -0.1587504869), Complex(-0.6890560811, 0.6890560811)};
+  const Matrix2x2 Q1RA = {Complex(0.5000000000, 0.5000000000), Complex(0.5000000000, 0.5000000000), Complex(-0.5000000000, 0.5000000000), Complex(0.5000000000, -0.5000000000)};
+  const Matrix2x2 Q1RB = {Complex(0.7071067812, 0.0000000000), Complex(0.7071067812, 0.0000000000), Complex(-0.7071067812, 0.0000000000), Complex(0.7071067812, 0.0000000000)};
+  const Matrix2x2 Q2L = {Complex(-0.3749826818, -0.3749826818), Complex(0.5994897733, 0.5994897733), Complex(-0.5994897733, 0.5994897733), Complex(-0.3749826818, 0.3749826818)};
+  const Matrix2x2 Q2R = {Complex(-0.5000000000, 0.5000000000), Complex(0.5000000000, -0.5000000000), Complex(-0.5000000000, -0.5000000000), Complex(-0.5000000000, -0.5000000000)};
+
+  const Matrix2x2 U0L = {Complex(0.5994897733, -0.3749826818), Complex(0.5994897733, -0.3749826818), Complex(-0.5994897733, -0.3749826818), Complex(0.5994897733, 0.3749826818)};
+  const Matrix2x2 U0R = {Complex(0.5000000000, -0.5000000000), Complex(0.5000000000, 0.5000000000), Complex(-0.5000000000, 0.5000000000), Complex(0.5000000000, 0.5000000000)};
+  const Matrix2x2 U1L = {Complex(0.5000000000, -0.2308205892), Complex(0.6683725425, 0.5000000000), Complex(-0.6683725425, 0.5000000000), Complex(0.5000000000, 0.2308205892)};
+  const Matrix2x2 U1RA = {Complex(0.7071067812, 0.0000000000), Complex(0.0000000000, -0.7071067812), Complex(-0.0000000000, -0.7071067812), Complex(0.7071067812, 0.0000000000)};
+  const Matrix2x2 U1RB = {Complex(-0.5000000000, -0.5000000000), Complex(-0.5000000000, -0.5000000000), Complex(0.5000000000, -0.5000000000), Complex(-0.5000000000, 0.5000000000)};
+  const Matrix2x2 U2LA = {Complex(0.1587504869, 0.6890560811), Complex(-0.1587504869, 0.6890560811), Complex(0.1587504869, 0.6890560811), Complex(0.1587504869, -0.6890560811)};
+  const Matrix2x2 U2LB = {Complex(-0.6890560811, -0.6890560811), Complex(0.1587504869, -0.1587504869), Complex(-0.1587504869, -0.1587504869), Complex(-0.6890560811, 0.6890560811)};
+  const Matrix2x2 U2RA = {Complex(-0.7071067812, 0.0000000000), Complex(0.7071067812, 0.0000000000), Complex(-0.7071067812, 0.0000000000), Complex(-0.7071067812, 0.0000000000)};
+  const Matrix2x2 U2RB = {Complex(0.7071067812, 0.0000000000), Complex(0.7071067812, 0.0000000000), Complex(-0.7071067812, 0.0000000000), Complex(0.7071067812, 0.0000000000)};
+  const Matrix2x2 U3L = {Complex(-0.3749826818, -0.3749826818), Complex(0.5994897733, 0.5994897733), Complex(-0.5994897733, 0.5994897733), Complex(-0.3749826818, 0.3749826818)};
+  const Matrix2x2 U3R = {Complex(-0.5000000000, 0.5000000000), Complex(0.5000000000, -0.5000000000), Complex(-0.5000000000, -0.5000000000), Complex(-0.5000000000, -0.5000000000)};
+
+  double x = kak.x;
+  double y = kak.y;
+  double z = kak.z;
+
+  // CNOT gate (control = q0, target = q1)
+  CompiledGate cx;
+  cx.type = CompiledGate::TWO_QUBIT;
+  cx.target_qubits = {q0, q1};
+  cx.two_matrix = cnot_matrix();
+
+  double tol = 1e-9;
+  if (std::abs(x) < tol && std::abs(y) < tol && std::abs(z) < tol) {
+    // 0 CNOTs
+    Matrix2x2 post_q0 = matmul2x2(kak.A2, kak.B2);
+    Matrix2x2 post_q1 = matmul2x2(kak.A1, kak.B1);
+
+    insert_clifford_gates(q0, post_q0);
+    insert_clifford_gates(q1, post_q1);
+  } else if (std::abs(x - M_PI / 4.0) < tol && std::abs(y) < tol && std::abs(z) < tol) {
+    // 1 CNOT
+    Matrix2x2 pre_q0 = matmul2x2(adjoint2x2(CX_K2R), kak.B2);
+    Matrix2x2 pre_q1 = matmul2x2(adjoint2x2(CX_K2L), kak.B1);
+    Matrix2x2 post_q0 = matmul2x2(kak.A2, adjoint2x2(CX_K1R));
+    Matrix2x2 post_q1 = matmul2x2(kak.A1, adjoint2x2(CX_K1L));
+
+    insert_clifford_gates(q0, pre_q0);
+    insert_clifford_gates(q1, pre_q1);
+    synthesized.push_back(cx);
+    insert_clifford_gates(q0, post_q0);
+    insert_clifford_gates(q1, post_q1);
+  } else if (std::abs(z) < tol) {
+    // 2 CNOTs
+    Matrix2x2 pre_q0 = matmul2x2(Q2R, kak.B2);
+    Matrix2x2 pre_q1 = matmul2x2(Q2L, kak.B1);
+    Matrix2x2 mid_q0 = matmul2x2(Q1RA, matmul2x2(rz_matrix(2.0 * y), Q1RB));
+    Matrix2x2 mid_q1 = matmul2x2(Q1LA, matmul2x2(rz_matrix(-2.0 * x), Q1LB));
+    Matrix2x2 post_q0 = matmul2x2(kak.A2, Q0R);
+    Matrix2x2 post_q1 = matmul2x2(kak.A1, Q0L);
+
+    insert_clifford_gates(q0, pre_q0);
+    insert_clifford_gates(q1, pre_q1);
+    synthesized.push_back(cx);
+    insert_clifford_gates(q0, mid_q0);
+    insert_clifford_gates(q1, mid_q1);
+    synthesized.push_back(cx);
+    insert_clifford_gates(q0, post_q0);
+    insert_clifford_gates(q1, post_q1);
+  } else {
+    // 3 CNOTs
+    Matrix2x2 pre_q0 = matmul2x2(U3R, kak.B2);
+    Matrix2x2 pre_q1 = matmul2x2(U3L, kak.B1);
+    Matrix2x2 mid1_q0 = matmul2x2(U2RA, matmul2x2(rz_matrix(2.0 * y), U2RB));
+    Matrix2x2 mid1_q1 = matmul2x2(U2LA, matmul2x2(rz_matrix(-2.0 * x), U2LB));
+    Matrix2x2 mid2_q0 = matmul2x2(U1RA, matmul2x2(rz_matrix(-2.0 * z), U1RB));
+    Matrix2x2 mid2_q1 = U1L;
+    Matrix2x2 post_q0 = matmul2x2(kak.A2, U0R);
+    Matrix2x2 post_q1 = matmul2x2(kak.A1, U0L);
+
+    insert_clifford_gates(q0, pre_q0);
+    insert_clifford_gates(q1, pre_q1);
+    synthesized.push_back(cx);
+    insert_clifford_gates(q0, mid1_q0);
+    insert_clifford_gates(q1, mid1_q1);
+    synthesized.push_back(cx);
+    insert_clifford_gates(q0, mid2_q0);
+    insert_clifford_gates(q1, mid2_q1);
+    synthesized.push_back(cx);
+    insert_clifford_gates(q0, post_q0);
+    insert_clifford_gates(q1, post_q1);
+  }
+
+  return synthesized;
 }
 
 // --- Count Fused Blocks ---

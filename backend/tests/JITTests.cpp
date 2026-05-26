@@ -5,10 +5,87 @@
 #define M_PI 3.14159265358979323846
 #endif
 #include "../src/QuantumJIT.hpp"
+#include "../src/QuantumRegister.hpp"
+#include <Eigen/Dense>
 #include <array>
 #include <gtest/gtest.h>
 
 using namespace qubit_engine::jit;
+
+// Helper to construct the 4x4 unitary matrix of a vector of CompiledGate
+static Eigen::Matrix4cd get_unitary_from_compiled(const std::vector<CompiledGate> &gates) {
+    Eigen::Matrix4cd U = Eigen::Matrix4cd::Zero();
+    for (int k = 0; k < 4; ++k) {
+        qubit_engine::QuantumRegister q(2);
+        if (k & 2) q.applyX(1);
+        if (k & 1) q.applyX(0);
+        for (const auto &g : gates) {
+            std::vector<size_t> targets;
+            for (int t : g.target_qubits) targets.push_back((size_t)t);
+            if (!g.fused_unitary.empty()) {
+                q.applyDenseUnitary(targets, g.fused_unitary);
+            } else if (g.type == CompiledGate::SINGLE_QUBIT) {
+                std::vector<Complex> matrix(g.single_matrix.begin(), g.single_matrix.end());
+                q.applyDenseUnitary(targets, matrix);
+            } else if (g.type == CompiledGate::TWO_QUBIT) {
+                std::vector<Complex> matrix(g.two_matrix.begin(), g.two_matrix.end());
+                q.applyDenseUnitary(targets, matrix);
+            }
+        }
+        auto state = q.getStateVector();
+        for (int row = 0; row < 4; ++row) {
+            U(row, k) = state[row];
+        }
+    }
+    return U;
+}
+
+// Helper to construct the 4x4 unitary matrix of a vector of input gates
+static Eigen::Matrix4cd get_unitary_from_input(const std::vector<std::pair<std::string, std::vector<int>>> &gates, const std::vector<double> &params) {
+    Eigen::Matrix4cd U = Eigen::Matrix4cd::Zero();
+    for (int k = 0; k < 4; ++k) {
+        qubit_engine::QuantumRegister q(2);
+        if (k & 2) q.applyX(1);
+        if (k & 1) q.applyX(0);
+        for (size_t i = 0; i < gates.size(); ++i) {
+            const auto &g = gates[i];
+            double p = i < params.size() ? params[i] : 0.0;
+            if (g.first == "H") q.applyHadamard(g.second[0]);
+            else if (g.first == "X") q.applyX(g.second[0]);
+            else if (g.first == "Y") q.applyY(g.second[0]);
+            else if (g.first == "Z") q.applyZ(g.second[0]);
+            else if (g.first == "S") q.applyPhaseS(g.second[0]);
+            else if (g.first == "T") q.applyPhaseT(g.second[0]);
+            else if (g.first == "RX") q.applyRotationX(g.second[0], p);
+            else if (g.first == "RY") q.applyRotationY(g.second[0], p);
+            else if (g.first == "RZ") q.applyRotationZ(g.second[0], p);
+            else if (g.first == "CNOT" || g.first == "CX") q.applyCNOT(g.second[0], g.second[1]);
+            else if (g.first == "CZ") q.applyCZ(g.second[0], g.second[1]);
+            else if (g.first == "SWAP") q.applySWAP(g.second[0], g.second[1]);
+        }
+        auto state = q.getStateVector();
+        for (int row = 0; row < 4; ++row) {
+            U(row, k) = state[row];
+        }
+    }
+    return U;
+}
+
+// Helper to verify unitary equivalence up to a global phase
+static bool are_unitaries_equivalent(const Eigen::Matrix4cd &U1, const Eigen::Matrix4cd &U2) {
+    double trace_norm = std::abs((U1.adjoint() * U2).trace());
+    return std::abs(trace_norm - 4.0) < 1e-8;
+}
+
+static int count_cnots(const std::vector<CompiledGate> &gates) {
+    int count = 0;
+    for (const auto &g : gates) {
+        if (g.type == CompiledGate::TWO_QUBIT) {
+            count++;
+        }
+    }
+    return count;
+}
 
 // ===== Basic Compilation =====
 
@@ -225,9 +302,15 @@ TEST(JITTest, FuseAdjacentTwoQubitGates_SameOrder_O4) {
   auto ir = jit.compile(2, gates);
 
   EXPECT_EQ(ir.stats.original_gates, 2);
-  EXPECT_EQ(ir.stats.optimized_gates, 1);
-  EXPECT_EQ(ir.gates.size(), 1);
-  EXPECT_EQ(ir.gates[0].type, CompiledGate::TWO_QUBIT);
+  EXPECT_LE(count_cnots(ir.gates), 3);
+  
+  Eigen::Matrix4cd U_orig = get_unitary_from_input(gates, {});
+  Eigen::Matrix4cd U_comp = get_unitary_from_compiled(ir.gates);
+  std::cout << "\n--- UNITARY DEBUG SameOrder_O4 ---\n";
+  std::cout << "U_orig:\n" << U_orig << "\n";
+  std::cout << "U_comp:\n" << U_comp << "\n";
+  std::cout << "U_orig * U_comp^\dagger:\n" << (U_orig * U_comp.adjoint()) << "\n";
+  EXPECT_TRUE(are_unitaries_equivalent(U_orig, U_comp)) << "Compiled unitary does not match original for SameOrder_O4";
 }
 
 TEST(JITTest, FuseAdjacentTwoQubitGates_SwappedOrder_O4) {
@@ -238,9 +321,11 @@ TEST(JITTest, FuseAdjacentTwoQubitGates_SwappedOrder_O4) {
   auto ir = jit.compile(2, gates);
 
   EXPECT_EQ(ir.stats.original_gates, 2);
-  EXPECT_EQ(ir.stats.optimized_gates, 1);
-  EXPECT_EQ(ir.gates.size(), 1);
-  EXPECT_EQ(ir.gates[0].type, CompiledGate::TWO_QUBIT);
+  EXPECT_LE(count_cnots(ir.gates), 3);
+
+  Eigen::Matrix4cd U_orig = get_unitary_from_input(gates, {});
+  Eigen::Matrix4cd U_comp = get_unitary_from_compiled(ir.gates);
+  EXPECT_TRUE(are_unitaries_equivalent(U_orig, U_comp)) << "Compiled unitary does not match original for SwappedOrder_O4";
 }
 
 TEST(JITTest, FuseAdjacentTwoQubitGates_Commute_O4) {
@@ -251,8 +336,16 @@ TEST(JITTest, FuseAdjacentTwoQubitGates_Commute_O4) {
   auto ir = jit.compile(3, gates);
 
   EXPECT_EQ(ir.stats.original_gates, 3);
-  // CNOT and CZ should fuse. X(2) is independent. Total gates: 2
-  EXPECT_EQ(ir.stats.optimized_gates, 2);
+  
+  int cnots = count_cnots(ir.gates);
+  EXPECT_LE(cnots, 3);
+  
+  std::vector<std::pair<std::string, std::vector<int>>> sub_gates = {
+      {"CNOT", {0, 1}}, {"CZ", {0, 1}}};
+  auto ir_sub = jit.compile(2, sub_gates);
+  Eigen::Matrix4cd U_orig = get_unitary_from_input(sub_gates, {});
+  Eigen::Matrix4cd U_comp = get_unitary_from_compiled(ir_sub.gates);
+  EXPECT_TRUE(are_unitaries_equivalent(U_orig, U_comp)) << "Subsystem 0,1 compiled unitary does not match original";
 }
 
 TEST(JITTest, IdentityCancellation_O4) {

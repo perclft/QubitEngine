@@ -153,6 +153,15 @@ private:
 
   int count_fused_blocks(const std::vector<CompiledGate> &gates);
   
+  struct KAKDecomposition {
+    Matrix2x2 A1, A2;
+    double x, y, z;
+    Matrix2x2 B1, B2;
+  };
+
+  KAKDecomposition decompose_unitary_kak(const Matrix4x4 &U);
+  std::vector<CompiledGate> synthesize_kak(const KAKDecomposition &kak, int q0, int q1);
+
 private:
   void apply_gate_to_unitary(std::vector<Complex>& unitary, 
                             const std::vector<int>& block_qubits, 

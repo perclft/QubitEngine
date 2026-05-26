@@ -1,94 +1,160 @@
 import torch
 import torch.nn as nn
-from typing import List, Callable, Optional
+from typing import List, Callable, Optional, Tuple
 import qubit_engine  # The C++ Extension Module
 
 class QuantumFunction(torch.autograd.Function):
     """
     Custom Autograd Function connecting PyTorch to QubitEngine.
-    Forward: Calculates Expectation Value <H>.
-    Backward: Calculates Gradients via Parameter Shift Rule (executed in C++).
+    Forward: Calculates Expectation Value <H> for a batch of parameters and inputs in parallel.
+    Backward: Calculates Gradients via parameter-shift or adjoint methods in parallel.
     """
 
     @staticmethod
-    def forward(ctx, params, num_qubits, hamiltonian_str, ansatz_func):
+    def forward(
+        ctx,
+        params: torch.Tensor,
+        inputs: torch.Tensor,
+        num_qubits: int,
+        hamiltonian: List[Tuple[float, str]],
+        ansatz_func: Callable,
+        diff_method: str = "parameter-shift",
+        backend: str = "cpu"
+    ) -> torch.Tensor:
         """
-        params: Tensor of shape (batch_size, n_params) or (n_params)
+        params: Tensor of shape (n_params,) or (batch_size, n_params)
+        inputs: Tensor of shape (n_inputs,) or (batch_size, n_inputs)
         num_qubits: int
-        hamiltonian_str: list of "coeff string" e.g. ["1.0 Z0", "0.5 X1"]
-        ansatz_func: Python function(params, register) -> void
+        hamiltonian: list of tuples, e.g. [(1.0, "Z0"), (0.5, "X1")]
+        ansatz_func: Python function(params, inputs, register) -> void
+        diff_method: 'parameter-shift', 'adjoint', or 'adjoint-gpu'
+        backend: 'cpu' or 'gpu'
         """
-        # Save context for backward
+        # Save context attributes
+        params_is_1d = (params.ndim == 1)
+        inputs_is_1d = (inputs.ndim == 1)
+        ctx.params_is_1d = params_is_1d
+        ctx.inputs_is_1d = inputs_is_1d
         ctx.num_qubits = num_qubits
-        ctx.hamiltonian_str = hamiltonian_str
+        ctx.hamiltonian = hamiltonian
         ctx.ansatz_func = ansatz_func
+        ctx.diff_method = diff_method
+        ctx.backend = backend
         
-        # Detach params to convert to standard list for C++
-        params_list = params.detach().cpu().numpy().tolist()
-        ctx.save_for_backward(params)
+        # Promote to 2D
+        params_2d = params if params.ndim == 2 else params.unsqueeze(0)
+        inputs_2d = inputs if inputs.ndim == 2 else inputs.unsqueeze(0)
+        
+        batch_size = max(params_2d.shape[0], inputs_2d.shape[0])
+        if params_2d.shape[0] < batch_size:
+            params_2d = params_2d.expand(batch_size, -1)
+        if inputs_2d.shape[0] < batch_size:
+            inputs_2d = inputs_2d.expand(batch_size, -1)
+            
+        ctx.num_params = params_2d.shape[1]
+        ctx.num_inputs = inputs_2d.shape[1]
+        ctx.save_for_backward(params, inputs)
 
-        # Call C++ Engine
-        # Expectation value <H>
-        # Note: We need a C++ binding that takes (params, ansatz, hamiltonian) and returns energy.
-        # Currently we have `QuantumDifferentiator::calculateGradients`.
-        # We likely need `QuantumDifferentiator::evaluateEnergy` exposed or similar.
-        # Or we manually instantiate Register, apply ansatz, measure.
-        
-        # Let's assume for MVP we just use the register directly in python?
-        # No, for performance (and MPI), we want the C++ engine to handle it.
-        
-        # NOTE: The current python_bindings.cpp might need updates to expose a helper
-        # that does 'RunCircuitAndMeasure'. 
-        
-        # Placeholder: using single-shot binding if available, else we loop.
-        # Using a hypothetical `qubit_engine.run_vqe_step(n, params, ansatz, hamiltonian)`
-        # If not present, we will implement it in python_bindings.cpp next.
-        
-        energy = qubit_engine.get_expectation_value(num_qubits, params_list, ansatz_func, hamiltonian_str)
-        
-        return torch.tensor(energy, dtype=params.dtype, device=params.device)
+        # Convert tensors to python lists for pybind11
+        params_list = params_2d.detach().cpu().numpy().tolist()
+        inputs_list = inputs_2d.detach().cpu().numpy().tolist()
+
+        # Call the parallel batched expectation value helper
+        energies = qubit_engine.get_expectation_value_batched(
+            num_qubits, params_list, inputs_list, ansatz_func, hamiltonian
+        )
+
+        out_tensor = torch.tensor(energies, dtype=params.dtype, device=params.device)
+        return out_tensor if (not params_is_1d or not inputs_is_1d) else out_tensor[0]
 
     @staticmethod
-    def backward(ctx, grad_output):
-        params, = ctx.saved_tensors
-        params_list = params.detach().cpu().numpy().tolist()
+    def backward(ctx, grad_output: torch.Tensor) -> tuple:
+        params, inputs = ctx.saved_tensors
+        params_is_1d = ctx.params_is_1d
+        inputs_is_1d = ctx.inputs_is_1d
+
+        # Promote to 2D and expand
+        params_2d = params if params.ndim == 2 else params.unsqueeze(0)
+        inputs_2d = inputs if inputs.ndim == 2 else inputs.unsqueeze(0)
         
-        # Call C++ Engine for Gradients (MPI/GPU Accelerated)
-        # Returns list [dE/dp0, dE/dp1, ...]
-        grads_list = qubit_engine.get_gradients(
-            ctx.num_qubits, 
-            params_list, 
-            ctx.ansatz_func, 
-            ctx.hamiltonian_str
+        batch_size = max(params_2d.shape[0], inputs_2d.shape[0])
+        if params_2d.shape[0] < batch_size:
+            params_2d = params_2d.expand(batch_size, -1)
+        if inputs_2d.shape[0] < batch_size:
+            inputs_2d = inputs_2d.expand(batch_size, -1)
+
+        params_list = params_2d.detach().cpu().numpy().tolist()
+        inputs_list = inputs_2d.detach().cpu().numpy().tolist()
+
+        # Call C++ parallel batched gradient solver
+        batch_grads = qubit_engine.get_gradients_batched(
+            ctx.num_qubits,
+            params_list,
+            inputs_list,
+            ctx.ansatz_func,
+            ctx.hamiltonian,
+            ctx.diff_method,
+            ctx.backend
         )
-        
-        grad_input = torch.tensor(grads_list, dtype=params.dtype, device=params.device)
-        
-        # Chain Rule: dL/dParam = (dL/dEnergy) * (dEnergy/dParam)
-        return grad_input * grad_output, None, None, None
+
+        grad_tensor = torch.tensor(batch_grads, dtype=params.dtype, device=params.device)
+
+        # Split gradients
+        grad_params_all = grad_tensor[:, :ctx.num_params]
+        grad_inputs_all = grad_tensor[:, ctx.num_params:]
+
+        # Apply chain rule
+        # grad_output has shape (batch_size,) if batched, else scalar ()
+        if grad_output.ndim > 0:
+            grad_output_unsqueezed = grad_output.unsqueeze(1)
+            grad_params_all = grad_params_all * grad_output_unsqueezed
+            grad_inputs_all = grad_inputs_all * grad_output_unsqueezed
+        else:
+            grad_params_all = grad_params_all * grad_output
+            grad_inputs_all = grad_inputs_all * grad_output
+
+        # Reduce back to 1D if inputs were 1D
+        grad_params = grad_params_all.sum(dim=0) if params_is_1d else grad_params_all
+        grad_inputs = grad_inputs_all.sum(dim=0) if inputs_is_1d else grad_inputs_all
+
+        return grad_params, grad_inputs, None, None, None, None, None
 
 class QuantumLayer(nn.Module):
-    def __init__(self, num_qubits, num_params, hamiltonian, ansatz_func):
+    """
+    Variational Quantum Layer (VQC) integrating classical input features with trainable weights.
+    """
+    def __init__(
+        self,
+        num_qubits: int,
+        num_params: int,
+        hamiltonian: List[Tuple[float, str]],
+        ansatz_func: Callable,
+        diff_method: str = "parameter-shift",
+        backend: str = "cpu"
+    ):
         super().__init__()
         self.num_qubits = num_qubits
         self.num_params = num_params
         self.hamiltonian = hamiltonian
         self.ansatz = ansatz_func
-        
-        # Learnable Parameters initialized randomly
-        self.params = nn.Parameter(torch.rand(num_params) * 2 * 3.14159)
+        self.diff_method = diff_method
+        self.backend = backend
 
-    def forward(self, x):
-        # x is input features. 
-        # Typically in QML: features encoded into circuit, OR params are the weights.
-        # This layer acts as a "Variational Quantum Circuit" with fixed input-independent weights?
-        # OR x modifies the weights?
-        
-        # MVP: Fixed Variational Layer (VQE-style) returning scalar energy.
-        # Usually we want: Input -> Encoding(x) -> Variational(theta) -> Measure.
-        
-        # Let's assume 'x' acts as a scaling factor or additional rotation for now,
-        # or we just ignore x if this is a raw VQE optimization layer.
-        
-        return QuantumFunction.apply(self.params, self.num_qubits, self.hamiltonian, self.ansatz)
+        # Trainable weights initialized randomly
+        self.params = nn.Parameter(torch.rand(num_params) * 2.0 * 3.141592653589793)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        x: Input feature tensor of shape (n_inputs,) or (batch_size, n_inputs)
+        """
+        return QuantumFunction.apply(
+            self.params,
+            x,
+            self.num_qubits,
+            self.hamiltonian,
+            self.ansatz,
+            self.diff_method,
+            self.backend
+        )
+
 

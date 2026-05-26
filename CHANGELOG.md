@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **Cartan KAK Decomposition (JIT O4)**: Implemented analytical two-qubit gate simplification using KAK (Cartan) decomposition to reduce arbitrary adjacent two-qubit unitaries down to at most 3 CNOT gates. Fixed the magic basis matrix to align with standard Bell basis coordinates and integrated exact basis coefficients for 0, 1, 2, and 3 CNOT exact gate synthesis.
+- **Batched PyTorch/QML Integration**: Added multi-threaded python bindings (`get_expectation_value_batched` and `get_gradients_batched`) with OpenMP parallelization, automatic tensor promotion, and unified backpropagation for variational quantum algorithms in PyTorch.
 - **Pythonic Circuit-Builder API**: Introduced fluent `Circuit` builder (`circuit.py`) with support for basic quantum gates, `Result` metadata wrapping, high-level noise wrapper, and VQE execution.
 - **Circuit Presets (Web)**: Integrated standard quantum algorithm presets (Bell, GHZ, QFT, Teleportation) for quick loading in the Circuit Lab.
 - **Hardware-Specific Noise Presets**: Added calibration configurations for `IBM Brisbane` and `Google Sycamore` with customized per-qubit and per-edge noise channel application.

@@ -283,6 +283,103 @@ PYBIND11_MODULE(core, m) {
       "Calculate gradients for PyTorch backward pass");
 
   m.def(
+      "get_expectation_value_batched",
+      [](int num_qubits,
+         std::vector<std::vector<double>> batch_params,
+         std::vector<std::vector<double>> batch_inputs,
+         py::function ansatz_func,
+         std::vector<std::pair<double, std::string>> hamiltonian_data) {
+        
+        std::vector<PauliTerm> hamiltonian;
+        for (const auto &item : hamiltonian_data) {
+          hamiltonian.push_back({item.first, item.second});
+        }
+
+        size_t batch_size = batch_params.size();
+        std::vector<double> energies(batch_size, 0.0);
+
+        // Release GIL for the outer OpenMP loop
+        py::gil_scoped_release release;
+
+        #pragma omp parallel for schedule(dynamic)
+        for (int b = 0; b < static_cast<int>(batch_size); ++b) {
+          QuantumRegister qreg(num_qubits);
+          
+          {
+            py::gil_scoped_acquire acquire;
+            ansatz_func(batch_params[b], batch_inputs[b], &qreg);
+          }
+
+          double energy = 0.0;
+          for (const auto &term : hamiltonian) {
+            energy += term.coefficient * qreg.expectationValue(term.pauli_string);
+          }
+          energies[b] = energy;
+        }
+
+        return energies;
+      },
+      "Calculate expectation values for a batch of parameters and inputs in parallel");
+
+  m.def(
+      "get_gradients_batched",
+      [](int num_qubits,
+         std::vector<std::vector<double>> batch_params,
+         std::vector<std::vector<double>> batch_inputs,
+         py::function ansatz_func,
+         std::vector<std::pair<double, std::string>> hamiltonian_data,
+         std::string diff_method,
+         std::string backend) {
+        
+        std::vector<PauliTerm> hamiltonian;
+        for (const auto &item : hamiltonian_data) {
+          hamiltonian.push_back({item.first, item.second});
+        }
+
+        size_t batch_size = batch_params.size();
+        size_t num_params = batch_params.empty() ? 0 : batch_params[0].size();
+        size_t num_inputs = batch_inputs.empty() ? 0 : batch_inputs[0].size();
+        size_t total_vars = num_params + num_inputs;
+
+        std::vector<std::vector<double>> batch_grads(batch_size, std::vector<double>(total_vars, 0.0));
+
+        // Release GIL for the outer OpenMP loop
+        py::gil_scoped_release release;
+
+        #pragma omp parallel for schedule(dynamic)
+        for (int b = 0; b < static_cast<int>(batch_size); ++b) {
+          // Combined ansatz wrapper
+          QuantumDifferentiator::AnsatzFunc<QuantumRegister> cpp_ansatz =
+              [&](const std::vector<double> &combined_p, QuantumRegister &q) {
+                std::vector<double> p(combined_p.begin(), combined_p.begin() + num_params);
+                std::vector<double> x(combined_p.begin() + num_params, combined_p.end());
+                py::gil_scoped_acquire acquire;
+                ansatz_func(p, x, &q);
+              };
+
+          // Combine parameters and inputs
+          std::vector<double> combined_vars = batch_params[b];
+          combined_vars.insert(combined_vars.end(), batch_inputs[b].begin(), batch_inputs[b].end());
+
+          std::vector<double> grads;
+          if (diff_method == "adjoint-gpu" || (diff_method == "adjoint" && backend == "gpu")) {
+            grads = QuantumDifferentiator::calculateGradientsAdjointGPU(
+                num_qubits, combined_vars, cpp_ansatz, hamiltonian);
+          } else if (diff_method == "adjoint") {
+            grads = QuantumDifferentiator::calculateGradientsAdjoint<QuantumRegister>(
+                num_qubits, combined_vars, cpp_ansatz, hamiltonian);
+          } else { // default parameter-shift
+            grads = QuantumDifferentiator::calculateGradients(
+                num_qubits, combined_vars, cpp_ansatz, hamiltonian);
+          }
+          batch_grads[b] = grads;
+        }
+
+        return batch_grads;
+      },
+      "Calculate analytical gradients for a batch of parameters and inputs in parallel");
+
+  m.def(
       "calculate_gradients_adjoint",
       [](int num_qubits, std::vector<double> params, py::function ansatz_func,
          std::vector<std::pair<double, std::string>> hamiltonian_data) {
