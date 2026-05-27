@@ -97,6 +97,7 @@ public:
 
   void optimize();        // Optimizes the current tape
   void mapToTopology();   // Routes tape to physical topology
+  void transpileToClifford(bool approximate = false, bool use_stochastic = false);
 
   // Helper to Replay Tape (Optional, for adjoint)
   void applyRegisteredGate(const RecordedGate &gate);

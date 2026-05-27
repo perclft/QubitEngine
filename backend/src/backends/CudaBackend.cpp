@@ -498,9 +498,14 @@ void CudaBackend::applyFusedBlock(const std::vector<int> &targets,
 }
 
 void CudaBackend::applyDenseUnitary(const std::vector<size_t> &targets,
-                                   const std::vector<Complex> &matrix) {
-  throw FeatureNotSupportedException(
-      "applyDenseUnitary not supported in CUDA backend.");
+                                    const std::vector<Complex> &matrix) {
+  int k = static_cast<int>(targets.size());
+  if (k < 1 || k > 3) {
+    throw FeatureNotSupportedException(
+        "applyDenseUnitary only supports up to 3 target qubits in CUDA backend.");
+  }
+  std::vector<int> int_targets(targets.begin(), targets.end());
+  applyFusedBlock(int_targets, matrix);
 }
 
 } // namespace qubit_engine

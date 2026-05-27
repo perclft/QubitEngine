@@ -35,4 +35,10 @@ public:
       : Exception(message) {}
 };
 
+class NonCliffordGateException : public Exception {
+public:
+  explicit NonCliffordGateException(const std::string &message)
+      : Exception(message) {}
+};
+
 } // namespace qubit_engine

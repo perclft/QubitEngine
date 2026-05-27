@@ -10,6 +10,7 @@
 #include "QuantumDifferentiator.hpp"
 #include "QuantumRegister.hpp"
 #include "SPSAOptimizer.hpp"
+#include "Exceptions.hpp"
 
 // Include GPU headers
 #include "backends/GPUQuantumRegister.hpp"
@@ -32,6 +33,8 @@ void applyAnsatzWrapper(
 
 PYBIND11_MODULE(core, m) {
   m.doc() = "QubitEngine Python Bindings";
+
+  py::register_exception<qubit_engine::NonCliffordGateException>(m, "NonCliffordGateException");
 
   // --- StabilizerBackend Binding ---
   py::class_<qubit_engine::StabilizerBackend>(m, "StabilizerBackend")
@@ -90,6 +93,7 @@ PYBIND11_MODULE(core, m) {
       .def("applyPhaseT", &QuantumRegister::applyPhaseT)
       .def("applySWAP", &QuantumRegister::applySWAP)
       .def("applyCZ", &QuantumRegister::applyCZ)
+      .def("applyDenseUnitary", &QuantumRegister::applyDenseUnitary, py::arg("targets"), py::arg("matrix"), "Apply a dense custom unitary matrix to a set of target qubits")
       .def("measure", &QuantumRegister::measure)
       .def("getProbabilities", &QuantumRegister::getProbabilities)
       .def("expectationValue", &QuantumRegister::expectationValue)
@@ -115,7 +119,13 @@ PYBIND11_MODULE(core, m) {
       .def("setNoiseModel", &QuantumRegister::setNoiseModel,
            py::arg("model"), "Attach a noise model for automatic post-gate noise injection")
       .def("getNoiseModel", &QuantumRegister::getNoiseModel,
-           py::return_value_policy::reference, "Get the current noise model (or None)");
+           py::return_value_policy::reference, "Get the current noise model (or None)")
+      .def("enableRecording", &QuantumRegister::enableRecording, py::arg("enable"), "Enable or disable gate recording to the circuit tape")
+      .def("clearTape", &QuantumRegister::clearTape, "Clear all recorded gates from the tape")
+      .def("optimize", &QuantumRegister::optimize, "Optimize the recorded circuit tape in-place")
+      .def("transpileToClifford", &QuantumRegister::transpileToClifford,
+           py::arg("approximate") = false, py::arg("use_stochastic") = false,
+           "Transpile non-Clifford gates on the tape to Clifford equivalents");
 
   // --- ReadoutError Binding ---
   py::class_<qubit_engine::ReadoutError>(m, "ReadoutError")

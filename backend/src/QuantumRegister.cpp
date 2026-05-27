@@ -348,6 +348,16 @@ void QuantumRegister::mapToTopology() {
   CircuitOptimizer::mapToTopology(tape, config);
 }
 
+void QuantumRegister::transpileToClifford(bool approximate, bool use_stochastic) {
+#ifdef ENABLE_OPENTELEMETRY
+  auto tracer = opentelemetry::trace::Provider::GetTracerProvider()->GetTracer("QubitEngine");
+  auto span = tracer->StartSpan("QuantumRegister::transpileToClifford");
+  auto scope = tracer->WithActiveSpan(span);
+#endif
+  spdlog::debug("Transpiling circuit tape of size {} to Clifford equivalents", tape.size());
+  CircuitOptimizer::transpileToClifford(tape, approximate, use_stochastic);
+}
+
 // --- Replay Logic (Kept purely on proxy as it uses public API) ---
 
 void QuantumRegister::applyRegisteredGate(const RecordedGate &gate) {

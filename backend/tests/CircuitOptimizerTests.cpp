@@ -1,6 +1,7 @@
 // Unit Tests for CircuitOptimizer — Gate Cancellation & Tape Optimization
 // Migrated from legacy src/CircuitOptimizerTest.cpp (assert-based) to GTest
 #include "../src/CircuitOptimizer.hpp"
+#include "../src/Exceptions.hpp"
 #include <gtest/gtest.h>
 
 using namespace qubit_engine;
@@ -164,3 +165,83 @@ TEST(CircuitOptimizerTest, RotationGates_DontCancel) {
   CircuitOptimizer::optimize(tape);
   EXPECT_EQ(tape.size(), 2) << "RY-RY should not cancel (not self-inverse)";
 }
+
+// ===== Clifford Transpiler Tests =====
+
+TEST(CircuitOptimizerTest, TranspilerStrictValidation_Throws) {
+  std::vector<Gate> tape = {
+      makeGate(Gate::H, {0}),
+      makeGate(Gate::RZ, {0}, {0.4}) // Non-Clifford
+  };
+  EXPECT_THROW(CircuitOptimizer::transpileToClifford(tape, false), NonCliffordGateException);
+}
+
+TEST(CircuitOptimizerTest, TranspilerStrictValidation_NoThrow_CliffordOnly) {
+  std::vector<Gate> tape = {
+      makeGate(Gate::H, {0}),
+      makeGate(Gate::CNOT, {0, 1}),
+      makeGate(Gate::PHASE_S, {1})
+  };
+  EXPECT_NO_THROW(CircuitOptimizer::transpileToClifford(tape, false));
+  EXPECT_EQ(tape.size(), 3);
+}
+
+TEST(CircuitOptimizerTest, TranspilerApproximation_SnappingRotations) {
+  // RZ(0.1) -> 0 -> deleted
+  // RZ(1.4) -> pi/2 -> PHASE_S
+  // RZ(3.0) -> pi -> Z
+  // RZ(4.5) -> 3*pi/2 = -pi/2 -> Z + PHASE_S
+  std::vector<Gate> tape = {
+      makeGate(Gate::RZ, {0}, {0.1}),
+      makeGate(Gate::RZ, {0}, {1.4}),
+      makeGate(Gate::RZ, {0}, {3.0}),
+      makeGate(Gate::RZ, {0}, {4.5}),
+  };
+  CircuitOptimizer::transpileToClifford(tape, true, false);
+
+  // Exclude deleted RZ(0.1)
+  // RZ(1.4) -> PHASE_S
+  // RZ(3.0) -> Z
+  // RZ(4.5) -> Z, PHASE_S
+  ASSERT_EQ(tape.size(), 4);
+  EXPECT_EQ(tape[0].type, Gate::PHASE_S);
+  EXPECT_EQ(tape[1].type, Gate::Z);
+  EXPECT_EQ(tape[2].type, Gate::Z);
+  EXPECT_EQ(tape[3].type, Gate::PHASE_S);
+}
+
+TEST(CircuitOptimizerTest, TranspilerApproximation_StochasticHalfway) {
+  // RZ(pi/4) is exactly halfway between 0 and pi/2.
+  // In deterministic mode, it rounds up to S.
+  std::vector<Gate> tape_det = { makeGate(Gate::RZ, {0}, {3.141592653589793 / 4.0}) };
+  CircuitOptimizer::transpileToClifford(tape_det, true, false);
+  ASSERT_EQ(tape_det.size(), 1);
+  EXPECT_EQ(tape_det[0].type, Gate::PHASE_S);
+
+  // In stochastic mode, over 100 runs, it should result in roughly 50% PHASE_S and 50% empty.
+  int phase_s_count = 0;
+  for (int i = 0; i < 100; ++i) {
+    std::vector<Gate> tape_stoch = { makeGate(Gate::RZ, {0}, {3.141592653589793 / 4.0}) };
+    CircuitOptimizer::transpileToClifford(tape_stoch, true, true);
+    if (!tape_stoch.empty()) {
+      EXPECT_EQ(tape_stoch.size(), 1);
+      EXPECT_EQ(tape_stoch[0].type, Gate::PHASE_S);
+      phase_s_count++;
+    }
+  }
+  EXPECT_GE(phase_s_count, 20);
+  EXPECT_LE(phase_s_count, 80);
+}
+
+TEST(CircuitOptimizerTest, TranspilerApproximation_Toffoli) {
+  std::vector<Gate> tape = { makeGate(Gate::TOFFOLI, {0, 1, 2}) };
+  CircuitOptimizer::transpileToClifford(tape, true, false);
+  
+  // Toffoli decomposes to 15 gates. Some of these are T/T† (which snap to S/I).
+  // Let's verify that the output contains only Clifford gates.
+  EXPECT_FALSE(tape.empty());
+  for (const auto& g : tape) {
+    EXPECT_TRUE(g.type == Gate::H || g.type == Gate::CNOT || g.type == Gate::PHASE_S || g.type == Gate::Z);
+  }
+}
+

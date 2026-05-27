@@ -360,3 +360,53 @@ TEST(JITTest, IdentityCancellation_O4) {
   EXPECT_EQ(ir.stats.optimized_gates, 0);
   EXPECT_EQ(ir.gates.size(), 0);
 }
+
+#ifdef ENABLE_CUDA
+#include "../src/backends/CudaBackend.hpp"
+
+TEST(JITTest, CudaApplyDenseUnitary_JIT) {
+  QuantumJIT jit(QuantumJIT::O4);
+  std::vector<std::pair<std::string, std::vector<int>>> gates = {
+      {"H", {0}},
+      {"CNOT", {0, 1}},
+      {"RZ", {1}},
+      {"CNOT", {0, 1}}
+  };
+  std::vector<double> params = {0.5};
+
+  auto ir = jit.compile(2, gates, params);
+  
+  bool has_fused = false;
+  for (const auto& g : ir.gates) {
+    if (!g.fused_unitary.empty()) {
+      has_fused = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(has_fused);
+
+  qubit_engine::CudaBackend cuda_backend(2);
+  
+  for (const auto& g : ir.gates) {
+    std::vector<size_t> targets;
+    for (int t : g.target_qubits) targets.push_back(static_cast<size_t>(t));
+    
+    if (!g.fused_unitary.empty()) {
+      EXPECT_NO_THROW(cuda_backend.applyDenseUnitary(targets, g.fused_unitary));
+    } else if (g.type == CompiledGate::SINGLE_QUBIT) {
+      std::vector<qubit_engine::Complex> matrix(g.single_matrix.begin(), g.single_matrix.end());
+      EXPECT_NO_THROW(cuda_backend.applyDenseUnitary(targets, matrix));
+    } else if (g.type == CompiledGate::TWO_QUBIT) {
+      std::vector<qubit_engine::Complex> matrix(g.two_matrix.begin(), g.two_matrix.end());
+      EXPECT_NO_THROW(cuda_backend.applyDenseUnitary(targets, matrix));
+    }
+  }
+
+  auto state = cuda_backend.getStateVector();
+  double norm = 0.0;
+  for (auto c : state) {
+    norm += std::norm(c);
+  }
+  EXPECT_NEAR(norm, 1.0, 1e-9);
+}
+#endif
