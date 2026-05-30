@@ -405,24 +405,14 @@ std::vector<double> QuantumDifferentiator::calculateGradientsAdjointGPU(
   for (const auto &term : hamiltonian) {
     qe::cuda::setDeviceStateZero(pauli_psi_ptr, size_bytes);
     
-    // Encode Pauli ops
+    // Encode Pauli ops (matching direct qubit mapping)
     // 0=I, 1=X, 2=Y, 3=Z
     std::vector<int> pauli_ops(num_qubits, 0);
-    for (size_t q = 0; q < static_cast<size_t>(num_qubits) && q < term.pauli_string.size(); ++q) {
-      char op = term.pauli_string[term.pauli_string.size() - 1 - q]; // Need to match correct qubit endianness. The current C++ loop uses `q` directly.
-      if (op == 'X') pauli_ops[q] = 1;
-      else if (op == 'Y') pauli_ops[q] = 2;
-      else if (op == 'Z') pauli_ops[q] = 3;
-    }
-    
-    // Override! The CPU codebase loops `q` from 0 to term.pauli_string.size()-1
-    // and checks bit `(i >> q) & 1`.
     for (size_t q = 0; q < static_cast<size_t>(num_qubits) && q < term.pauli_string.size(); ++q) {
       char op = term.pauli_string[q];
       if (op == 'X') pauli_ops[q] = 1;
       else if (op == 'Y') pauli_ops[q] = 2;
       else if (op == 'Z') pauli_ops[q] = 3;
-      else pauli_ops[q] = 0;
     }
 
     int* d_pauli_ops;

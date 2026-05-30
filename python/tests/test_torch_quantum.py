@@ -95,43 +95,10 @@ def test_quantum_function_batched_backward():
     
     assert params.grad is not None
     assert inputs.grad is not None
-    # Wait, because params is a shared weight in neural network, its gradient shape is (2, 1) in params.grad
-    # since we passed params as [[pi/4], [pi/3]] representing batched weights (if used as individual weights).
-    # Wait! If params is passed as batched tensor (batch_size, n_params) to QuantumFunction, PyTorch expects
-    # its gradient to match that shape (batch_size, n_params).
-    # In QuantumFunction.backward, we check if is_batched: grad_params = grad_params.sum(dim=0).
-    # Wait, if we sum it, then grad_params will have shape (n_params,) instead of (batch_size, n_params)!
-    # Let's think about this:
-    # If the user passes a batched parameter tensor `params` to `QuantumFunction.forward`, PyTorch expects the
-    # returned gradient to have the EXACT SAME shape as the input tensor `params`!
-    # So if `params` has shape `(batch_size, n_params)`, its gradient must have shape `(batch_size, n_params)`.
-    # It only needs to be summed over batch if `params` was a 1D tensor (non-batched shared weight) but the inputs
-    # were batched!
-    # Wait, can `params` be 1D (non-batched) while `inputs` is 2D (batched)?
-    # YES! In `QuantumLayer.forward`, `self.params` is a 1D nn.Parameter of shape `(num_params,)`, while `x` is
-    # a 2D batch of shape `(batch_size, num_inputs)`.
-    # When `QuantumFunction.apply` is called, it receives a 1D `self.params` and a 2D `x`!
-    # In this case:
-    # `params.ndim` is 1, so `is_batched` is `False`!
-    # But wait! If `is_batched` is `False`, then `params_2d = params.unsqueeze(0)` which has shape `(1, num_params)`.
-    # But `inputs_2d = inputs` which has shape `(batch_size, num_inputs)`.
-    # To pass these to `get_expectation_value_batched` and `get_gradients_batched`, they must have the SAME batch dimension!
-    # So if `params` is 1D and `inputs` is 2D, we must tile/expand `params` to `(batch_size, num_params)`!
-    # Ah! That is a very important detail!
-    # Let's check: if `params_2d` has shape `(1, num_params)` and `inputs_2d` has `(batch_size, num_inputs)`,
-    # we should expand `params_2d` to match `batch_size`:
-    # `params_2d = params_2d.expand(batch_size, -1)`!
-    # Let's modify `torch_quantum.py` to handle this expansion correctly!
-    # And then, in `backward`:
-    # If `params` was 1D (i.e. `not is_batched` at the input of `forward`), then `grad_params` must be summed over the
-    # batch dimension to return a 1D gradient of shape `(num_params,)`!
-    # If `params` was 2D, we do NOT sum it, we keep it as `(batch_size, num_params)`.
-    # This is extremely logical and correct!
-    # Let's check our test again: in `test_quantum_function_batched_backward`, we defined `params` as 2D:
-    # `params = torch.tensor([[math.pi / 4.0], [math.pi / 3.0]], ...)`
-    # Since it is 2D, PyTorch expects `params.grad` to have shape `(2, 1)`, containing the individual gradients:
-    # `[-sin(pi/4 + 0.1)]` and `[-sin(pi/3 + 0.2)]`.
-    # Let's write the test assertion to expect this:
+    # When `params` is a 2D tensor (batch_size, n_params), PyTorch expects `params.grad` 
+    # to have the exact same shape. If `params` was a 1D tensor representing a shared 
+    # network weight, its gradient would be summed over the batch dimension in `backward`.
+    # Here, we test the 2D case where each batch item has its own parameters.
     assert torch.isclose(params.grad[0, 0], torch.tensor(expected_grad_params_0, dtype=torch.float64), atol=1e-4)
     assert torch.isclose(params.grad[1, 0], torch.tensor(expected_grad_params_1, dtype=torch.float64), atol=1e-4)
     assert torch.isclose(inputs.grad[0, 0], torch.tensor(expected_grad_params_0, dtype=torch.float64), atol=1e-4)

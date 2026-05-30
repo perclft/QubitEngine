@@ -1,5 +1,6 @@
 #include "Router.hpp"
 #include "../QuantumRegister.hpp"
+#include "../Exceptions.hpp"
 #include <queue>
 #include <algorithm>
 #include <stdexcept>
@@ -50,7 +51,7 @@ std::vector<int> Router::findShortestPath(int src, int dst) const {
     }
 
     if (parent[dst] == -1) {
-        throw std::runtime_error("Disconnected hardware topology. Cannot route.");
+        throw InvalidArgumentException("Disconnected hardware topology. Cannot route.");
     }
 
     std::vector<int> path;

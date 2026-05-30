@@ -176,6 +176,8 @@ std::shared_ptr<ASTNode> QASMParser::parseStatement() {
                     }
                     consume(Token::PUNCTUATION, ";", "Expected ';'");
                     return m;
+                } else {
+                    throw std::runtime_error("QASM Parse Error: Expected 'measure' after '=' in assignment");
                 }
             }
         }
