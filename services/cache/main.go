@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+	"strings"
 
 	"github.com/go-redis/redis/v8"
 	api "github.com/perclft/QubitEngine/api/generated"
@@ -184,8 +185,14 @@ func (s *CacheServer) GetCacheStats(ctx context.Context, req *pb.CacheEmpty) (*p
 	// Get memory info
 	info, _ := s.rdb.Info(ctx, "memory").Result()
 	var memUsed int64 = 0
-	// Parse memory from info string (simplified)
-	fmt.Sscanf(info, "used_memory:%d", &memUsed)
+	lines := strings.Split(info, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "used_memory:") {
+			fmt.Sscanf(line, "used_memory:%d", &memUsed)
+			break
+		}
+	}
 
 	hits := atomic.LoadInt64(&s.hits)
 	misses := atomic.LoadInt64(&s.misses)

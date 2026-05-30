@@ -375,13 +375,23 @@ func (s *SchedulerServer) ListJobs(ctx context.Context, req *pb.ListJobsRequest)
 		})
 	}
 
-	start := int(req.Offset)
-	end := start + int(req.Limit)
-	if end > len(jobs) {
-		end = len(jobs)
+	offset := req.Offset
+	if offset < 0 {
+		offset = 0
 	}
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+
+	start := int(offset)
 	if start > len(jobs) {
 		start = len(jobs)
+	}
+
+	end := start + int(limit)
+	if end > len(jobs) || end < start {
+		end = len(jobs)
 	}
 
 	return &pb.JobList{

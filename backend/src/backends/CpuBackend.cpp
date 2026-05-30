@@ -927,13 +927,16 @@ std::vector<Complex> CpuBackend::getStateVector() const {
 
 void CpuBackend::applyDenseUnitary(const std::vector<size_t> &targets,
                                    const std::vector<Complex> &matrix) {
+  size_t local_dim = state.size();
   if (targets.size() == 1) {
     size_t t0 = targets[0];
     size_t stride = 1ULL << t0;
-    size_t dim = 1ULL << num_qubits;
+    if (stride >= local_dim) {
+      throw std::runtime_error("applyDenseUnitary not implemented for global qubits in CPU backend.");
+    }
 
 #pragma omp parallel for
-    for (long long i = 0; i < static_cast<long long>(dim); i += 2 * stride) {
+    for (long long i = 0; i < static_cast<long long>(local_dim); i += 2 * stride) {
       for (size_t j = 0; j < stride; ++j) {
         size_t idx0 = i + j;
         size_t idx1 = i + j + stride;
@@ -948,10 +951,12 @@ void CpuBackend::applyDenseUnitary(const std::vector<size_t> &targets,
     size_t q1 = targets[1];
     size_t m0 = 1ULL << q0;
     size_t m1 = 1ULL << q1;
-    size_t dim = 1ULL << num_qubits;
+    if (m0 >= local_dim || m1 >= local_dim) {
+      throw std::runtime_error("applyDenseUnitary not implemented for global qubits in CPU backend.");
+    }
 
 #pragma omp parallel for
-    for (long long i = 0; i < static_cast<long long>(dim); ++i) {
+    for (long long i = 0; i < static_cast<long long>(local_dim); ++i) {
       if (!(i & m0) && !(i & m1)) {
         size_t i00 = i;
         size_t i01 = i | m1; // Index 1: targets[1] set

@@ -27,6 +27,7 @@ func getJwtSecret() []byte {
 func GenerateToken(userID string, expiry time.Duration) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
 		Subject:   userID,
+		Issuer:    "qubit-engine",
 		ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 		IssuedAt:  jwt.NewNumericDate(time.Now()),
 	})

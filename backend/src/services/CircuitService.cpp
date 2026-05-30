@@ -88,9 +88,10 @@ void CircuitService::serializeState(
       try {
         auto state_vec = qreg.getStateVector();
         size_t bytes = state_vec.size() * sizeof(qubit_engine::Complex);
-        qubit_engine::ipc::SharedMemory shm(shm_name, bytes, true);
-        std::memcpy(shm.data(), state_vec.data(), bytes);
+        void* shm_ptr = qubit_engine::ipc::SharedMemory::createSegment(shm_name, bytes);
+        std::memcpy(shm_ptr, state_vec.data(), bytes);
         response->set_shm_descriptor(shm_name);
+        qubit_engine::ipc::SharedMemory::scheduleCleanup(shm_name, shm_ptr, bytes, 5000); // 5s deferred cleanup
         shm_success = true;
       } catch (const std::exception &e) {
         spdlog::error("Shared Memory Error in serializeState: {}", e.what());
