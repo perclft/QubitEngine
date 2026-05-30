@@ -8,6 +8,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <windows.h>
+#include <sddl.h>
 
 #else
 #include <fcntl.h>
@@ -59,13 +60,24 @@ SharedMemory::~SharedMemory() {
 void *SharedMemory::createSegment(const std::string &descriptor,
                                   size_t sizeBytes) {
 #ifdef _WIN32
+  SECURITY_ATTRIBUTES sa;
+  sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+  sa.bInheritHandle = FALSE;
+  
+  // D: (DACL) (A;;GA;;;OW) = Access allowed, Generic All, Owner
+  if (!ConvertStringSecurityDescriptorToSecurityDescriptorA("D:(A;;GA;;;OW)", SDDL_REVISION_1, &sa.lpSecurityDescriptor, NULL)) {
+    throw std::runtime_error("Could not construct security descriptor");
+  }
+
   HANDLE hMapFile = CreateFileMappingA(
       INVALID_HANDLE_VALUE,            // use paging file
-      NULL,                            // default security
+      &sa,                             // restricted security
       PAGE_READWRITE,                  // read/write access
       (DWORD)(sizeBytes >> 32),        // maximum object size (high-order DWORD)
       (DWORD)(sizeBytes & 0xFFFFFFFF), // maximum object size (low-order DWORD)
       descriptor.c_str());             // name of mapping object
+      
+  LocalFree(sa.lpSecurityDescriptor);
 
   if (hMapFile == NULL) {
     throw std::runtime_error("Could not create file mapping object: " +

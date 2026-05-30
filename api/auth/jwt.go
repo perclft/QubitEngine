@@ -28,6 +28,7 @@ func GenerateToken(userID string, expiry time.Duration) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
 		Subject:   userID,
 		Issuer:    "qubit-engine",
+		Audience:  jwt.ClaimStrings{"qubit-engine-api"},
 		ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 		IssuedAt:  jwt.NewNumericDate(time.Now()),
 	})
@@ -51,6 +52,16 @@ func ValidateToken(tokenString string) (string, error) {
 	}
 
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		iss, err := claims.GetIssuer()
+		if err != nil || iss != "qubit-engine" {
+			return "", fmt.Errorf("invalid issuer")
+		}
+		
+		aud, err := claims.GetAudience()
+		if err != nil || len(aud) == 0 || aud[0] != "qubit-engine-api" {
+			return "", fmt.Errorf("invalid audience")
+		}
+
 		sub, _ := claims.GetSubject()
 		return sub, nil
 	}

@@ -131,6 +131,9 @@ grpc::Status CircuitService::RunCircuit(grpc::ServerContext *context,
     return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Qubits must be between 1 and 30");
   }
 
+  static std::mutex mem_check_mutex;
+  std::unique_lock<std::mutex> lock(mem_check_mutex);
+
   if (!hasEnoughMemory(n)) {
     return grpc::Status(grpc::StatusCode::RESOURCE_EXHAUSTED, 
                         "Insufficient Server Memory for " + std::to_string(n) + " qubits.");
@@ -138,6 +141,7 @@ grpc::Status CircuitService::RunCircuit(grpc::ServerContext *context,
 
   try {
     qubit_engine::QuantumRegister qreg(n);
+    lock.unlock(); // Release lock after allocation is committed
     int num_ops = request->operations_size();
 
     if (num_ops > 0) {
