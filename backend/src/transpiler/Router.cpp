@@ -23,10 +23,10 @@ Router::Router(const HardwareConfig& config) {
 }
 
 std::vector<int> Router::findShortestPath(int src, int dst) const {
-    if (src == dst) return {src};
-    if (src >= num_qubits_ || dst >= num_qubits_) {
+    if (src < 0 || src >= num_qubits_ || dst < 0 || dst >= num_qubits_) {
         throw std::invalid_argument("Qubit ID out of bounds in Router.");
     }
+    if (src == dst) return {src};
 
     std::vector<int> parent(num_qubits_, -1);
     std::queue<int> q;
@@ -89,6 +89,13 @@ std::vector<QuantumRegister::RecordedGate> Router::route(const std::vector<Quant
     };
 
     for (const auto& gate : tape) {
+        for (size_t q : gate.qubits) {
+            if (q >= static_cast<size_t>(num_qubits_)) {
+                throw std::runtime_error("Logical qubit index " + std::to_string(q) + 
+                                         " exceeds hardware configuration size " + std::to_string(num_qubits_) + ".");
+            }
+        }
+
         if (gate.type == QuantumRegister::RecordedGate::CNOT || 
             gate.type == QuantumRegister::RecordedGate::CZ || 
             gate.type == QuantumRegister::RecordedGate::SWAP) {

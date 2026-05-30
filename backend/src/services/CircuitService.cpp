@@ -9,6 +9,7 @@
 #include <cmath>
 #include <random>
 #include <string>
+#include <atomic>
 
 #ifdef __linux__
 #include <sys/sysinfo.h>
@@ -77,12 +78,10 @@ void CircuitService::serializeState(
   if (strategy == qubit_engine::CircuitRequest::FULL_STATE) {
     bool shm_success = false;
     if (use_shm) {
-      static std::random_device rd;
-      static std::mt19937 gen(rd());
-      static const char charset[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-      std::string shm_name = "/qe_shm_";
-      for (int i = 0; i < 16; ++i) {
-        shm_name += charset[gen() % (sizeof(charset) - 1)];
+      static std::atomic<uint64_t> counter{0};
+      std::string shm_name = "/qe_shm_" + std::to_string(++counter) + "_";
+      for (int i = 0; i < 8; ++i) { // Optional: still add some small randomness using rand() or just rely on atomic
+        shm_name += std::to_string(rand() % 10);
       }
 
       try {

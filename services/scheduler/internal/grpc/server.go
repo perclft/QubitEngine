@@ -336,67 +336,103 @@ func (s *SchedulerServer) saveJob(ctx context.Context, job *models.Job) {
 }
 
 func (s *SchedulerServer) ListJobs(ctx context.Context, req *pb.ListJobsRequest) (*pb.JobList, error) {
-	// Use secondary sorted-set index instead of SCAN for O(log n) lookups
+	// 1. Determine pagination bounds
+	pageSize := int(req.Limit)
+	if pageSize <= 0 || pageSize > 100 {
+		pageSize = 50
+	}
+	offset := int(req.Offset)
+	if offset < 0 {
+		offset = 0
+	}
+
 	var allIDs []string
 	var err error
-	
+
+	// If a specific state filter is requested, we must still filter, but we can do MGET 
+	// or scan to be efficient. However, if no filter or a typical list is requested:
+	// ZRevRange uses 0-based start/stop indices
+	start := int64(offset)
+	stop := int64(offset + pageSize - 1)
+
 	if req.UserId != "" {
-		allIDs, err = s.rdb.ZRevRange(ctx, "index:jobs:user:"+req.UserId, 0, -1).Result()
+		allIDs, err = s.rdb.ZRevRange(ctx, "index:jobs:user:"+req.UserId, start, stop).Result()
 	} else {
-		allIDs, err = s.rdb.ZRevRange(ctx, "index:jobs:all", 0, -1).Result()
+		allIDs, err = s.rdb.ZRevRange(ctx, "index:jobs:all", start, stop).Result()
 	}
 
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to list jobs: %v", err)
 	}
 
+	var totalCount int64
+	if req.UserId != "" {
+		totalCount, _ = s.rdb.ZCard(ctx, "index:jobs:user:"+req.UserId).Result()
+	} else {
+		totalCount, _ = s.rdb.ZCard(ctx, "index:jobs:all").Result()
+	}
+
 	var jobs []*pb.JobStatus
-	for _, jobID := range allIDs {
-		jobBytes, err := s.rdb.Get(ctx, "job:"+jobID).Bytes()
+	if len(allIDs) > 0 {
+		// Use MGET to fetch all job JSON payloads in a single round-trip
+		keys := make([]string, len(allIDs))
+		for i, id := range allIDs {
+			keys[i] = "job:" + id
+		}
+		
+		results, err := s.rdb.MGet(ctx, keys...).Result()
 		if err != nil {
-			continue
-		}
-		var job models.Job
-		if err := json.Unmarshal(jobBytes, &job); err != nil {
-			continue
+			return nil, status.Errorf(codes.Internal, "failed to fetch jobs metadata: %v", err)
 		}
 
-		if req.StateFilter != pb.JobState_STATE_UNKNOWN && pb.JobState(job.State) != req.StateFilter {
-			continue
+		for _, item := range results {
+			if item == nil {
+				continue
+			}
+			jobStr, ok := item.(string)
+			if !ok {
+				continue
+			}
+			var job models.Job
+			if err := json.Unmarshal([]byte(jobStr), &job); err != nil {
+				continue
+			}
+
+			if req.StateFilter != pb.JobState_STATE_UNKNOWN && pb.JobState(job.State) != req.StateFilter {
+				continue
+			}
+
+			// Retrieve runtime overrides
+			if sVal, err := s.rdb.Get(ctx, "job:state:"+job.ID).Int64(); err == nil {
+				job.State = models.JobState(sVal)
+			}
+			if v, err := s.rdb.Get(ctx, "job:started_at:"+job.ID).Int64(); err == nil {
+				job.StartedAt = v
+			}
+			if v, err := s.rdb.Get(ctx, "job:completed_at:"+job.ID).Int64(); err == nil {
+				job.CompletedAt = v
+			}
+			if v, err := s.rdb.Get(ctx, "job:worker_id:"+job.ID).Result(); err == nil {
+				job.WorkerID = v
+			}
+			if v, err := s.rdb.Get(ctx, "job:error:"+job.ID).Result(); err == nil {
+				job.ErrorMessage = v
+			}
+
+			jobs = append(jobs, &pb.JobStatus{
+				JobId:        job.ID,
+				State:        pb.JobState(job.State),
+				WorkerId:     job.WorkerID,
+				StartedAt:    job.StartedAt,
+				CompletedAt:  job.CompletedAt,
+				ErrorMessage: job.ErrorMessage,
+			})
 		}
-
-		jobs = append(jobs, &pb.JobStatus{
-			JobId:        job.ID,
-			State:        pb.JobState(job.State),
-			WorkerId:     job.WorkerID,
-			StartedAt:    job.StartedAt,
-			CompletedAt:  job.CompletedAt,
-			ErrorMessage: job.ErrorMessage,
-		})
-	}
-
-	offset := req.Offset
-	if offset < 0 {
-		offset = 0
-	}
-	limit := req.Limit
-	if limit <= 0 {
-		limit = 50
-	}
-
-	start := int(offset)
-	if start > len(jobs) {
-		start = len(jobs)
-	}
-
-	end := start + int(limit)
-	if end > len(jobs) || end < start {
-		end = len(jobs)
 	}
 
 	return &pb.JobList{
-		Jobs:       jobs[start:end],
-		TotalCount: int32(len(jobs)),
+		Jobs:       jobs,
+		TotalCount: int32(totalCount),
 	}, nil
 }
 

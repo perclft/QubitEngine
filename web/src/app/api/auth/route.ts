@@ -16,6 +16,7 @@ export async function POST(request: Request) {
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(userId)
       .setIssuer('qubit-engine')
+      .setAudience('qubit-engine-api')
       .setIssuedAt()
       .setExpirationTime('24h')
       .sign(encodedSecret);

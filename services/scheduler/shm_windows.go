@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"syscall"
 	"unsafe"
 
@@ -21,6 +22,10 @@ var (
 const FILE_MAP_READ = 4
 
 func readSharedMemory(descriptor string, numQubits int32) ([]*pb.StateResponse_ComplexNumber, error) {
+	descName := strings.TrimPrefix(descriptor, "/")
+	if strings.Contains(descName, "..") || strings.Contains(descName, "/") || strings.Contains(descName, "\\") {
+		return nil, fmt.Errorf("invalid shm descriptor: path traversal detected")
+	}
 	descPtr, err := syscall.BytePtrFromString(descriptor)
 	if err != nil {
 		return nil, err

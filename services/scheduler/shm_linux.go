@@ -4,6 +4,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"syscall"
@@ -13,7 +14,11 @@ import (
 )
 
 func readSharedMemory(descriptor string, numQubits int32) ([]*pb.StateResponse_ComplexNumber, error) {
-	path := "/dev/shm/" + strings.TrimPrefix(descriptor, "/")
+	descName := strings.TrimPrefix(descriptor, "/")
+	if strings.Contains(descName, "..") || strings.Contains(descName, "/") || strings.Contains(descName, "\\") {
+		return nil, fmt.Errorf("invalid shm descriptor: path traversal detected")
+	}
+	path := "/dev/shm/" + descName
 	f, err := os.OpenFile(path, os.O_RDONLY, 0666)
 	if err != nil {
 		return nil, err
