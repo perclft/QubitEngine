@@ -1,15 +1,22 @@
 import { NextResponse } from 'next/server';
 import { SignJWT } from 'jose';
 
-const JWT_SECRET = process.env.QUBIT_ENGINE_JWT_SECRET || 'qubit-engine-development-secret-12345';
-const encodedSecret = new TextEncoder().encode(JWT_SECRET);
-
 export async function POST(request: Request) {
   try {
-    const { userId } = await request.json();
+    const JWT_SECRET = process.env.QUBIT_ENGINE_JWT_SECRET;
+    if (!JWT_SECRET) {
+      throw new Error('QUBIT_ENGINE_JWT_SECRET environment variable is not set');
+    }
+    const encodedSecret = new TextEncoder().encode(JWT_SECRET);
+    const { userId, password } = await request.json();
 
     if (!userId) {
       return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+    }
+
+    const adminPassword = process.env.QUBIT_ENGINE_ADMIN_PASSWORD;
+    if (!adminPassword || password !== adminPassword) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const token = await new SignJWT()

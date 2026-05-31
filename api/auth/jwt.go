@@ -16,10 +16,10 @@ import (
 func getJwtSecret() []byte {
 	secret := os.Getenv("QUBIT_ENGINE_JWT_SECRET")
 	if secret == "" {
-		if os.Getenv("QUBIT_ENGINE_SKIP_AUTH") != "1" {
-			panic("QUBIT_ENGINE_JWT_SECRET is required in production but not set")
+		if os.Getenv("QUBIT_ENGINE_SKIP_AUTH") == "1" {
+			return []byte("dummy-skip-secret")
 		}
-		return []byte("default_dev_secret")
+		panic("QUBIT_ENGINE_JWT_SECRET is required but not set")
 	}
 	return []byte(secret)
 }

@@ -80,8 +80,12 @@ void CircuitService::serializeState(
     if (use_shm) {
       static std::atomic<uint64_t> counter{0};
       std::string shm_name = "/qe_shm_" + std::to_string(++counter) + "_";
-      for (int i = 0; i < 8; ++i) { // Optional: still add some small randomness using rand() or just rely on atomic
-        shm_name += std::to_string(rand() % 10);
+      
+      thread_local std::random_device rd;
+      thread_local std::mt19937_64 gen(rd());
+      std::uniform_int_distribution<> dis(0, 9);
+      for (int i = 0; i < 16; ++i) { 
+        shm_name += std::to_string(dis(gen));
       }
 
       try {
