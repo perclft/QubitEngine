@@ -55,16 +55,16 @@ class QuantumFunction(torch.autograd.Function):
         ctx.num_inputs = inputs_2d.shape[1]
         ctx.save_for_backward(params, inputs)
 
-        # Convert tensors to python lists for pybind11
-        params_list = params_2d.detach().cpu().numpy().tolist()
-        inputs_list = inputs_2d.detach().cpu().numpy().tolist()
+        # Convert tensors to numpy arrays (zero-copy if on CPU)
+        params_np = params_2d.detach().cpu().numpy()
+        inputs_np = inputs_2d.detach().cpu().numpy()
 
         # Call the parallel batched expectation value helper
         energies = qubit_engine.get_expectation_value_batched(
-            num_qubits, params_list, inputs_list, ansatz_func, hamiltonian
+            num_qubits, params_np, inputs_np, ansatz_func, hamiltonian
         )
 
-        out_tensor = torch.tensor(energies, dtype=params.dtype, device=params.device)
+        out_tensor = torch.from_numpy(energies).to(dtype=params.dtype, device=params.device)
         return out_tensor if (not params_is_1d or not inputs_is_1d) else out_tensor[0]
 
     @staticmethod
@@ -83,21 +83,21 @@ class QuantumFunction(torch.autograd.Function):
         if inputs_2d.shape[0] < batch_size:
             inputs_2d = inputs_2d.expand(batch_size, -1)
 
-        params_list = params_2d.detach().cpu().numpy().tolist()
-        inputs_list = inputs_2d.detach().cpu().numpy().tolist()
+        params_np = params_2d.detach().cpu().numpy()
+        inputs_np = inputs_2d.detach().cpu().numpy()
 
         # Call C++ parallel batched gradient solver
         batch_grads = qubit_engine.get_gradients_batched(
             ctx.num_qubits,
-            params_list,
-            inputs_list,
+            params_np,
+            inputs_np,
             ctx.ansatz_func,
             ctx.hamiltonian,
             ctx.diff_method,
             ctx.backend
         )
 
-        grad_tensor = torch.tensor(batch_grads, dtype=params.dtype, device=params.device)
+        grad_tensor = torch.from_numpy(batch_grads).to(dtype=params.dtype, device=params.device)
 
         # Split gradients
         grad_params_all = grad_tensor[:, :ctx.num_params]

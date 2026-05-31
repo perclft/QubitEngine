@@ -3,6 +3,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <iostream>
 
 #include "AdamOptimizer.hpp"
 #include "MolecularHamiltonian.hpp"
@@ -295,8 +296,8 @@ PYBIND11_MODULE(core, m) {
   m.def(
       "get_expectation_value_batched",
       [](int num_qubits,
-         std::vector<std::vector<double>> batch_params,
-         std::vector<std::vector<double>> batch_inputs,
+         py::array_t<double> batch_params,
+         py::array_t<double> batch_inputs,
          py::function ansatz_func,
          std::vector<std::pair<double, std::string>> hamiltonian_data) {
         
@@ -305,37 +306,76 @@ PYBIND11_MODULE(core, m) {
           hamiltonian.push_back({item.first, item.second});
         }
 
-        size_t batch_size = batch_params.size();
-        std::vector<double> energies(batch_size, 0.0);
+        auto r_params = batch_params.unchecked<2>();
+        auto r_inputs = batch_inputs.unchecked<2>();
 
-        // Release GIL for the outer OpenMP loop
-        py::gil_scoped_release release;
-
-        #pragma omp parallel for schedule(dynamic)
-        for (int b = 0; b < static_cast<int>(batch_size); ++b) {
-          QuantumRegister qreg(num_qubits);
-          
-          {
-            py::gil_scoped_acquire acquire;
-            ansatz_func(batch_params[b], batch_inputs[b], &qreg);
-          }
-
-          double energy = 0.0;
-          for (const auto &term : hamiltonian) {
-            energy += term.coefficient * qreg.expectationValue(term.pauli_string);
-          }
-          energies[b] = energy;
+        size_t batch_size = r_params.shape(0);
+        if (r_inputs.shape(0) != batch_size) {
+          throw std::invalid_argument("Batch size mismatch between parameters and inputs");
         }
 
-        return energies;
+        size_t num_params = r_params.shape(1);
+        size_t num_inputs = r_inputs.shape(1);
+
+        std::vector<double> energies(batch_size, 0.0);
+
+        int world_size = 1;
+#ifdef MPI_ENABLED
+        int initialized = 0;
+        MPI_Initialized(&initialized);
+        if (initialized) {
+          MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+        }
+#endif
+        bool use_omp = (world_size == 1);
+
+        {
+          // Release GIL for the outer OpenMP loop
+          py::gil_scoped_release release;
+
+          #pragma omp parallel for schedule(dynamic) if(use_omp)
+          for (int b = 0; b < static_cast<int>(batch_size); ++b) {
+            std::vector<double> p(num_params);
+            std::vector<double> x(num_inputs);
+            for (size_t j = 0; j < num_params; ++j) {
+              p[j] = r_params(b, j);
+            }
+            for (size_t j = 0; j < num_inputs; ++j) {
+              x[j] = r_inputs(b, j);
+            }
+
+            QuantumRegister qreg(num_qubits);
+            
+            {
+              py::gil_scoped_acquire acquire;
+              ansatz_func(p, x, &qreg);
+            }
+
+            double energy = 0.0;
+            for (const auto &term : hamiltonian) {
+              energy += term.coefficient * qreg.expectationValue(term.pauli_string);
+            }
+            energies[b] = energy;
+          }
+        } // GIL is re-acquired here when 'release' goes out of scope
+
+        auto* energies_ptr = new std::vector<double>(std::move(energies));
+        py::capsule capsule(energies_ptr, [](void *p) {
+            delete reinterpret_cast<std::vector<double>*>(p);
+        });
+        return py::array_t<double>(
+            energies_ptr->size(),
+            energies_ptr->data(),
+            capsule
+        );
       },
       "Calculate expectation values for a batch of parameters and inputs in parallel");
 
   m.def(
       "get_gradients_batched",
       [](int num_qubits,
-         std::vector<std::vector<double>> batch_params,
-         std::vector<std::vector<double>> batch_inputs,
+         py::array_t<double> batch_params,
+         py::array_t<double> batch_inputs,
          py::function ansatz_func,
          std::vector<std::pair<double, std::string>> hamiltonian_data,
          std::string diff_method,
@@ -346,46 +386,78 @@ PYBIND11_MODULE(core, m) {
           hamiltonian.push_back({item.first, item.second});
         }
 
-        size_t batch_size = batch_params.size();
-        size_t num_params = batch_params.empty() ? 0 : batch_params[0].size();
-        size_t num_inputs = batch_inputs.empty() ? 0 : batch_inputs[0].size();
-        size_t total_vars = num_params + num_inputs;
-
-        std::vector<std::vector<double>> batch_grads(batch_size, std::vector<double>(total_vars, 0.0));
-
-        // Release GIL for the outer OpenMP loop
-        py::gil_scoped_release release;
-
-        #pragma omp parallel for schedule(dynamic)
-        for (int b = 0; b < static_cast<int>(batch_size); ++b) {
-          // Combined ansatz wrapper
-          QuantumDifferentiator::AnsatzFunc<QuantumRegister> cpp_ansatz =
-              [&](const std::vector<double> &combined_p, QuantumRegister &q) {
-                std::vector<double> p(combined_p.begin(), combined_p.begin() + num_params);
-                std::vector<double> x(combined_p.begin() + num_params, combined_p.end());
-                py::gil_scoped_acquire acquire;
-                ansatz_func(p, x, &q);
-              };
-
-          // Combine parameters and inputs
-          std::vector<double> combined_vars = batch_params[b];
-          combined_vars.insert(combined_vars.end(), batch_inputs[b].begin(), batch_inputs[b].end());
-
-          std::vector<double> grads;
-          if (diff_method == "adjoint-gpu" || (diff_method == "adjoint" && backend == "gpu")) {
-            grads = QuantumDifferentiator::calculateGradientsAdjointGPU(
-                num_qubits, combined_vars, cpp_ansatz, hamiltonian);
-          } else if (diff_method == "adjoint") {
-            grads = QuantumDifferentiator::calculateGradientsAdjoint<QuantumRegister>(
-                num_qubits, combined_vars, cpp_ansatz, hamiltonian);
-          } else { // default parameter-shift
-            grads = QuantumDifferentiator::calculateGradients(
-                num_qubits, combined_vars, cpp_ansatz, hamiltonian);
-          }
-          batch_grads[b] = grads;
+        auto r_params = batch_params.unchecked<2>();
+        auto r_inputs = batch_inputs.unchecked<2>();
+        
+        size_t batch_size = r_params.shape(0);
+        if (r_inputs.shape(0) != batch_size) {
+          throw std::invalid_argument("Batch size mismatch between parameters and inputs");
         }
 
-        return batch_grads;
+        size_t num_params = r_params.shape(1);
+        size_t num_inputs = r_inputs.shape(1);
+        size_t total_vars = num_params + num_inputs;
+
+        double* out_data = new double[batch_size * total_vars];
+
+        int world_size = 1;
+#ifdef MPI_ENABLED
+        int initialized = 0;
+        MPI_Initialized(&initialized);
+        if (initialized) {
+          MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+        }
+#endif
+        bool use_omp = (world_size == 1);
+
+        {
+          // Release GIL for the outer OpenMP loop
+          py::gil_scoped_release release;
+
+          #pragma omp parallel for schedule(dynamic) if(use_omp)
+          for (int b = 0; b < static_cast<int>(batch_size); ++b) {
+            // Combined ansatz wrapper
+            QuantumDifferentiator::AnsatzFunc<QuantumRegister> cpp_ansatz =
+                [&](const std::vector<double> &combined_p, QuantumRegister &q) {
+                  std::vector<double> p(combined_p.begin(), combined_p.begin() + num_params);
+                  std::vector<double> x(combined_p.begin() + num_params, combined_p.end());
+                  py::gil_scoped_acquire acquire;
+                  ansatz_func(p, x, &q);
+                };
+
+            // Combine parameters and inputs
+            std::vector<double> combined_vars(total_vars);
+            for (size_t j = 0; j < num_params; ++j) {
+              combined_vars[j] = r_params(b, j);
+            }
+            for (size_t j = 0; j < num_inputs; ++j) {
+              combined_vars[num_params + j] = r_inputs(b, j);
+            }
+
+            std::vector<double> grads;
+            if (diff_method == "adjoint-gpu" || (diff_method == "adjoint" && backend == "gpu")) {
+              grads = QuantumDifferentiator::calculateGradientsAdjointGPU(
+                  num_qubits, combined_vars, cpp_ansatz, hamiltonian);
+            } else if (diff_method == "adjoint") {
+              grads = QuantumDifferentiator::calculateGradientsAdjoint<QuantumRegister>(
+                  num_qubits, combined_vars, cpp_ansatz, hamiltonian);
+            } else { // default parameter-shift
+              grads = QuantumDifferentiator::calculateGradients(
+                  num_qubits, combined_vars, cpp_ansatz, hamiltonian);
+            }
+            std::copy(grads.begin(), grads.end(), out_data + b * total_vars);
+          }
+        } // GIL is re-acquired here when 'release' goes out of scope
+
+        py::capsule capsule(out_data, [](void *p) {
+            delete[] reinterpret_cast<double*>(p);
+        });
+        return py::array_t<double>(
+            {batch_size, total_vars},
+            {total_vars * sizeof(double), sizeof(double)},
+            out_data,
+            capsule
+        );
       },
       "Calculate analytical gradients for a batch of parameters and inputs in parallel");
 
