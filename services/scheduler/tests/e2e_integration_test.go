@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,6 +30,14 @@ func (t tokenAuth) GetRequestMetadata(ctx context.Context, uri ...string) (map[s
 }
 
 func (t tokenAuth) RequireTransportSecurity() bool { return false }
+
+func getFreePort() int {
+	addr, _ := net.ResolveTCPAddr("tcp", "localhost:0")
+	l, _ := net.ListenTCP("tcp", addr)
+	port := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+	return port
+}
 
 func TestFullStackIntegration(t *testing.T) {
 	// Find root directory
@@ -116,7 +125,7 @@ func TestFullStackIntegration(t *testing.T) {
 	})
 
 	// 3. Start C++ Engine
-	enginePort := 50061
+	enginePort := getFreePort()
 	cmdEngine := exec.Command(enginePath)
 	cmdEngine.Env = append(os.Environ(),
 		fmt.Sprintf("PORT=%d", enginePort),
@@ -155,7 +164,7 @@ func TestFullStackIntegration(t *testing.T) {
 		t.Fatalf("failed to build scheduler: %v\n%s", err, out)
 	}
 
-	schedulerPort := 50062
+	schedulerPort := getFreePort()
 	cmdSched := exec.Command(schedulerBin,
 		"-port", fmt.Sprintf("%d", schedulerPort),
 		"-redis-addr", mr.Addr(),

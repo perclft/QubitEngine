@@ -444,6 +444,7 @@ add_executable(tests
     tests/NoiseModelTests.cpp
     tests/JITPropertyTests.cpp
     tests/QECTests.cpp
+    tests/NoiseAwareTranspilerTests.cpp
 )
 
 # Service tests need gRPC generated headers + ServiceImpl sources

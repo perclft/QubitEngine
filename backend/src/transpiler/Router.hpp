@@ -19,11 +19,12 @@ public:
     std::vector<QuantumRegister::RecordedGate> route(const std::vector<QuantumRegister::RecordedGate>& tape);
 
 private:
+    const HardwareConfig& config_;
     int num_qubits_;
     std::vector<std::vector<int>> adjacency_list_;
 
-    // Finds the shortest path between src and dst using BFS
-    std::vector<int> findShortestPath(int src, int dst) const;
+    // Finds the path between src and dst maximizing fidelity using Dijkstra
+    std::vector<int> findMaximumFidelityPath(int src, int dst) const;
 };
 
 } // namespace transpiler

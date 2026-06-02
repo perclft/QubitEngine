@@ -6,11 +6,46 @@ namespace qubit_engine {
 
 SurfaceCode::SurfaceCode(int distance) : d_(distance) {
     num_data_qubits_ = d_ * d_;
-    num_measure_qubits_ = d_ * d_ - 1; // 8 for d=3
+    buildStabilizers();
+    num_measure_qubits_ = x_stabilizers_.size() + z_stabilizers_.size();
     int total_qubits = num_data_qubits_ + num_measure_qubits_;
     
     backend_ = std::make_unique<StabilizerBackend>(total_qubits);
     prev_syndromes_.resize(num_measure_qubits_, 0);
+    decoder_.setDistance(d_);
+}
+
+void SurfaceCode::buildStabilizers() {
+    x_stabilizers_.clear();
+    z_stabilizers_.clear();
+    int id_counter = 0;
+    
+    for (int y = -1; y < d_; ++y) {
+        for (int x = -1; x < d_; ++x) {
+            std::vector<int> data_qubits;
+            auto add_if_valid = [&](int qx, int qy) {
+                if (qx >= 0 && qx < d_ && qy >= 0 && qy < d_) {
+                    data_qubits.push_back(qy * d_ + qx);
+                }
+            };
+            add_if_valid(x, y);
+            add_if_valid(x + 1, y);
+            add_if_valid(x, y + 1);
+            add_if_valid(x + 1, y + 1);
+            
+            if (data_qubits.size() == 2 || data_qubits.size() == 4) {
+                bool is_x = ((x + y) % 2 == 0);
+                
+                if (x == -1 && !is_x) continue;
+                if (x == d_ - 1 && !is_x) continue;
+                if (y == -1 && is_x) continue;
+                if (y == d_ - 1 && is_x) continue;
+                
+                if (is_x) x_stabilizers_.push_back({id_counter++, x, y, data_qubits});
+                else z_stabilizers_.push_back({id_counter++, x, y, data_qubits});
+            }
+        }
+    }
 }
 
 void SurfaceCode::initializeLattice() {
@@ -19,51 +54,24 @@ void SurfaceCode::initializeLattice() {
 }
 
 int SurfaceCode::qubitIndex(int x, int y) const {
-    // Simple row-major mapping for data qubits
     return y * d_ + x;
 }
 
 void SurfaceCode::applySyndromeCircuit() {
-    // A rigorous surface code would have a precise scheduling 
-    // (e.g. N, W, E, S) to measure Z and X stabilizers without cross-talk.
-    // For this architectural module, we approximate the syndrome extraction
-    // by applying CNOTs between measure qubits and their adjacent data qubits.
-    
     int m_idx = num_data_qubits_;
     
-    // For d=3, we have 4 X-type and 4 Z-type stabilizers
-    // This is a simplified rotated surface code layout
-    
     // X-stabilizers
-    auto applyXStab = [&](int m, const std::vector<int>& data) {
-        backend_->applyHadamard(m);
-        for (int d : data) backend_->applyCNOT(m, d);
-        backend_->applyHadamard(m);
-    };
+    for (const auto& stab : x_stabilizers_) {
+        backend_->applyHadamard(m_idx);
+        for (int d_q : stab.data_qubits) backend_->applyCNOT(m_idx, d_q);
+        backend_->applyHadamard(m_idx);
+        m_idx++;
+    }
     
     // Z-stabilizers
-    auto applyZStab = [&](int m, const std::vector<int>& data) {
-        for (int d : data) backend_->applyCNOT(d, m);
-    };
-
-    if (d_ == 3) {
-        // X-type
-        applyXStab(m_idx++, {1, 2, 4, 5});
-        applyXStab(m_idx++, {3, 4, 6, 7});
-        applyXStab(m_idx++, {0, 3});
-        applyXStab(m_idx++, {5, 8});
-        
-        // Z-type
-        applyZStab(m_idx++, {0, 1, 3, 4});
-        applyZStab(m_idx++, {4, 5, 7, 8});
-        applyZStab(m_idx++, {1, 2});
-        applyZStab(m_idx++, {6, 7});
-    } else {
-        // Fallback for other distances (simplified)
-        for (int i = 0; i < num_measure_qubits_; ++i) {
-            if (i % 2 == 0) applyXStab(m_idx++, {i % num_data_qubits_});
-            else applyZStab(m_idx++, {i % num_data_qubits_});
-        }
+    for (const auto& stab : z_stabilizers_) {
+        for (int d_q : stab.data_qubits) backend_->applyCNOT(d_q, m_idx);
+        m_idx++;
     }
 }
 
@@ -82,13 +90,18 @@ std::vector<SyndromeDefect> SurfaceCode::extractSyndromes(double noise_probabili
         int m_q = num_data_qubits_ + i;
         int result = backend_->measure(m_q);
         
+        // Find corresponding stabilizer
+        const Stabilizer* stab = nullptr;
+        if (i < x_stabilizers_.size()) stab = &x_stabilizers_[i];
+        else stab = &z_stabilizers_[i - x_stabilizers_.size()];
+        
         // A defect is a *change* in the syndrome measurement from the previous round
         if (result != prev_syndromes_[i]) {
             SyndromeDefect defect;
             defect.id = defect_id++;
-            // Approximate x/y for the MWPM distance calculation
-            defect.x = i % d_; 
-            defect.y = i / d_;
+            defect.type = (i < x_stabilizers_.size()) ? 0 : 1;
+            defect.x = stab->x; 
+            defect.y = stab->y;
             defect.time = 0; // Handled in loop
             defects.push_back(defect);
         }
@@ -122,34 +135,32 @@ void SurfaceCode::applyCorrections(const std::vector<std::pair<int, int>>& match
         int d1 = match.first;
         int d2 = match.second;
 
-        // Note: For this simplified implementation, we map defect indices (0-7) 
-        // back to the physical stabilizers: 0-3 (X), 4-7 (Z).
-        if (d1 < 4) {
-            // X-syndrome defect -> Z error on data qubit
-            if (d2 == -1) {
-                // Boundary match for X1 (0,1,3,4) -> Z on qubit 0
-                if (d1 == 0) backend_->applyZ(0);
-                else if (d1 == 1) backend_->applyZ(2);
-                else if (d1 == 2) backend_->applyZ(6);
-                else if (d1 == 3) backend_->applyZ(8);
-            } else {
-                // Interior match (simplified)
-                if ((d1 == 0 && d2 == 1) || (d1 == 1 && d2 == 0)) backend_->applyZ(1);
-                else if ((d1 == 2 && d2 == 3) || (d1 == 3 && d2 == 2)) backend_->applyZ(7);
-                else if ((d1 == 0 && d2 == 2) || (d1 == 2 && d2 == 0)) backend_->applyZ(3);
-                else if ((d1 == 1 && d2 == 3) || (d1 == 3 && d2 == 1)) backend_->applyZ(5);
-            }
+        // Find stabilizer type
+        bool is_x = false;
+        const Stabilizer* s1 = nullptr;
+        if (d1 < x_stabilizers_.size()) {
+            is_x = true;
+            s1 = &x_stabilizers_[d1];
         } else {
-            // Z-syndrome defect -> X error on data qubit
-            int s1 = d1 - 4;
-            int s2 = (d2 == -1) ? -1 : d2 - 4;
-            if (s2 == -1) {
-                if (s1 == 0) backend_->applyX(0);
-                else if (s1 == 2) backend_->applyX(2);
-            } else {
-                if ((s1 == 0 && s2 == 1) || (s1 == 1 && s2 == 0)) backend_->applyX(3);
-                else if ((s1 == 1 && s2 == 2) || (s1 == 2 && s2 == 1)) backend_->applyX(4);
-            }
+            s1 = &z_stabilizers_[d1 - x_stabilizers_.size()];
+        }
+        
+        // As an approximation for our simulation, we apply a single correction
+        // on the first data qubit of the stabilizer. A true decoder would compute
+        // the minimum weight path of data qubits between s1 and s2.
+        int target_q = s1->data_qubits[0];
+        if (is_x) backend_->applyZ(target_q); // X-syndrome detects Z errors
+        else backend_->applyX(target_q);      // Z-syndrome detects X errors
+        
+        // Apply correction for d2 as well if it's an internal match
+        if (d2 != -1) {
+            const Stabilizer* s2 = nullptr;
+            if (is_x) s2 = &x_stabilizers_[d2];
+            else s2 = &z_stabilizers_[d2 - x_stabilizers_.size()];
+            
+            int target_q2 = s2->data_qubits[0];
+            if (is_x) backend_->applyZ(target_q2);
+            else backend_->applyX(target_q2);
         }
     }
 }
@@ -183,10 +194,10 @@ bool SurfaceCode::simulate(int num_rounds, double noise_probability) {
     
     // Logical Measurement (Z logical)
     int logical_z = 0;
-    // For our layout, Z_L = Z_0 * Z_3 * Z_6 commutes with all X-stabilizers
-    logical_z ^= backend_->measure(0);
-    logical_z ^= backend_->measure(3);
-    logical_z ^= backend_->measure(6);
+    // For our layout, Z_L can be a vertical string of Z operators at x = 0
+    for (int y = 0; y < d_; ++y) {
+        logical_z ^= backend_->measure(y * d_);
+    }
     
     // If the logical Z measurement is 0, the state was preserved (we started in |0>)
     return (logical_z == 0);

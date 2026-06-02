@@ -58,9 +58,16 @@ public:
     const std::vector<NodeDef>& getNodes() const { return nodes; }
     const std::vector<EdgeDef>& getEdges() const { return edges; }
 
+    void setCalibration(const DeviceCalibration& cal);
+    double getEdgeErrorRate(int node1, int node2) const;
+    double getQubitReadoutError(int node) const;
+    bool hasCalibration() const { return has_calibration; }
+
 private:
     std::vector<NodeDef> nodes;
     std::vector<EdgeDef> edges;
+    DeviceCalibration calibration;
+    bool has_calibration = false;
 };
 
 } // namespace qubit_engine

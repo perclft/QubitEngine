@@ -9,6 +9,8 @@
 #include "MolecularHamiltonian.hpp"
 #include "NoiseModel.hpp"
 #include "QuantumDifferentiator.hpp"
+#include "transpiler/Router.hpp"
+#include "qec/SurfaceCode.hpp"
 #include "QuantumRegister.hpp"
 #include "SPSAOptimizer.hpp"
 #include "Exceptions.hpp"
@@ -124,6 +126,7 @@ PYBIND11_MODULE(core, m) {
       .def("enableRecording", &QuantumRegister::enableRecording, py::arg("enable"), "Enable or disable gate recording to the circuit tape")
       .def("clearTape", &QuantumRegister::clearTape, "Clear all recorded gates from the tape")
       .def("optimize", &QuantumRegister::optimize, "Optimize the recorded circuit tape in-place")
+      .def("mapToTopology", &QuantumRegister::mapToTopology, py::arg("device_preset") = "", "Route the tape to a physical topology, optionally specifying a device preset (e.g. 'ibmBrisbane')")
       .def("transpileToClifford", &QuantumRegister::transpileToClifford,
            py::arg("approximate") = false, py::arg("use_stochastic") = false,
            "Transpile non-Clifford gates on the tape to Clifford equivalents");
@@ -549,6 +552,13 @@ PYBIND11_MODULE(core, m) {
                                       initial_params);
           },
           "Run SPSA Optimizer natively in C++");
+
+  // QEC bindings
+  py::class_<qubit_engine::SurfaceCode>(m, "SurfaceCode")
+      .def(py::init<int>(), py::arg("distance"))
+      .def("simulate", &qubit_engine::SurfaceCode::simulate, 
+           py::arg("num_rounds"), py::arg("noise_probability"),
+           "Simulate surface code for num_rounds with given physical depolarizing noise_probability. Returns True if logical state was preserved.");
 
   py::module_ atexit = py::module_::import("atexit");
   atexit.attr("register")(py::cpp_function([]() {

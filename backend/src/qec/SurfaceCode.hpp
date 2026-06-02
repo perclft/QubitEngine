@@ -8,6 +8,13 @@
 
 namespace qubit_engine {
 
+struct Stabilizer {
+    int id;
+    int x;
+    int y;
+    std::vector<int> data_qubits;
+};
+
 // Implements a distance-d Surface Code simulation
 class SurfaceCode {
 public:
@@ -34,8 +41,12 @@ private:
     std::vector<int> prev_syndromes_;
 
     void initializeLattice();
+    void buildStabilizers();
     void applySyndromeCircuit();
     int qubitIndex(int x, int y) const;
+
+    std::vector<Stabilizer> x_stabilizers_;
+    std::vector<Stabilizer> z_stabilizers_;
 };
 
 } // namespace qubit_engine

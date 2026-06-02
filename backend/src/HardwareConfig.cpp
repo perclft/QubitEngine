@@ -145,4 +145,27 @@ DeviceCalibration HardwareConfig::genericDevice(int n) {
     return cal;
 }
 
+void HardwareConfig::setCalibration(const DeviceCalibration& cal) {
+    calibration = cal;
+    has_calibration = true;
+    nodes = cal.topology_nodes;
+    edges = cal.topology_edges;
+}
+
+double HardwareConfig::getEdgeErrorRate(int node1, int node2) const {
+    if (!has_calibration) return 0.0; // Default to perfect if no calibration provided
+    for (const auto& coupler : calibration.coupler_calibrations) {
+        if ((coupler.qubit1 == node1 && coupler.qubit2 == node2) ||
+            (coupler.qubit1 == node2 && coupler.qubit2 == node1)) {
+            return coupler.cx_error;
+        }
+    }
+    return 1.0; // No edge exists -> infinite error
+}
+
+double HardwareConfig::getQubitReadoutError(int node) const {
+    if (!has_calibration || node < 0 || node >= (int)calibration.qubit_calibrations.size()) return 0.0;
+    return calibration.qubit_calibrations[node].readout_error;
+}
+
 } // namespace qubit_engine

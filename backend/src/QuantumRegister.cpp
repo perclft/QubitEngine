@@ -332,18 +332,24 @@ void QuantumRegister::optimize() {
   CircuitOptimizer::optimize(tape);
 }
 
-void QuantumRegister::mapToTopology() {
+void QuantumRegister::mapToTopology(const std::string& device_preset) {
 #ifdef ENABLE_OPENTELEMETRY
   auto tracer = opentelemetry::trace::Provider::GetTracerProvider()->GetTracer("QubitEngine");
   auto span = tracer->StartSpan("QuantumRegister::mapToTopology");
   auto scope = tracer->WithActiveSpan(span);
 #endif
   HardwareConfig config;
-  auto topology_path = ConfigManager::Instance().getTopologyPath();
-  if (topology_path.has_value() && config.loadFromFile(topology_path.value())) {
-      // Successfully loaded
+  if (device_preset == "ibmBrisbane") {
+      config.setCalibration(HardwareConfig::ibmBrisbane());
+  } else if (device_preset == "googleSycamore") {
+      config.setCalibration(HardwareConfig::googleSycamore());
   } else {
-      config.loadDefaultHeavyHex();
+      auto topology_path = ConfigManager::Instance().getTopologyPath();
+      if (topology_path.has_value() && config.loadFromFile(topology_path.value())) {
+          // Successfully loaded
+      } else {
+          config.loadDefaultHeavyHex();
+      }
   }
   CircuitOptimizer::mapToTopology(tape, config);
 }

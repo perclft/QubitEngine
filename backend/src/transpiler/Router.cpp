@@ -4,48 +4,61 @@
 #include <queue>
 #include <algorithm>
 #include <stdexcept>
+#include <cmath>
+#include <limits>
 
 namespace qubit_engine {
 namespace transpiler {
 
-Router::Router(const HardwareConfig& config) {
+Router::Router(const HardwareConfig& config) : config_(config) {
     int max_id = -1;
-    for (const auto& node : config.getNodes()) {
+    for (const auto& node : config_.getNodes()) {
         if (node.id > max_id) max_id = node.id;
     }
     num_qubits_ = max_id + 1;
     adjacency_list_.resize(num_qubits_);
 
-    for (const auto& edge : config.getEdges()) {
+    for (const auto& edge : config_.getEdges()) {
         adjacency_list_[edge.node1].push_back(edge.node2);
         adjacency_list_[edge.node2].push_back(edge.node1);
     }
 }
 
-std::vector<int> Router::findShortestPath(int src, int dst) const {
+std::vector<int> Router::findMaximumFidelityPath(int src, int dst) const {
     if (src < 0 || src >= num_qubits_ || dst < 0 || dst >= num_qubits_) {
         throw std::invalid_argument("Qubit ID out of bounds in Router.");
     }
     if (src == dst) return {src};
 
+    std::vector<double> dist(num_qubits_, std::numeric_limits<double>::infinity());
     std::vector<int> parent(num_qubits_, -1);
-    std::queue<int> q;
-    std::vector<bool> visited(num_qubits_, false);
+    
+    using PDI = std::pair<double, int>;
+    std::priority_queue<PDI, std::vector<PDI>, std::greater<PDI>> pq;
 
-    q.push(src);
-    visited[src] = true;
+    dist[src] = 0.0;
+    pq.push({0.0, src});
 
-    while (!q.empty()) {
-        int u = q.front();
-        q.pop();
+    while (!pq.empty()) {
+        auto [d, u] = pq.top();
+        pq.pop();
 
+        if (d > dist[u]) continue;
         if (u == dst) break;
 
         for (int v : adjacency_list_[u]) {
-            if (!visited[v]) {
-                visited[v] = true;
+            double err = config_.getEdgeErrorRate(u, v);
+            double weight = (err >= 1.0) ? std::numeric_limits<double>::infinity() : -std::log(1.0 - err);
+            
+            // To ensure routing works even when no calibrations are set (all err=0.0 -> weight=0.0),
+            // we should add a small baseline cost for each SWAP (e.g., 1.0) so it prefers shorter paths
+            // if fidelities are equal.
+            double cost = weight + 1.0; 
+
+            if (dist[u] + cost < dist[v]) {
+                dist[v] = dist[u] + cost;
                 parent[v] = u;
-                q.push(v);
+                pq.push({dist[v], v});
             }
         }
     }
@@ -113,8 +126,8 @@ std::vector<QuantumRegister::RecordedGate> Router::route(const std::vector<Quant
             }
 
             if (!adjacent) {
-                // Find shortest path between p_control and p_target
-                std::vector<int> path = findShortestPath(p_control, p_target);
+                // Find max fidelity path between p_control and p_target
+                std::vector<int> path = findMaximumFidelityPath(p_control, p_target);
                 
                 // Route target towards control (leaving it adjacent)
                 // path = [p_control, n1, n2, ..., p_target]
