@@ -14,10 +14,11 @@
 #ifdef ENABLE_NCCL
 #include <nccl.h>
 #endif
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 
-class CudaBackend : public IQuantumBackend {
+class QUBIT_ENGINE_EXPORT CudaBackend : public IQuantumBackend {
 public:
   CudaBackend(size_t num_qubits);
   ~CudaBackend() override;

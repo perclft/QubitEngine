@@ -309,7 +309,7 @@ TEST(JITTest, FuseAdjacentTwoQubitGates_SameOrder_O4) {
   std::cout << "\n--- UNITARY DEBUG SameOrder_O4 ---\n";
   std::cout << "U_orig:\n" << U_orig << "\n";
   std::cout << "U_comp:\n" << U_comp << "\n";
-  std::cout << "U_orig * U_comp^\dagger:\n" << (U_orig * U_comp.adjoint()) << "\n";
+  std::cout << "U_orig * U_comp^\\dagger:\n" << (U_orig * U_comp.adjoint()) << "\n";
   EXPECT_TRUE(are_unitaries_equivalent(U_orig, U_comp)) << "Compiled unitary does not match original for SameOrder_O4";
 }
 
