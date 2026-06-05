@@ -286,8 +286,8 @@ target_link_libraries(qubit_engine_proto
 )
 target_include_directories(qubit_engine_proto PUBLIC ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 target_compile_options(qubit_engine_proto PUBLIC
-    $<$<CXX_COMPILER_ID:MSVC>:/FI"qubit_engine_proto_export.h">
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-include "qubit_engine_proto_export.h">
+    $<$<CXX_COMPILER_ID:MSVC>:/FIqubit_engine_proto_export.h>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-include qubit_engine_proto_export.h>
 )
 set_target_properties(qubit_engine_proto PROPERTIES POSITION_INDEPENDENT_CODE ON WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
