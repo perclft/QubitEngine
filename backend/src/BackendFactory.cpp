@@ -1,7 +1,9 @@
 #include "BackendFactory.hpp"
 #include "ConfigManager.hpp"
 #include "backends/CpuBackend.hpp"
+#ifdef ENABLE_CUDA
 #include "backends/CudaBackend.hpp"
+#endif
 #include "backends/MPSBackend.hpp"
 #include "backends/CloudBackend.hpp"
 #include <spdlog/spdlog.h>
