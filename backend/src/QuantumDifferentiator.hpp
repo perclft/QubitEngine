@@ -7,6 +7,7 @@
 #include <cmath>
 #include <functional>
 #include <vector>
+#include "qubit_engine_export.h"
 
 // Redundant M_PI definition removed; centralized in Types.hpp
 
@@ -15,7 +16,7 @@ using qubit_engine::QuantumRegister;
 using AnsatzFunction =
     std::function<void(const std::vector<double> &, QuantumRegister &)>;
 
-class QuantumDifferentiator {
+class QUBIT_ENGINE_EXPORT QuantumDifferentiator {
 public:
   // Calculates the gradient of the expectation value <H> with respect to each
   // parameter using the Parameter Shift Rule.

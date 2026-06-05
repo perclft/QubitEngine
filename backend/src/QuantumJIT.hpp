@@ -16,6 +16,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "qubit_engine_export.h"
 
 #include "Types.hpp"
 
@@ -38,7 +39,7 @@ extern const Matrix2x2 S_GATE;
 extern const Matrix2x2 T_GATE;
 
 // Compiled gate operation
-struct CompiledGate {
+struct QUBIT_ENGINE_EXPORT CompiledGate {
   enum Type { SINGLE_QUBIT, TWO_QUBIT, FUSED_BLOCK };
 
   Type type;
@@ -52,7 +53,7 @@ struct CompiledGate {
 };
 
 // JIT Compiler for quantum circuits
-class QuantumJIT {
+class QUBIT_ENGINE_EXPORT QuantumJIT {
 public:
   struct OptimizationStats {
     int original_gates;

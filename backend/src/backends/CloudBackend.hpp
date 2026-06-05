@@ -5,10 +5,11 @@
 #include <grpcpp/grpcpp.h>
 #include <memory>
 #include <vector>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 
-class CloudBackend : public IQuantumBackend {
+class QUBIT_ENGINE_EXPORT CloudBackend : public IQuantumBackend {
 public:
   CloudBackend(size_t num_qubits, const std::string &remote_url);
   virtual ~CloudBackend() = default;

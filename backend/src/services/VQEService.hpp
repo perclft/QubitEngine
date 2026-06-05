@@ -3,11 +3,12 @@
 #include <grpcpp/grpcpp.h>
 #include <vector>
 #include <string>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 namespace services {
 
-class VQEService {
+class QUBIT_ENGINE_EXPORT VQEService {
 public:
   VQEService() = default;
 

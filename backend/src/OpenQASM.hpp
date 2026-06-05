@@ -10,12 +10,13 @@
 #include <map>
 #include <string>
 #include <vector>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 namespace qasm {
 
 // Parsed gate instruction
-struct QASMGate {
+struct QUBIT_ENGINE_EXPORT QASMGate {
   std::string name;
   std::vector<int> qubits;
   std::vector<double> params;
@@ -24,7 +25,7 @@ struct QASMGate {
 };
 
 // Parsed gate definition
-struct QASMGateDef {
+struct QUBIT_ENGINE_EXPORT QASMGateDef {
     std::string name;
     std::vector<std::string> params;
     std::vector<std::string> qubits;
@@ -32,7 +33,7 @@ struct QASMGateDef {
 };
 
 // Parsed circuit
-struct QASMCircuit {
+struct QUBIT_ENGINE_EXPORT QASMCircuit {
   int num_qubits;
   int num_classical;
   std::vector<QASMGate> gates;
@@ -42,7 +43,7 @@ struct QASMCircuit {
 };
 
 // OpenQASM Parser
-class QASMParser {
+class QUBIT_ENGINE_EXPORT QASMParser {
 public:
   QASMCircuit parse(const std::string &qasm_code);
 
@@ -54,7 +55,7 @@ private:
 };
 
 // OpenQASM Exporter
-class QASMExporter {
+class QUBIT_ENGINE_EXPORT QASMExporter {
 public:
   std::string
   to_qasm3(int num_qubits,

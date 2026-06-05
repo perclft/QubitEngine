@@ -2,35 +2,36 @@
 
 #include <string>
 #include <vector>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 
-struct NodeDef {
+struct QUBIT_ENGINE_EXPORT NodeDef {
     int id;
     double x;
     double y;
 };
 
-struct EdgeDef {
+struct QUBIT_ENGINE_EXPORT EdgeDef {
     int node1;
     int node2;
 };
 
-struct QubitCalibration {
+struct QUBIT_ENGINE_EXPORT QubitCalibration {
     double t1_us;
     double t2_us;
     double readout_error;
     double gate_error_1q;
 };
 
-struct CouplerCalibration {
+struct QUBIT_ENGINE_EXPORT CouplerCalibration {
     int qubit1;
     int qubit2;
     double cx_error;
     double cx_time_ns;
 };
 
-struct DeviceCalibration {
+struct QUBIT_ENGINE_EXPORT DeviceCalibration {
     std::string device_name;
     int num_qubits;
     double single_qubit_gate_time_ns;
@@ -40,7 +41,7 @@ struct DeviceCalibration {
     std::vector<EdgeDef> topology_edges;
 };
 
-class HardwareConfig {
+class QUBIT_ENGINE_EXPORT HardwareConfig {
 public:
     HardwareConfig() = default;
     

@@ -3,11 +3,12 @@
 #include "backends/IQuantumBackend.hpp"
 #include <complex>
 #include <vector>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 
 // Represents a single node in a Matrix Product State (MPS)
-struct MPSTensor {
+struct QUBIT_ENGINE_EXPORT MPSTensor {
   // For a spin-1/2 chain, physical dimension is always 2.
   // virtual bond dimensions: left_dim, right_dim
   int left_dim;
@@ -18,7 +19,7 @@ struct MPSTensor {
   std::vector<Complex> data;
 };
 
-class MPSBackend : public IQuantumBackend {
+class QUBIT_ENGINE_EXPORT MPSBackend : public IQuantumBackend {
 private:
   int num_qubits;
   int max_bond_dimension;

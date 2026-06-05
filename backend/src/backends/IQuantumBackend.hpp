@@ -7,10 +7,11 @@
 #include <random>
 #include <string>
 #include <vector>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 
-class IQuantumBackend {
+class QUBIT_ENGINE_EXPORT IQuantumBackend {
 public:
   virtual ~IQuantumBackend() = default;
 

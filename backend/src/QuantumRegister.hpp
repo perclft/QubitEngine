@@ -8,12 +8,13 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "qubit_engine_export.h"
 
 #include "Types.hpp"
 
 namespace qubit_engine {
 
-class QuantumRegister {
+class QUBIT_ENGINE_EXPORT QuantumRegister {
 public:
   // --- Lifecycle ---
   /// @brief Constructs a register with automatic backend selection via BackendFactory.

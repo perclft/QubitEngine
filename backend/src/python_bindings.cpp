@@ -11,6 +11,7 @@
 #include "QuantumDifferentiator.hpp"
 #include "transpiler/Router.hpp"
 #include "qec/SurfaceCode.hpp"
+#include "qec/ColorCode.hpp"
 #include "QuantumRegister.hpp"
 #include "SPSAOptimizer.hpp"
 #include "Exceptions.hpp"
@@ -554,11 +555,67 @@ PYBIND11_MODULE(core, m) {
           "Run SPSA Optimizer natively in C++");
 
   // QEC bindings
+  py::class_<qubit_engine::SyndromeDefect>(m, "SyndromeDefect")
+      .def(py::init<>())
+      .def_readwrite("id", &qubit_engine::SyndromeDefect::id)
+      .def_readwrite("type", &qubit_engine::SyndromeDefect::type)
+      .def_readwrite("x", &qubit_engine::SyndromeDefect::x)
+      .def_readwrite("y", &qubit_engine::SyndromeDefect::y)
+      .def_readwrite("time", &qubit_engine::SyndromeDefect::time);
+
   py::class_<qubit_engine::SurfaceCode>(m, "SurfaceCode")
       .def(py::init<int>(), py::arg("distance"))
       .def("simulate", &qubit_engine::SurfaceCode::simulate, 
            py::arg("num_rounds"), py::arg("noise_probability"),
-           "Simulate surface code for num_rounds with given physical depolarizing noise_probability. Returns True if logical state was preserved.");
+           "Simulate surface code for num_rounds with given physical depolarizing noise_probability. Returns True if logical state was preserved.")
+      .def("extract_syndromes_tensor", [](qubit_engine::SurfaceCode& sc, double p) {
+           auto defects = sc.extractSyndromes(p);
+           int num_defects = defects.size();
+           int* data = new int[num_defects * 5];
+           for (int i = 0; i < num_defects; ++i) {
+               data[i*5 + 0] = defects[i].id;
+               data[i*5 + 1] = defects[i].type;
+               data[i*5 + 2] = defects[i].x;
+               data[i*5 + 3] = defects[i].y;
+               data[i*5 + 4] = defects[i].time;
+           }
+           auto capsule = py::capsule(data, [](void *ptr) {
+               delete[] reinterpret_cast<int*>(ptr);
+           });
+           return py::array_t<int>(
+               {num_defects, 5},
+               {5 * sizeof(int), sizeof(int)},
+               data,
+               capsule
+           );
+      }, py::arg("noise_probability"), "Extract syndromes as a zero-copy NumPy array [N, 5] for PyTorch");
+
+  py::class_<qubit_engine::ColorCode>(m, "ColorCode")
+      .def(py::init<int>(), py::arg("distance"))
+      .def("simulate", &qubit_engine::ColorCode::simulate, 
+           py::arg("num_rounds"), py::arg("noise_probability"),
+           "Simulate color code.")
+      .def("extract_syndromes_tensor", [](qubit_engine::ColorCode& cc, double p) {
+           auto defects = cc.extractSyndromes(p);
+           int num_defects = defects.size();
+           int* data = new int[num_defects * 5];
+           for (int i = 0; i < num_defects; ++i) {
+               data[i*5 + 0] = defects[i].id;
+               data[i*5 + 1] = defects[i].type;
+               data[i*5 + 2] = defects[i].x;
+               data[i*5 + 3] = defects[i].y;
+               data[i*5 + 4] = defects[i].time;
+           }
+           auto capsule = py::capsule(data, [](void *ptr) {
+               delete[] reinterpret_cast<int*>(ptr);
+           });
+           return py::array_t<int>(
+               {num_defects, 5},
+               {5 * sizeof(int), sizeof(int)},
+               data,
+               capsule
+           );
+      }, py::arg("noise_probability"), "Extract syndromes as a zero-copy NumPy array [N, 5] for PyTorch");
 
   py::module_ atexit = py::module_::import("atexit");
   atexit.attr("register")(py::cpp_function([]() {

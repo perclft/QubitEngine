@@ -2,10 +2,11 @@
 
 #include <string>
 #include <optional>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 
-class ConfigManager {
+class QUBIT_ENGINE_EXPORT ConfigManager {
 public:
   static ConfigManager& Instance();
 

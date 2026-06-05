@@ -20,26 +20,29 @@ void SurfaceCode::buildStabilizers() {
     z_stabilizers_.clear();
     int id_counter = 0;
     
-    for (int y = -1; y < d_; ++y) {
-        for (int x = -1; x < d_; ++x) {
+    for (int y = 0; y <= d_; ++y) {
+        for (int x = 0; x <= d_; ++x) {
             std::vector<int> data_qubits;
             auto add_if_valid = [&](int qx, int qy) {
                 if (qx >= 0 && qx < d_ && qy >= 0 && qy < d_) {
                     data_qubits.push_back(qy * d_ + qx);
                 }
             };
+            add_if_valid(x - 1, y - 1);
+            add_if_valid(x, y - 1);
+            add_if_valid(x - 1, y);
             add_if_valid(x, y);
-            add_if_valid(x + 1, y);
-            add_if_valid(x, y + 1);
-            add_if_valid(x + 1, y + 1);
             
             if (data_qubits.size() == 2 || data_qubits.size() == 4) {
                 bool is_x = ((x + y) % 2 == 0);
                 
-                if (x == -1 && !is_x) continue;
-                if (x == d_ - 1 && !is_x) continue;
-                if (y == -1 && is_x) continue;
-                if (y == d_ - 1 && is_x) continue;
+                if (data_qubits.size() == 2) {
+                    bool on_top_or_bottom = (y == 0 || y == d_);
+                    bool on_left_or_right = (x == 0 || x == d_);
+                    
+                    if (is_x && on_left_or_right) continue; // Drop X on Left/Right
+                    if (!is_x && on_top_or_bottom) continue; // Drop Z on Top/Bottom
+                }
                 
                 if (is_x) x_stabilizers_.push_back({id_counter++, x, y, data_qubits});
                 else z_stabilizers_.push_back({id_counter++, x, y, data_qubits});
@@ -127,15 +130,10 @@ bool SurfaceCode::decodeAndCorrect() {
 }
 
 void SurfaceCode::applyCorrections(const std::vector<std::pair<int, int>>& matches) {
-    // For d=3 rotated surface code, we use a simplified lookup for the matching pairs.
-    // If a defect is matched to a boundary (id2 == -1), we apply a single correction.
-    // If two defects are matched, we apply corrections along the shortest path.
-
     for (const auto& match : matches) {
         int d1 = match.first;
         int d2 = match.second;
 
-        // Find stabilizer type
         bool is_x = false;
         const Stabilizer* s1 = nullptr;
         if (d1 < x_stabilizers_.size()) {
@@ -145,22 +143,63 @@ void SurfaceCode::applyCorrections(const std::vector<std::pair<int, int>>& match
             s1 = &z_stabilizers_[d1 - x_stabilizers_.size()];
         }
         
-        // As an approximation for our simulation, we apply a single correction
-        // on the first data qubit of the stabilizer. A true decoder would compute
-        // the minimum weight path of data qubits between s1 and s2.
-        int target_q = s1->data_qubits[0];
-        if (is_x) backend_->applyZ(target_q); // X-syndrome detects Z errors
-        else backend_->applyX(target_q);      // Z-syndrome detects X errors
+        // Find path from s1 to s2 (or boundary if d2 == -1)
+        int curr_x = s1->x;
+        int curr_y = s1->y;
         
-        // Apply correction for d2 as well if it's an internal match
-        if (d2 != -1) {
+        int target_x = curr_x;
+        int target_y = curr_y;
+        
+        if (d2 == -1) {
+            if (is_x) {
+                // Match to X boundary (x=0 or x=d_)
+                target_x = (curr_x < d_ - curr_x) ? 0 : d_;
+                while (curr_x != target_x) {
+                    int dx = (target_x > curr_x) ? 1 : -1;
+                    int dy = 1; // arbitrary
+                    int qx = curr_x + (dx > 0 ? 0 : -1);
+                    int qy = curr_y + (dy > 0 ? 0 : -1);
+                    if (qx >= 0 && qx < d_ && qy >= 0 && qy < d_) backend_->applyZ(qubitIndex(qx, qy));
+                    curr_x += dx;
+                    curr_y += dy;
+                }
+            } else {
+                // Match to Z boundary (y=0 or y=d_)
+                target_y = (curr_y < d_ - curr_y) ? 0 : d_;
+                while (curr_y != target_y) {
+                    int dx = 1; // arbitrary
+                    int dy = (target_y > curr_y) ? 1 : -1;
+                    int qx = curr_x + (dx > 0 ? 0 : -1);
+                    int qy = curr_y + (dy > 0 ? 0 : -1);
+                    if (qx >= 0 && qx < d_ && qy >= 0 && qy < d_) backend_->applyX(qubitIndex(qx, qy));
+                    curr_x += dx;
+                    curr_y += dy;
+                }
+            }
+        } else {
             const Stabilizer* s2 = nullptr;
             if (is_x) s2 = &x_stabilizers_[d2];
             else s2 = &z_stabilizers_[d2 - x_stabilizers_.size()];
+            target_x = s2->x;
+            target_y = s2->y;
             
-            int target_q2 = s2->data_qubits[0];
-            if (is_x) backend_->applyZ(target_q2);
-            else backend_->applyX(target_q2);
+            while (curr_x != target_x || curr_y != target_y) {
+                int dx = (target_x > curr_x) ? 1 : ((target_x < curr_x) ? -1 : 0);
+                int dy = (target_y > curr_y) ? 1 : ((target_y < curr_y) ? -1 : 0);
+                if (dx == 0) dx = 1; 
+                if (dy == 0) dy = 1;
+                
+                int qx = curr_x + (dx > 0 ? 0 : -1);
+                int qy = curr_y + (dy > 0 ? 0 : -1);
+                
+                if (qx >= 0 && qx < d_ && qy >= 0 && qy < d_) {
+                    if (is_x) backend_->applyZ(qubitIndex(qx, qy));
+                    else backend_->applyX(qubitIndex(qx, qy));
+                }
+                
+                curr_x += dx;
+                curr_y += dy;
+            }
         }
     }
 }
@@ -183,20 +222,15 @@ bool SurfaceCode::simulate(int num_rounds, double noise_probability) {
         // Decode
         auto matches = decoder_.decode(defects);
         
-        // Apply Corrections (Conceptual for now, assuming X and Z corrections)
-        for (const auto& match : matches) {
-            // A rigorous decoder maps the matching path over the lattice 
-            // and applies X or Z to the data qubits along the path.
-            // We approximate by applying a local correction.
-            backend_->applyX(0); // Dummy correction to prevent compilation warnings
-        }
+        // Apply Corrections
+        applyCorrections(matches);
     }
     
     // Logical Measurement (Z logical)
     int logical_z = 0;
-    // For our layout, Z_L can be a vertical string of Z operators at x = 0
-    for (int y = 0; y < d_; ++y) {
-        logical_z ^= backend_->measure(y * d_);
+    // Z_L is a horizontal string of Z operators at y = 0 connecting the Z boundaries (Left/Right)
+    for (int x = 0; x < d_; ++x) {
+        logical_z ^= backend_->measure(x);
     }
     
     // If the logical Z measurement is 0, the state was preserved (we started in |0>)

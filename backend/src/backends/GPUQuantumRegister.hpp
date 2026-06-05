@@ -8,10 +8,11 @@
 #include "../QuantumRegister.hpp"
 #include "GPUContext.hpp"
 #include <vector>
+#include "qubit_engine_export.h"
 
 using qubit_engine::QuantumRegister;
 
-class GPUQuantumRegister {
+class QUBIT_ENGINE_EXPORT GPUQuantumRegister {
 public:
   explicit GPUQuantumRegister(size_t n); // Defined in .cpp
   ~GPUQuantumRegister();

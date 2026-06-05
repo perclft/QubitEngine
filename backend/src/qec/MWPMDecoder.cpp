@@ -7,8 +7,9 @@
 namespace qubit_engine {
 
 double MWPMDecoder::calculateDistance(const SyndromeDefect& a, const SyndromeDefect& b) const {
-    // Manhattan distance in 3D (x, y, time)
-    return std::abs(a.x - b.x) + std::abs(a.y - b.y) + std::abs(a.time - b.time);
+    // Chebyshev distance in 2D + time distance
+    // For rotated surface codes, diagonal moves (x±1, y±1) correspond to single data qubit errors
+    return std::max(std::abs(a.x - b.x), std::abs(a.y - b.y)) + std::abs(a.time - b.time);
 }
 
 std::vector<std::pair<int, int>> MWPMDecoder::decode(const std::vector<SyndromeDefect>& defects) {
@@ -19,11 +20,13 @@ std::vector<std::pair<int, int>> MWPMDecoder::decode(const std::vector<SyndromeD
     std::vector<MatchingEdge> edges;
     for (size_t i = 0; i < defects.size(); ++i) {
         for (size_t j = i + 1; j < defects.size(); ++j) {
-            edges.push_back({
-                static_cast<int>(i),
-                static_cast<int>(j),
-                calculateDistance(defects[i], defects[j])
-            });
+            if (defects[i].type == defects[j].type) {
+                edges.push_back({
+                    static_cast<int>(i),
+                    static_cast<int>(j),
+                    calculateDistance(defects[i], defects[j])
+                });
+            }
         }
     }
 
@@ -31,9 +34,11 @@ std::vector<std::pair<int, int>> MWPMDecoder::decode(const std::vector<SyndromeD
     for (size_t i = 0; i < defects.size(); ++i) {
         double dist_to_boundary = 0;
         if (defects[i].type == 0) { // X-stabilizer
-            dist_to_boundary = std::min(defects[i].x + 1, d_ - defects[i].x);
+            // Boundary is Left/Right for X
+            dist_to_boundary = std::min(defects[i].x, d_ - defects[i].x);
         } else { // Z-stabilizer
-            dist_to_boundary = std::min(defects[i].y + 1, d_ - defects[i].y);
+            // Boundary is Top/Bottom for Z
+            dist_to_boundary = std::min(defects[i].y, d_ - defects[i].y);
         }
         edges.push_back({
             static_cast<int>(i),

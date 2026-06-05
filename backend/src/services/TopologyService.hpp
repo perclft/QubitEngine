@@ -1,11 +1,12 @@
 #pragma once
 #include "quantum.grpc.pb.h"
 #include <grpcpp/grpcpp.h>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 namespace services {
 
-class TopologyService {
+class QUBIT_ENGINE_EXPORT TopologyService {
 public:
   TopologyService() = default;
 

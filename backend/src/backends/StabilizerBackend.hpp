@@ -10,10 +10,11 @@
 
 #include "../Types.hpp"
 #include "IQuantumBackend.hpp"
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 
-class StabilizerBackend : public IQuantumBackend {
+class QUBIT_ENGINE_EXPORT StabilizerBackend : public IQuantumBackend {
 public:
   StabilizerBackend(size_t num_qubits);
   ~StabilizerBackend() override = default;

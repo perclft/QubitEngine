@@ -246,7 +246,7 @@ function(grpc_generate_cpp srcs hdrs)
                    "${_g_output_dir}/${fil_we}.grpc.pb.cc"
                    "${_g_output_dir}/${fil_we}.grpc.pb.h"
             COMMAND protobuf::protoc
-            ARGS --cpp_out=${_g_output_dir}
+            ARGS --cpp_out=dllexport_decl=QUBIT_ENGINE_PROTO_EXPORT:${_g_output_dir}
                  --grpc_out=${_g_output_dir}
                  --plugin=protoc-gen-grpc=${gRPC_CPP_PLUGIN_EXECUTABLE}
                  ${_g_import_dirs}
@@ -268,17 +268,28 @@ grpc_generate_cpp(GRPC_SRC_GENERATED_CPP GRPC_HDR_GENERATED_CPP
 )
 
 # --- Proto Library ---
-add_library(qubit_engine_proto STATIC
+add_library(qubit_engine_proto SHARED
     ${GRPC_SRC_GENERATED_CPP}
     ${GRPC_HDR_GENERATED_CPP}
 )
+
+include(GenerateExportHeader)
+generate_export_header(qubit_engine_proto
+    EXPORT_MACRO_NAME QUBIT_ENGINE_PROTO_EXPORT
+    EXPORT_FILE_NAME ${CMAKE_CURRENT_BINARY_DIR}/qubit_engine_proto_export.h
+)
+
 target_link_libraries(qubit_engine_proto 
     PUBLIC 
         gRPC::grpc++ 
         protobuf::libprotobuf
 )
-target_include_directories(qubit_engine_proto PUBLIC ${GENERATED_DIR})
-set_target_properties(qubit_engine_proto PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(qubit_engine_proto PUBLIC ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+target_compile_options(qubit_engine_proto PUBLIC
+    $<$<CXX_COMPILER_ID:MSVC>:/FI"qubit_engine_proto_export.h">
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-include "qubit_engine_proto_export.h">
+)
+set_target_properties(qubit_engine_proto PROPERTIES POSITION_INDEPENDENT_CODE ON WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
 # --- GPU Sources ---
 set(GPU_SOURCES "")
@@ -292,7 +303,7 @@ endif()
 # =================================================================
 # Core Library — shared across all targets to eliminate duplication
 # =================================================================
-add_library(qubit_engine_core STATIC
+add_library(qubit_engine_core SHARED
     src/HardwareConfig.cpp
     src/QuantumRegister.cpp
     src/ConfigManager.cpp
@@ -312,6 +323,8 @@ add_library(qubit_engine_core STATIC
     src/QuantumMetrics.cpp
     src/NoiseModel.cpp
     src/qec/MWPMDecoder.cpp
+    src/qec/UnionFindDecoder.cpp
+    src/qec/ColorCode.cpp
     src/qec/SurfaceCode.cpp
     src/auth/AuthInterceptor.cpp
     src/services/CircuitService.cpp
@@ -323,8 +336,19 @@ add_library(qubit_engine_core STATIC
     ${GPU_SOURCES}
 )
 
-target_include_directories(qubit_engine_core PUBLIC src ${GENERATED_DIR})
-set_target_properties(qubit_engine_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+include(GenerateExportHeader)
+generate_export_header(qubit_engine_core
+    BASE_NAME qubit_engine
+    EXPORT_MACRO_NAME QUBIT_ENGINE_EXPORT
+    EXPORT_FILE_NAME ${CMAKE_CURRENT_BINARY_DIR}/qubit_engine_export.h
+)
+
+target_include_directories(qubit_engine_core PUBLIC src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+set_target_properties(qubit_engine_core PROPERTIES 
+    POSITION_INDEPENDENT_CODE ON
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN 1
+)
 
 target_link_libraries(qubit_engine_core PUBLIC qubit_engine_proto)
 
@@ -447,11 +471,9 @@ add_executable(tests
     tests/NoiseAwareTranspilerTests.cpp
 )
 
-# Service tests need gRPC generated headers + ServiceImpl sources
+# Service tests need ServiceImpl sources
 target_sources(tests PRIVATE
     src/ServiceImpl.cpp
-    ${PROTO_SRC_GENERATED_CPP}
-    ${GRPC_SRC_GENERATED_CPP}
 )
 
 target_include_directories(tests PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
@@ -485,8 +507,6 @@ add_executable(validation_tests
 
 target_sources(validation_tests PRIVATE
     src/ServiceImpl.cpp
-    ${PROTO_SRC_GENERATED_CPP}
-    ${GRPC_SRC_GENERATED_CPP}
 )
 
 target_include_directories(validation_tests PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
@@ -522,8 +542,6 @@ add_executable(benchmark tests/Benchmark.cpp)
 
 target_sources(benchmark PRIVATE
     src/ServiceImpl.cpp
-    ${PROTO_SRC_GENERATED_CPP}
-    ${GRPC_SRC_GENERATED_CPP}
 )
 
 target_include_directories(benchmark PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
@@ -548,8 +566,6 @@ if(MPI_FOUND)
     add_executable(mpi_test mpi_test.cpp)
 
     target_sources(mpi_test PRIVATE
-        ${PROTO_SRC_GENERATED_CPP}
-        ${GRPC_SRC_GENERATED_CPP}
     )
 
     target_include_directories(mpi_test PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})

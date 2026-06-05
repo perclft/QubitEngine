@@ -5,11 +5,12 @@
 #include "IQuantumBackend.hpp"
 #include <array>
 #include <vector>
+#include "qubit_engine_export.h"
 
 
 namespace qubit_engine {
 
-class CpuBackend : public IQuantumBackend {
+class QUBIT_ENGINE_EXPORT CpuBackend : public IQuantumBackend {
 public:
   CpuBackend(size_t num_qubits, bool force_local = false);
   ~CpuBackend() override = default;

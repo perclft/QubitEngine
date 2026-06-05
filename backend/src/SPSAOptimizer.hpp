@@ -5,6 +5,7 @@
 #include <spdlog/spdlog.h>
 #include <random>
 #include <vector>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 namespace optimizers {

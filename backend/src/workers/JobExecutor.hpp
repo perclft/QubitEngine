@@ -7,11 +7,12 @@
 #include "Types.hpp"
 #include "QuantumRegister.hpp"
 #include "quantum.pb.h"
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 namespace workers {
 
-class JobExecutor {
+class QUBIT_ENGINE_EXPORT JobExecutor {
 public:
     JobExecutor(sw::redis::Redis& redis, const std::string& worker_id);
     

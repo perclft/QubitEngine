@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include "qubit_engine_export.h"
 
 // Guarded by ENABLE_PROMETHEUS if we wanted to be strictly optional,
 // but we'll provide a clean interface.
@@ -13,7 +14,7 @@ class Histogram;
 class Exposer;
 }
 
-class QuantumMetrics {
+class QUBIT_ENGINE_EXPORT QuantumMetrics {
 public:
   static QuantumMetrics &Instance();
 

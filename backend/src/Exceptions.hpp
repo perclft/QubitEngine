@@ -2,40 +2,41 @@
 
 #include <stdexcept>
 #include <string>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 
-class Exception : public std::runtime_error {
+class QUBIT_ENGINE_EXPORT Exception : public std::runtime_error {
 public:
   explicit Exception(const std::string &message)
       : std::runtime_error(message) {}
 };
 
-class QubitOutOfRangeException : public Exception {
+class QUBIT_ENGINE_EXPORT QubitOutOfRangeException : public Exception {
 public:
   explicit QubitOutOfRangeException(const std::string &message)
       : Exception(message) {}
 };
 
-class BackendUnavailableException : public Exception {
+class QUBIT_ENGINE_EXPORT BackendUnavailableException : public Exception {
 public:
   explicit BackendUnavailableException(const std::string &message)
       : Exception(message) {}
 };
 
-class InvalidArgumentException : public Exception {
+class QUBIT_ENGINE_EXPORT InvalidArgumentException : public Exception {
 public:
   explicit InvalidArgumentException(const std::string &message)
       : Exception(message) {}
 };
 
-class FeatureNotSupportedException : public Exception {
+class QUBIT_ENGINE_EXPORT FeatureNotSupportedException : public Exception {
 public:
   explicit FeatureNotSupportedException(const std::string &message)
       : Exception(message) {}
 };
 
-class NonCliffordGateException : public Exception {
+class QUBIT_ENGINE_EXPORT NonCliffordGateException : public Exception {
 public:
   explicit NonCliffordGateException(const std::string &message)
       : Exception(message) {}

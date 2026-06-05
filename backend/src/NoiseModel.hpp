@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <vector>
 #include <utility>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 
@@ -16,14 +17,14 @@ namespace qubit_engine {
 
 /// @brief A single Kraus operator for a 1-qubit channel.
 /// The matrix is 2×2, stored in row-major order: [M00, M01, M10, M11].
-struct KrausOperator1Q {
+struct QUBIT_ENGINE_EXPORT KrausOperator1Q {
   Precision probability;              // Initial selection weight (||K_i||² / dim)
   std::array<Complex, 4> matrix;      // 2×2 row-major
   std::array<Complex, 4> matrix_dag_self; // K†K (Hermitian), precomputed
 };
 
 /// @brief A single Kraus operator for a 2-qubit channel.
-struct KrausOperator2Q {
+struct QUBIT_ENGINE_EXPORT KrausOperator2Q {
   Precision probability;              // Initial selection weight
   std::array<Complex, 16> matrix;     // 4×4 row-major
   std::array<Complex, 16> matrix_dag_self; // K†K, precomputed
@@ -34,13 +35,13 @@ struct KrausOperator2Q {
 // ============================================================================
 
 /// @brief A single-qubit quantum noise channel defined by a set of Kraus operators.
-struct NoiseChannel1Q {
+struct QUBIT_ENGINE_EXPORT NoiseChannel1Q {
   std::string name;
   std::vector<KrausOperator1Q> operators;
 };
 
 /// @brief A two-qubit quantum noise channel defined by a set of Kraus operators.
-struct NoiseChannel2Q {
+struct QUBIT_ENGINE_EXPORT NoiseChannel2Q {
   std::string name;
   std::vector<KrausOperator2Q> operators;
 };
@@ -50,29 +51,29 @@ struct NoiseChannel2Q {
 // ============================================================================
 
 /// @brief Creates a single-qubit depolarizing channel.
-NoiseChannel1Q makeDepolarizingChannel1Q(Precision p);
+QUBIT_ENGINE_EXPORT NoiseChannel1Q makeDepolarizingChannel1Q(Precision p);
 
 /// @brief Creates a full two-qubit depolarizing channel using 16 Pauli products.
-NoiseChannel2Q makeDepolarizingChannel2Q(Precision p);
+QUBIT_ENGINE_EXPORT NoiseChannel2Q makeDepolarizingChannel2Q(Precision p);
 
 /// @brief Creates a single-qubit amplitude damping channel (T1 decay).
-NoiseChannel1Q makeAmplitudeDampingChannel(Precision gamma);
+QUBIT_ENGINE_EXPORT NoiseChannel1Q makeAmplitudeDampingChannel(Precision gamma);
 
 /// @brief Creates a single-qubit phase damping channel (T2 dephasing).
-NoiseChannel1Q makePhaseDampingChannel(Precision gamma);
+QUBIT_ENGINE_EXPORT NoiseChannel1Q makePhaseDampingChannel(Precision gamma);
 
 /// @brief Creates a single-qubit thermal relaxation channel (combined T1/T2).
 /// @param t1 Longitudinal relaxation time
 /// @param t2 Transverse relaxation time (must satisfy T2 <= 2*T1)
 /// @param gate_time Duration of the gate in the same units as T1, T2
-NoiseChannel1Q makeThermalRelaxationChannel(Precision t1, Precision t2, Precision gate_time);
+QUBIT_ENGINE_EXPORT NoiseChannel1Q makeThermalRelaxationChannel(Precision t1, Precision t2, Precision gate_time);
 
 // ============================================================================
 // Readout Error
 // ============================================================================
 
 /// @brief Per-qubit measurement confusion matrix.
-struct ReadoutError {
+struct QUBIT_ENGINE_EXPORT ReadoutError {
   Precision p0_given_1 = 0.0;   ///< P(readout=0 | true state is |1⟩)
   Precision p1_given_0 = 0.0;   ///< P(readout=1 | true state is |0⟩)
 };
@@ -82,7 +83,7 @@ struct ReadoutError {
 // ============================================================================
 
 /// @brief Composable noise model that holds all noise channels and readout errors.
-class NoiseModel {
+class QUBIT_ENGINE_EXPORT NoiseModel {
 public:
   NoiseModel() = default;
 

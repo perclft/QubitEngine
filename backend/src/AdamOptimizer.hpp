@@ -4,6 +4,7 @@
 #include <cmath>
 #include <spdlog/spdlog.h>
 #include <vector>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 namespace optimizers {

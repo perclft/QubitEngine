@@ -5,10 +5,11 @@
 #include <memory>
 #include "../backends/StabilizerBackend.hpp"
 #include "MWPMDecoder.hpp"
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 
-struct Stabilizer {
+struct QUBIT_ENGINE_EXPORT Stabilizer {
     int id;
     int x;
     int y;
@@ -16,7 +17,7 @@ struct Stabilizer {
 };
 
 // Implements a distance-d Surface Code simulation
-class SurfaceCode {
+class QUBIT_ENGINE_EXPORT SurfaceCode {
 public:
     SurfaceCode(int distance);
     ~SurfaceCode() = default;

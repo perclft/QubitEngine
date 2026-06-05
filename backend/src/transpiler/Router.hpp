@@ -6,11 +6,12 @@
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 namespace transpiler {
 
-class Router {
+class QUBIT_ENGINE_EXPORT Router {
 public:
     explicit Router(const HardwareConfig& config);
 

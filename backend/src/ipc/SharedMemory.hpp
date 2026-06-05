@@ -2,12 +2,13 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include "qubit_engine_export.h"
 
 
 namespace qubit_engine {
 namespace ipc {
 
-class SharedMemory {
+class QUBIT_ENGINE_EXPORT SharedMemory {
 public:
   // RAII Constructor
   SharedMemory(const std::string& descriptor, size_t sizeBytes, bool create = false);

@@ -5,13 +5,14 @@
 #include <vector>
 #include <string>
 #include <map>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 class QuantumRegister;
 
 namespace services {
 
-class CircuitService {
+class QUBIT_ENGINE_EXPORT CircuitService {
 public:
   CircuitService() = default;
 

@@ -5,11 +5,12 @@
 #include <vector>
 #include <thread>
 #include <sw/redis++/redis++.h>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 namespace workers {
 
-class WorkerPool {
+class QUBIT_ENGINE_EXPORT WorkerPool {
 public:
     WorkerPool(const std::string& redis_url, int num_workers);
     ~WorkerPool();

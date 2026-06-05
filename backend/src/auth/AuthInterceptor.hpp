@@ -5,11 +5,12 @@
 #include <spdlog/spdlog.h>
 #include <jwt-cpp/jwt.h>
 #include <jwt-cpp/traits/nlohmann-json/traits.h>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 namespace auth {
 
-class AuthInterceptor {
+class QUBIT_ENGINE_EXPORT AuthInterceptor {
 public:
   AuthInterceptor() = default;
 

@@ -3,11 +3,12 @@
 
 #include <vector>
 #include <utility>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 
 // A defect (syndrome) detected in the surface code
-struct SyndromeDefect {
+struct QUBIT_ENGINE_EXPORT SyndromeDefect {
     int id;
     int type; // 0 for X-stabilizer, 1 for Z-stabilizer
     int x;
@@ -16,13 +17,13 @@ struct SyndromeDefect {
 };
 
 // Edge between two defects
-struct MatchingEdge {
+struct QUBIT_ENGINE_EXPORT MatchingEdge {
     int u;
     int v;
     double weight;
 };
 
-class MWPMDecoder {
+class QUBIT_ENGINE_EXPORT MWPMDecoder {
 public:
     MWPMDecoder() : d_(3) {}
     

@@ -3,10 +3,11 @@
 #include "HardwareConfig.hpp"
 #include "QuantumRegister.hpp"
 #include <vector>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 
-class CircuitOptimizer {
+class QUBIT_ENGINE_EXPORT CircuitOptimizer {
 public:
   // Optimizes the given tape of gates in-place
   static void optimize(std::vector<QuantumRegister::RecordedGate> &tape);

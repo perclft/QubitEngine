@@ -3,6 +3,7 @@
 #include "backends/IQuantumBackend.hpp"
 #include <memory>
 #include <cstddef>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 
@@ -13,7 +14,7 @@ namespace qubit_engine {
 /// - Dependency injection for unit testing (inject mock backends)
 /// - Cleaner separation of concerns (register doesn't know about backends)
 /// - Centralized backend selection policy
-class BackendFactory {
+class QUBIT_ENGINE_EXPORT BackendFactory {
 public:
   /// @brief Creates the optimal backend for the given qubit count and constraints.
   ///

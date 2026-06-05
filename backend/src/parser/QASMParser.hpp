@@ -3,11 +3,12 @@
 #include "AST.hpp"
 #include <string>
 #include <vector>
+#include "qubit_engine_export.h"
 
 namespace qubit_engine {
 namespace parser {
 
-struct Token {
+struct QUBIT_ENGINE_EXPORT Token {
     enum Type {
         IDENTIFIER,
         NUMBER,
@@ -20,7 +21,7 @@ struct Token {
     std::string value;
 };
 
-class QASMParser {
+class QUBIT_ENGINE_EXPORT QASMParser {
 public:
     explicit QASMParser(const std::string& source);
 
