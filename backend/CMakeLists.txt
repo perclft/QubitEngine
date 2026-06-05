@@ -350,6 +350,11 @@ set_target_properties(qubit_engine_core PROPERTIES
     VISIBILITY_INLINES_HIDDEN 1
 )
 
+if(NOT MSVC AND NOT APPLE)
+    target_link_options(qubit_engine_core PRIVATE "-Wl,-Bsymbolic-functions")
+    target_compile_options(qubit_engine_core PRIVATE "-fno-semantic-interposition")
+endif()
+
 target_link_libraries(qubit_engine_core PUBLIC qubit_engine_proto)
 
 
