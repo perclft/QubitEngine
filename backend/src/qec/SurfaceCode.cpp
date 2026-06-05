@@ -87,7 +87,6 @@ std::vector<SyndromeDefect> SurfaceCode::extractSyndromes(double noise_probabili
     
     // 3. Measure syndrome qubits
     std::vector<SyndromeDefect> defects;
-    int defect_id = 0;
     
     for (int i = 0; i < num_measure_qubits_; ++i) {
         int m_q = num_data_qubits_ + i;
@@ -101,11 +100,11 @@ std::vector<SyndromeDefect> SurfaceCode::extractSyndromes(double noise_probabili
         // A defect is a *change* in the syndrome measurement from the previous round
         if (result != prev_syndromes_[i]) {
             SyndromeDefect defect;
-            defect.id = defect_id++;
+            defect.id = i; // The index of the measurement qubit in the full stabilizer list
             defect.type = (i < x_stabilizers_.size()) ? 0 : 1;
             defect.x = stab->x; 
             defect.y = stab->y;
-            defect.time = 0; // Handled in loop
+            defect.time = 0; // Time is assigned by the caller
             defects.push_back(defect);
         }
         prev_syndromes_[i] = result;
