@@ -284,6 +284,7 @@ jobs:
       options: --dns 8.8.8.8
     env:
       VCPKG_FORCE_SYSTEM_BINARIES: 1
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
     steps:
       - name: Install system dependencies needed for checkout
         run: |
@@ -294,6 +295,21 @@ jobs:
         
       - uses: actions/checkout@v4
 
+      - name: Export GitHub Actions Cache Variables
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: Cache VCPKG
+        uses: actions/cache@v4
+        with:
+          path: vcpkg
+          key: vcpkg-cuda-${{ hashFiles('backend/vcpkg.json') }}
+          restore-keys: |
+            vcpkg-cuda-
+
       - name: Install build tools and MPI
         run: |
           for i in 1 2 3; do apt-get update && break || sleep 5; done
@@ -302,7 +318,9 @@ jobs:
 
       - name: Setup VCPKG
         run: |
-          git clone https://github.com/microsoft/vcpkg.git
+          if [ ! -d "vcpkg" ]; then
+            git clone https://github.com/microsoft/vcpkg.git
+          fi
           ./vcpkg/bootstrap-vcpkg.sh
 
       - name: Configure CMake
