@@ -143,8 +143,7 @@ jobs:
         run: |
           pip3 install pytest numpy
           export PYTHONPATH=$GITHUB_WORKSPACE/python
-          # Depending on pybind output we might need to add the backend build to python path
-          export PYTHONPATH=$GITHUB_WORKSPACE/build/python:$PYTHONPATH
+          export PYTHONPATH=$GITHUB_WORKSPACE/build:$PYTHONPATH
           pytest python/tests/
 
   build-mac:
