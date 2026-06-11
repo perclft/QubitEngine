@@ -386,7 +386,7 @@ std::vector<double> QuantumDifferentiator::calculateGradientsAdjointGPU(
   }
 
   // --- Step 2: Forward pass on GPU to get |ψ⟩ ---
-  QuantumRegister psi_reg(num_qubits, std::make_unique<CudaBackend>(num_qubits));
+  QuantumRegister psi_reg(num_qubits, std::make_unique<qubit_engine::CudaBackend>(num_qubits));
   for (const auto& gate : tape) {
     psi_reg.applyRegisteredGate(gate);
   }
@@ -395,7 +395,7 @@ std::vector<double> QuantumDifferentiator::calculateGradientsAdjointGPU(
   size_t size_bytes = dim * 2 * sizeof(double); // cuDoubleComplex size
   
   // psi_ptr is managed by psi_reg, do not free it manually!
-  void* psi_ptr = dynamic_cast<CudaBackend*>(psi_reg.getBackend())->getDeviceState();
+  void* psi_ptr = dynamic_cast<qubit_engine::CudaBackend*>(psi_reg.getBackend())->getDeviceState();
 
   // --- Step 3: Compute |λ⟩ = H|ψ⟩ on GPU ---
   void* lambda_ptr = qe::cuda::allocateDeviceState(size_bytes);
