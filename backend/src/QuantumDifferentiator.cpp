@@ -339,10 +339,11 @@ void QuantumDifferentiator::applyGateDerivativeToState(
 }
 
 // --- GPU Adjoint Differentiation ---
-#include "backends/GPUQuantumRegister.hpp"
+
 
 #ifdef ENABLE_CUDA
 #include "kernels/GateKernels.hpp"
+#include "backends/CudaBackend.hpp"
 #endif
 
 std::vector<double> QuantumDifferentiator::calculateGradientsAdjointGPU(
@@ -385,7 +386,7 @@ std::vector<double> QuantumDifferentiator::calculateGradientsAdjointGPU(
   }
 
   // --- Step 2: Forward pass on GPU to get |ψ⟩ ---
-  GPUQuantumRegister psi_reg(num_qubits);
+  QuantumRegister psi_reg(num_qubits, std::make_unique<CudaBackend>(num_qubits));
   for (const auto& gate : tape) {
     psi_reg.applyRegisteredGate(gate);
   }
@@ -394,7 +395,7 @@ std::vector<double> QuantumDifferentiator::calculateGradientsAdjointGPU(
   size_t size_bytes = dim * 2 * sizeof(double); // cuDoubleComplex size
   
   // psi_ptr is managed by psi_reg, do not free it manually!
-  void* psi_ptr = psi_reg.getDeviceState();
+  void* psi_ptr = dynamic_cast<CudaBackend*>(psi_reg.getBackend())->getDeviceState();
 
   // --- Step 3: Compute |λ⟩ = H|ψ⟩ on GPU ---
   void* lambda_ptr = qe::cuda::allocateDeviceState(size_bytes);
@@ -464,11 +465,8 @@ std::vector<double> QuantumDifferentiator::calculateGradientsAdjointGPU(
     }
 
     // c. Un-apply gate from |λ⟩
-    // To do this, we temporarily wrap lambda_ptr in a dummy GPUQuantumRegister, 
-    // or just call the Inverse kernels directly. 
-    // We already have inverse kernels available via launchHadamard, etc., but the easiest is
-    // to swap device pointers in psi_reg temporarily.
-    // However, GPUQuantumRegister doesn't let us swap pointers.
+    // To do this, we temporarily wrap lambda_ptr in a dummy call or just call the Inverse kernels directly. 
+    // We already have inverse kernels available via launchHadamard, etc.
     // Let's implement static applyInverse wrapper locally.
     auto applyInv = [&](void* device_state_ptr) {
       if (gate.type == QuantumRegister::RecordedGate::H) qe::cuda::launchHadamard(device_state_ptr, num_qubits, gate.qubits[0]);

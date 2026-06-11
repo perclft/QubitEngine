@@ -239,6 +239,19 @@ void QuantumRegister::applyDepolarizingNoise(Precision probability) {
     backend->applyDepolarizingNoise(probability);
 }
 
+void QuantumRegister::applyNoiseChannel1Q(const NoiseChannel1Q& channel, size_t target) {
+  validateQubit(target);
+  if (execution_enabled)
+    backend->applyNoiseChannel1Q(channel, target);
+}
+
+void QuantumRegister::applyNoiseChannel2Q(const NoiseChannel2Q& channel, size_t q1, size_t q2) {
+  validateQubit(q1);
+  validateQubit(q2);
+  if (execution_enabled)
+    backend->applyNoiseChannel2Q(channel, q1, q2);
+}
+
 void QuantumRegister::setNoiseModel(const NoiseModel& model) {
   noise_model_ = std::make_shared<NoiseModel>(model);
 }

@@ -306,9 +306,39 @@ void CudaBackend::applyNoiseChannel1Q(const NoiseChannel1Q& channel,
   qe::cuda::launchApplyKraus1Q(device_state_, num_qubits_, target, m.data(), inv_norm);
 }
 
-void CudaBackend::applyNoiseChannel2Q(const NoiseChannel2Q& /*channel*/,
-                                       size_t /*q1*/, size_t /*q2*/) {
-  // TODO: Implement GPU-native 2Q Kraus channel application
+void CudaBackend::applyNoiseChannel2Q(const NoiseChannel2Q& channel,
+                                       size_t q1, size_t q2) {
+  if (channel.operators.empty()) return;
+
+  Precision total_p = 0.0;
+  for (const auto& op : channel.operators) {
+      total_p += op.probability;
+  }
+
+  static thread_local std::mt19937 gen(std::random_device{}());
+  std::uniform_real_distribution<Precision> dis(0.0, total_p);
+  Precision r = dis(gen);
+
+  const KrausOperator2Q* selected = &channel.operators.back();
+  Precision cumulative = 0.0;
+  for (size_t i = 0; i < channel.operators.size(); ++i) {
+    cumulative += channel.operators[i].probability;
+    if (r <= cumulative) {
+      selected = &channel.operators[i];
+      break;
+    }
+  }
+
+  if (selected->probability < 1e-20) return;
+
+  Precision inv_norm = 1.0 / std::sqrt(selected->probability);
+  
+  std::vector<cuDoubleComplex> m(16);
+  for(int i=0; i<16; ++i) {
+      m[i] = make_cuDoubleComplex(selected->matrix[i].real(), selected->matrix[i].imag());
+  }
+
+  qe::cuda::launchApplyKraus2Q(device_state_, num_qubits_, q1, q2, m.data(), inv_norm);
 }
 
 // --- Measurement ---

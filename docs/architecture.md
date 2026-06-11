@@ -43,12 +43,10 @@ QubitEngine is a multi-language quantum simulation platform with five major laye
 
 `QuantumRegister` acts as a proxy that creates the appropriate backend at construction time. The selection logic in `QuantumRegister.cpp` follows this priority chain:
 
-1. **CUDA** — Multi-GPU Tensor Sharding & Async Streams via NCCL
-2. **Metal** — Asynchronous GPU Command Queues ensuring CPU execution overlap
-3. **MPI** — Cluster-scale deployment across instances
-4. **MPS (Tensor Network)** — Simulates > 50 qubits for weakly entangled logic using SVD Truncation
-5. **Stabilizer** — Simulates thousands of qubits in polynomial time under pure Clifford operations
-6. **CPU** — Default fallback with AVX2/NEON + OpenMP
+1. **Cloud** — Remote execution offloading
+2. **MPS (Tensor Network)** — Simulates > 50 qubits for weakly entangled logic using SVD Truncation
+3. **CUDA** — Multi-GPU Tensor Sharding & Async Streams via NCCL
+4. **CPU** — Default fallback with AVX2/NEON + OpenMP
 
 The `force_local` constructor parameter bypasses distributed (MPI) execution, useful for gradient calculations where each parameter evaluation needs an independent register.
 

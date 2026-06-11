@@ -89,17 +89,6 @@ QASMCircuit QASMParser::parse(const std::string &qasm_code) {
   return circuit;
 }
 
-std::string QASMParser::trim(const std::string &s) {
-  size_t start = s.find_first_not_of(" \t\n\r");
-  size_t end = s.find_last_not_of(" \t\n\r;");
-  return (start == std::string::npos) ? "" : s.substr(start, end - start + 1);
-}
-
-QASMGate QASMParser::parse_gate(const std::string &line,
-                                const std::map<std::string, int> &qubit_map) {
-    return QASMGate(); // Deprecated
-}
-
 // --- QASMExporter ---
 
 std::string QASMExporter::to_qasm3(

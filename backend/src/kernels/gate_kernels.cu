@@ -3,6 +3,14 @@
 #include <cuda_runtime.h>
 #include <iostream>
 
+#define CHECK_CUDA_KERNEL() \
+  do { \
+    cudaError_t err = cudaGetLastError(); \
+    if (err != cudaSuccess) { \
+      fprintf(stderr, "CUDA Kernel error at %s:%d: %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
+    } \
+  } while (0)
+
 // Helper for complex numbers
 __device__ cuDoubleComplex add(cuDoubleComplex a, cuDoubleComplex b) {
   return make_cuDoubleComplex(cuCreal(a) + cuCreal(b), cuCimag(a) + cuCimag(b));
@@ -325,27 +333,39 @@ static void launchKernel1Q(void (*kernel)(cuDoubleComplex *, int, int),
 
 void launchHadamard(void *deviceState, int num_qubits, int target) {
   launchKernel1Q(kHadamard, deviceState, num_qubits, target);
+  CHECK_CUDA_KERNEL();
 }
+
 
 void launchapplyX(void *deviceState, int num_qubits, int target) {
   launchKernel1Q(kApplyX, deviceState, num_qubits, target);
+  CHECK_CUDA_KERNEL();
 }
+
 
 void launchapplyY(void *deviceState, int num_qubits, int target) {
   launchKernel1Q(kApplyY, deviceState, num_qubits, target);
+  CHECK_CUDA_KERNEL();
 }
+
 
 void launchapplyZ(void *deviceState, int num_qubits, int target) {
   launchKernel1Q(kApplyZ, deviceState, num_qubits, target);
+  CHECK_CUDA_KERNEL();
 }
+
 
 void launchPhaseS(void *deviceState, int num_qubits, int target) {
   launchKernel1Q(kPhaseS, deviceState, num_qubits, target);
+  CHECK_CUDA_KERNEL();
 }
+
 
 void launchPhaseT(void *deviceState, int num_qubits, int target) {
   launchKernel1Q(kPhaseT, deviceState, num_qubits, target);
+  CHECK_CUDA_KERNEL();
 }
+
 
 void launchRotationY(void *deviceState, int num_qubits, int target,
                      double angle) {
@@ -355,7 +375,9 @@ void launchRotationY(void *deviceState, int num_qubits, int target,
   kRotationY<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState,
                                        num_qubits, target, angle);
   // cudaDeviceSynchronize(); // Phase 4: Async kernels
+  CHECK_CUDA_KERNEL();
 }
+
 
 void launchRotationZ(void *deviceState, int num_qubits, int target,
                      double angle) {
@@ -365,7 +387,9 @@ void launchRotationZ(void *deviceState, int num_qubits, int target,
   kRotationZ<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState,
                                        num_qubits, target, angle);
   // cudaDeviceSynchronize(); // Phase 4: Async kernels
+  CHECK_CUDA_KERNEL();
 }
+
 
 void launchCNOT(void *deviceState, int num_qubits, int control, int target) {
   int half_dim = 1 << (num_qubits - 1);
@@ -374,7 +398,9 @@ void launchCNOT(void *deviceState, int num_qubits, int control, int target) {
   kCNOT<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
                                   control, target);
   // cudaDeviceSynchronize(); // Phase 4: Async kernels
+  CHECK_CUDA_KERNEL();
 }
+
 
 void launchToffoli(void *deviceState, int num_qubits, int control1,
                    int control2, int target) {
@@ -384,7 +410,9 @@ void launchToffoli(void *deviceState, int num_qubits, int control1,
   kToffoli<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
                                      control1, control2, target);
   // cudaDeviceSynchronize(); // Phase 4: Async kernels
+  CHECK_CUDA_KERNEL();
 }
+
 
 void launchRotationX(void *deviceState, int num_qubits, int target,
                      double angle) {
@@ -394,7 +422,9 @@ void launchRotationX(void *deviceState, int num_qubits, int target,
   kRotationX<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState,
                                        num_qubits, target, angle);
   // cudaDeviceSynchronize(); // Phase 4: Async kernels
+  CHECK_CUDA_KERNEL();
 }
+
 
 void launchSWAP(void *deviceState, int num_qubits, int qubit1, int qubit2) {
   int dim = 1 << num_qubits;
@@ -403,7 +433,9 @@ void launchSWAP(void *deviceState, int num_qubits, int qubit1, int qubit2) {
   kSWAP<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
                                   qubit1, qubit2);
   // cudaDeviceSynchronize(); // Phase 4: Async kernels
+  CHECK_CUDA_KERNEL();
 }
+
 
 void launchCZ(void *deviceState, int num_qubits, int control, int target) {
   int dim = 1 << num_qubits;
@@ -412,7 +444,9 @@ void launchCZ(void *deviceState, int num_qubits, int control, int target) {
   kCZ<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
                                 control, target);
   // cudaDeviceSynchronize(); // Phase 4: Async kernels
+  CHECK_CUDA_KERNEL();
 }
+
 
 void launchComputeProbabilities(const void *deviceState, double *deviceProbs,
                                 int dim) {
@@ -421,7 +455,9 @@ void launchComputeProbabilities(const void *deviceState, double *deviceProbs,
   kComputeProbabilities<<<numBlocks, blockSize>>>(
       (const cuDoubleComplex *)deviceState, deviceProbs, dim);
   // cudaDeviceSynchronize(); // Phase 4: Async kernels
+  CHECK_CUDA_KERNEL();
 }
+
 
 void launchApplyKraus1Q(void *deviceState, int num_qubits, int target,
                         const void *matrix, double inv_norm) {
@@ -432,7 +468,9 @@ void launchApplyKraus1Q(void *deviceState, int num_qubits, int target,
   const cuDoubleComplex* m = (const cuDoubleComplex*)matrix;
   kApplyKraus1Q<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits, target,
                                           m[0], m[1], m[2], m[3], inv_norm);
+  CHECK_CUDA_KERNEL();
 }
+
 
 // --- Memory Helpers ---
 void* allocateDeviceState(size_t size_bytes) {
@@ -557,33 +595,95 @@ void launchDerivativeRY(void* out, const void* in, int num_qubits, int target, d
   int blockSize = 256;
   int numBlocks = (half_dim + blockSize - 1) / blockSize;
   kDerivativeRY<<<numBlocks, blockSize>>>((cuDoubleComplex*)out, (const cuDoubleComplex*)in, num_qubits, target, angle);
+  CHECK_CUDA_KERNEL();
 }
+
 
 void launchDerivativeRX(void* out, const void* in, int num_qubits, int target, double angle) {
   int half_dim = 1 << (num_qubits - 1);
   int blockSize = 256;
   int numBlocks = (half_dim + blockSize - 1) / blockSize;
   kDerivativeRX<<<numBlocks, blockSize>>>((cuDoubleComplex*)out, (const cuDoubleComplex*)in, num_qubits, target, angle);
+  CHECK_CUDA_KERNEL();
 }
+
 
 void launchDerivativeRZ(void* out, const void* in, int num_qubits, int target, double angle) {
   int half_dim = 1 << (num_qubits - 1);
   int blockSize = 256;
   int numBlocks = (half_dim + blockSize - 1) / blockSize;
   kDerivativeRZ<<<numBlocks, blockSize>>>((cuDoubleComplex*)out, (const cuDoubleComplex*)in, num_qubits, target, angle);
+  CHECK_CUDA_KERNEL();
 }
+
 
 void launchAdjointInnerProduct(const void* dpsi, const void* lambda, double* grad_out, int dim) {
   int blockSize = 256;
   int numBlocks = (dim + blockSize - 1) / blockSize;
   kAdjointInnerProduct<<<numBlocks, blockSize>>>((const cuDoubleComplex*)dpsi, (const cuDoubleComplex*)lambda, grad_out, dim);
+  CHECK_CUDA_KERNEL();
 }
+
 
 void launchApplyPauliTerm(void* out, const void* in, int num_qubits, const int* d_pauli_ops, double coeff) {
   int dim = 1 << num_qubits;
   int blockSize = 256;
   int numBlocks = (dim + blockSize - 1) / blockSize;
   kApplyPauliTerm<<<numBlocks, blockSize>>>((cuDoubleComplex*)out, (const cuDoubleComplex*)in, num_qubits, d_pauli_ops, coeff);
+  CHECK_CUDA_KERNEL();
+}
+
+
+
+struct KrausMatrix2Q {
+    cuDoubleComplex m[16];
+};
+
+__global__ void kApplyKraus2Q(cuDoubleComplex *state, int num_qubits, int q1, int q2,
+                              KrausMatrix2Q mat, double inv_norm) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int quarter_dim = 1 << (num_qubits - 2);
+  if (idx >= quarter_dim)
+    return;
+
+  int min_q = min(q1, q2);
+  int max_q = max(q1, q2);
+
+  int i0 = ((idx >> min_q) << (min_q + 1)) | (idx & ((1 << min_q) - 1));
+  i0 = ((i0 >> max_q) << (max_q + 1)) | (i0 & ((1 << max_q) - 1));
+
+  int i1 = i0 | (1 << q2);
+  int i2 = i0 | (1 << q1);
+  int i3 = i0 | (1 << q1) | (1 << q2);
+
+  cuDoubleComplex v0 = state[i0];
+  cuDoubleComplex v1 = state[i1];
+  cuDoubleComplex v2 = state[i2];
+  cuDoubleComplex v3 = state[i3];
+
+  cuDoubleComplex out0 = add(add(mul(mat.m[0], v0), mul(mat.m[1], v1)), add(mul(mat.m[2], v2), mul(mat.m[3], v3)));
+  cuDoubleComplex out1 = add(add(mul(mat.m[4], v0), mul(mat.m[5], v1)), add(mul(mat.m[6], v2), mul(mat.m[7], v3)));
+  cuDoubleComplex out2 = add(add(mul(mat.m[8], v0), mul(mat.m[9], v1)), add(mul(mat.m[10], v2), mul(mat.m[11], v3)));
+  cuDoubleComplex out3 = add(add(mul(mat.m[12], v0), mul(mat.m[13], v1)), add(mul(mat.m[14], v2), mul(mat.m[15], v3)));
+
+  state[i0] = scale(out0, inv_norm);
+  state[i1] = scale(out1, inv_norm);
+  state[i2] = scale(out2, inv_norm);
+  state[i3] = scale(out3, inv_norm);
+}
+
+void launchApplyKraus2Q(void *deviceState, int num_qubits, int q1, int q2,
+                        const void *matrix, double inv_norm) {
+  int quarter_dim = 1 << (num_qubits - 2);
+  int blockSize = 256;
+  int numBlocks = (quarter_dim + blockSize - 1) / blockSize;
+  
+  KrausMatrix2Q mat;
+  const cuDoubleComplex* m = (const cuDoubleComplex*)matrix;
+  for(int i=0; i<16; ++i) mat.m[i] = m[i];
+
+  kApplyKraus2Q<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits, q1, q2, mat, inv_norm);
+  CHECK_CUDA_KERNEL();
 }
 
 } // namespace cuda

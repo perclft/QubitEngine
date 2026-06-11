@@ -312,7 +312,7 @@ add_library(qubit_engine_core SHARED
     src/backends/MPSBackend.cpp
     src/backends/StabilizerBackend.cpp
     src/backends/CloudBackend.cpp
-    src/backends/GPUQuantumRegister.cpp
+
     src/transpiler/Router.cpp
     src/parser/QASMParser.cpp
     src/CircuitOptimizer.cpp
@@ -464,7 +464,7 @@ add_executable(tests
     tests/CircuitOptimizerTests.cpp
     tests/AdjointTests.cpp
     tests/CpuBackendTests.cpp
-    tests/GPUQuantumRegisterTests.cpp
+
     tests/MPSBackendTests.cpp
     tests/StabilizerBackendTests.cpp
     tests/SecurityIntegrationTests.cpp

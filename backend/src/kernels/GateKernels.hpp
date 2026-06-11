@@ -49,6 +49,8 @@ void launchFusedUnitary(void *deviceState, int num_qubits, const int *d_targets,
 // --- Kraus Channels ---
 void launchApplyKraus1Q(void *deviceState, int num_qubits, int target,
                         const void *matrix, double inv_norm);
+void launchApplyKraus2Q(void *deviceState, int num_qubits, int q1, int q2,
+                        const void *matrix, double inv_norm);
 
 // --- Memory Management Helpers ---
 void* allocateDeviceState(size_t size_bytes);

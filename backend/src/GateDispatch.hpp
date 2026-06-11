@@ -75,15 +75,14 @@ inline void dispatchGate(
   case GateOperation::AMPLITUDE_DAMPING: {
     auto channel = qubit_engine::makeAmplitudeDampingChannel(op.noise_gamma());
     for (size_t q = 0; q < qreg.getNumQubits(); ++q) {
-      // Requires direct backend access; for now apply via noise model setup
-      // This is a per-gate noise injection path used by the protobuf circuit protocol
+      qreg.applyNoiseChannel1Q(channel, q);
     }
     break;
   }
   case GateOperation::PHASE_DAMPING: {
     auto channel = qubit_engine::makePhaseDampingChannel(op.noise_gamma());
     for (size_t q = 0; q < qreg.getNumQubits(); ++q) {
-      // Same as above — channel application requires backend access
+      qreg.applyNoiseChannel1Q(channel, q);
     }
     break;
   }

@@ -57,7 +57,7 @@ void CircuitService::applyGate(qubit_engine::QuantumRegister &qreg,
 
 void CircuitService::serializeState(
     const qubit_engine::QuantumRegister &qreg, qubit_engine::StateResponse *response,
-    qubit_engine::CircuitRequest::MeasurementStrategy strategy, bool use_shm) {
+    qubit_engine::CircuitRequest::MeasurementStrategy strategy, bool use_shm, bool authorized) {
   
   char hostname[256];
 #ifdef _WIN32
@@ -77,7 +77,7 @@ void CircuitService::serializeState(
 
   if (strategy == qubit_engine::CircuitRequest::FULL_STATE) {
     bool shm_success = false;
-    if (use_shm) {
+    if (use_shm && authorized) {
       static std::atomic<uint64_t> counter{0};
       std::string shm_name = "/qe_shm_" + std::to_string(++counter) + "_";
       
@@ -102,11 +102,18 @@ void CircuitService::serializeState(
     }
 
     if (!shm_success) {
-      auto state_vec = qreg.getStateVector();
-      for (const auto &c : state_vec) {
+      if (!authorized) {
         auto *pb_c = response->add_state_vector();
-        pb_c->set_real(c.real());
-        pb_c->set_imag(c.imag());
+        pb_c->set_real(0.0);
+        pb_c->set_imag(0.0);
+        spdlog::warn("State vector redacted for unauthorized request.");
+      } else {
+        auto state_vec = qreg.getStateVector();
+        for (const auto &c : state_vec) {
+          auto *pb_c = response->add_state_vector();
+          pb_c->set_real(c.real());
+          pb_c->set_imag(c.imag());
+        }
       }
     }
   } else if (strategy == qubit_engine::CircuitRequest::SPARSE_STATE) {
@@ -126,7 +133,8 @@ void CircuitService::serializeState(
 
 grpc::Status CircuitService::RunCircuit(grpc::ServerContext *context,
                                         const qubit_engine::CircuitRequest *request,
-                                        qubit_engine::StateResponse *response) {
+                                        qubit_engine::StateResponse *response,
+                                        bool authorized) {
   spdlog::debug("RunCircuit domain logic invoked!");
 
   int n = request->num_qubits();
@@ -238,7 +246,7 @@ grpc::Status CircuitService::RunCircuit(grpc::ServerContext *context,
       }
     }
 
-    serializeState(qreg, response, request->measurement_strategy(), request->use_shm());
+    serializeState(qreg, response, request->measurement_strategy(), request->use_shm(), authorized);
   } catch (const qubit_engine::InvalidArgumentException &e) {
     return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, e.what());
   } catch (const qubit_engine::QubitOutOfRangeException &e) {
@@ -253,7 +261,8 @@ grpc::Status CircuitService::RunCircuit(grpc::ServerContext *context,
 grpc::Status CircuitService::StreamGates(
     grpc::ServerContext *context,
     grpc::ServerReaderWriter<qubit_engine::StateResponse,
-                             qubit_engine::GateStreamRequest> *stream) {
+                             qubit_engine::GateStreamRequest> *stream,
+    bool authorized) {
   qubit_engine::GateStreamRequest first;
   if (!stream->Read(&first)) {
     return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "StreamGates requires an initial init message");
@@ -283,7 +292,7 @@ grpc::Status CircuitService::StreamGates(
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "StreamGates received unknown message type");
       }
       applyGate(qreg, req.op(), &response);
-      serializeState(qreg, &response, qubit_engine::CircuitRequest::FULL_STATE, use_shm);
+      serializeState(qreg, &response, qubit_engine::CircuitRequest::FULL_STATE, use_shm, authorized);
       stream->Write(response);
     }
   } catch (const std::exception &e) {
@@ -295,7 +304,8 @@ grpc::Status CircuitService::StreamGates(
 
 grpc::Status CircuitService::VisualizeCircuit(
     grpc::ServerContext *context, const qubit_engine::CircuitRequest *request,
-    grpc::ServerWriter<qubit_engine::StateResponse> *writer) {
+    grpc::ServerWriter<qubit_engine::StateResponse> *writer,
+    bool authorized) {
   spdlog::info("[VisualizeCircuit] Received request for {} qubits.", request->num_qubits());
   qubit_engine::QuantumRegister qreg(request->num_qubits());
 
@@ -305,7 +315,7 @@ grpc::Status CircuitService::VisualizeCircuit(
     if (request->noise_probability() > 0.0) {
       qreg.applyDepolarizingNoise(request->noise_probability());
     }
-    serializeState(qreg, &response, request->measurement_strategy(), false);
+    serializeState(qreg, &response, request->measurement_strategy(), false, authorized);
     if (!writer->Write(response)) {
       return grpc::Status::CANCELLED;
     }

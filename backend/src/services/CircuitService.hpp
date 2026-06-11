@@ -18,16 +18,19 @@ public:
 
   grpc::Status RunCircuit(grpc::ServerContext *context,
                           const qubit_engine::CircuitRequest *request,
-                          qubit_engine::StateResponse *response);
+                          qubit_engine::StateResponse *response,
+                          bool authorized = true);
 
   grpc::Status StreamGates(
       grpc::ServerContext *context,
       grpc::ServerReaderWriter<qubit_engine::StateResponse,
-                               qubit_engine::GateStreamRequest> *stream);
+                               qubit_engine::GateStreamRequest> *stream,
+      bool authorized = true);
 
   grpc::Status VisualizeCircuit(
       grpc::ServerContext *context, const qubit_engine::CircuitRequest *request,
-      grpc::ServerWriter<qubit_engine::StateResponse> *writer);
+      grpc::ServerWriter<qubit_engine::StateResponse> *writer,
+      bool authorized = true);
 
   static bool hasEnoughMemory(int num_qubits);
 
@@ -40,7 +43,7 @@ private:
                       qubit_engine::StateResponse *response,
                       qubit_engine::CircuitRequest::MeasurementStrategy
                           strategy = qubit_engine::CircuitRequest::FULL_STATE,
-                      bool use_shm = false);
+                      bool use_shm = false, bool authorized = true);
 };
 
 } // namespace services

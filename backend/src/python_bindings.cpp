@@ -17,7 +17,7 @@
 #include "Exceptions.hpp"
 
 // Include GPU headers
-#include "backends/GPUQuantumRegister.hpp"
+
 
 // Include Stabilizer Backend
 #include "backends/StabilizerBackend.hpp"
@@ -202,26 +202,11 @@ PYBIND11_MODULE(core, m) {
         py::arg("t1"), py::arg("t2"), py::arg("gate_time"),
         "Create a thermal relaxation (T1/T2) noise channel");
 
-  // --- GPUQuantumRegister Binding ---
-  py::class_<GPUQuantumRegister>(m, "GPUQuantumRegister")
-      .def(py::init<size_t>(),
-           "Initialize a GPU quantum register with N qubits")
-      .def("applyHadamard", &GPUQuantumRegister::applyHadamard)
-      .def("applyX", &GPUQuantumRegister::applyX)
-      .def("applyY", &GPUQuantumRegister::applyY)
-      .def("applyZ", &GPUQuantumRegister::applyZ)
-      .def("applyRotationY", &GPUQuantumRegister::applyRotationY)
-      .def("getStateVector", [](const GPUQuantumRegister &q) {
-          auto* vec_ptr = new std::vector<std::complex<double>>(std::move(q.getStateVector()));
-          auto capsule = py::capsule(vec_ptr, [](void *p) {
-              delete reinterpret_cast<std::vector<std::complex<double>>*>(p);
-          });
-          return py::array_t<std::complex<double>>(
-              vec_ptr->size(),
-              vec_ptr->data(),
-              capsule
-          );
-      });
+  // --- GPUQuantumRegister Alias ---
+  m.def("GPUQuantumRegister", [](size_t num_qubits) {
+      // Return a standard QuantumRegister. The factory will auto-select the GPU backend if available.
+      return std::make_unique<QuantumRegister>(num_qubits, false);
+  }, py::arg("num_qubits"), "Initialize a GPU quantum register with N qubits (alias for QuantumRegister)");
 
   // --- QuantumDifferentiator Binding ---
   m.def(

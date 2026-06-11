@@ -146,6 +146,14 @@ jobs:
           print('Benchmark passed.')
           "
 
+      - name: Run Python Tests
+        run: |
+          pip3 install pytest numpy
+          export PYTHONPATH=$GITHUB_WORKSPACE/python
+          # Depending on pybind output we might need to add the backend build to python path
+          export PYTHONPATH=$GITHUB_WORKSPACE/build/python:$PYTHONPATH
+          pytest python/tests/
+
   build-mac:
     runs-on: macos-14 # M1 ARM64 runner
     env:

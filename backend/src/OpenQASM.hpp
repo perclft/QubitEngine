@@ -46,12 +46,6 @@ struct QUBIT_ENGINE_EXPORT QASMCircuit {
 class QUBIT_ENGINE_EXPORT QASMParser {
 public:
   QASMCircuit parse(const std::string &qasm_code);
-
-private:
-  std::string trim(const std::string &s);
-
-  QASMGate parse_gate(const std::string &line,
-                      const std::map<std::string, int> &qubit_map);
 };
 
 // OpenQASM Exporter

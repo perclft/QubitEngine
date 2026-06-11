@@ -47,6 +47,8 @@ public:
 
   // --- Noise Simulation ---
   void applyDepolarizingNoise(Precision probability);
+  void applyNoiseChannel1Q(const NoiseChannel1Q& channel, size_t target);
+  void applyNoiseChannel2Q(const NoiseChannel2Q& channel, size_t q1, size_t q2);
 
   /// @brief Attaches a noise model. When set, noise is applied automatically
   /// after every gate operation.
@@ -67,6 +69,7 @@ public:
 
   // --- Debugging ---
   std::vector<Complex> getStateVector() const;
+  IQuantumBackend* getBackend() const { return backend.get(); }
 
   // --- Recording / Tape Helper ---
   struct RecordedGate {

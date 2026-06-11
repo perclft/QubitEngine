@@ -18,29 +18,23 @@ QubitEngineServiceImpl::~QubitEngineServiceImpl() = default;
 grpc::Status QubitEngineServiceImpl::RunCircuit(grpc::ServerContext *context,
                                                 const qubit_engine::CircuitRequest *request,
                                                 qubit_engine::StateResponse *response) {
-  if (!auth_interceptor_->ValidateAuth(context)) {
-    return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "Invalid or missing authorization token");
-  }
-  return circuit_service_->RunCircuit(context, request, response);
+  bool authorized = auth_interceptor_->ValidateAuth(context);
+  return circuit_service_->RunCircuit(context, request, response, authorized);
 }
 
 grpc::Status QubitEngineServiceImpl::StreamGates(
     grpc::ServerContext *context,
     grpc::ServerReaderWriter<qubit_engine::StateResponse,
                              qubit_engine::GateStreamRequest> *stream) {
-  if (!auth_interceptor_->ValidateAuth(context)) {
-    return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "Invalid or missing authorization token");
-  }
-  return circuit_service_->StreamGates(context, stream);
+  bool authorized = auth_interceptor_->ValidateAuth(context);
+  return circuit_service_->StreamGates(context, stream, authorized);
 }
 
 grpc::Status QubitEngineServiceImpl::VisualizeCircuit(
     grpc::ServerContext *context, const qubit_engine::CircuitRequest *request,
     grpc::ServerWriter<qubit_engine::StateResponse> *writer) {
-  if (!auth_interceptor_->ValidateAuth(context)) {
-    return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "Invalid or missing authorization token");
-  }
-  return circuit_service_->VisualizeCircuit(context, request, writer);
+  bool authorized = auth_interceptor_->ValidateAuth(context);
+  return circuit_service_->VisualizeCircuit(context, request, writer, authorized);
 }
 
 grpc::Status QubitEngineServiceImpl::RunVQE(
