@@ -17,7 +17,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o scheduler ./cmd/scheduler/main.go
 # Runtime stage
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache upgrade && apk --no-cache add ca-certificates
 
 WORKDIR /app
 
