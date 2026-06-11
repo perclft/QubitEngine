@@ -143,7 +143,7 @@ jobs:
         run: |
           pip3 install pytest numpy
           export PYTHONPATH=$GITHUB_WORKSPACE/python
-          export PYTHONPATH=$GITHUB_WORKSPACE/build:$PYTHONPATH
+          cp build/core*.so python/qubit_engine/ || echo "Warning: core.so not found in build/"
           pytest python/tests/
 
   build-mac:
