@@ -22,13 +22,6 @@ jobs:
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
-      - name: Cache VCPKG
-        uses: actions/cache@v4
-        with:
-          path: vcpkg
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('backend/vcpkg.json') }}
-          restore-keys: |
-            vcpkg-${{ runner.os }}-
 
       - name: Install System Dependencies (MPI)
         run: |
@@ -169,13 +162,6 @@ jobs:
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
-      - name: Cache VCPKG
-        uses: actions/cache@v4
-        with:
-          path: vcpkg
-          key: vcpkg-${{ runner.os }}-arm64-${{ hashFiles('backend/vcpkg.json') }}
-          restore-keys: |
-            vcpkg-${{ runner.os }}-arm64-
 
       - name: Install build tools
         run: brew install ninja autoconf autoconf-archive automake libtool pkg-config libomp || true
@@ -234,13 +220,6 @@ jobs:
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
-      - name: Cache VCPKG
-        uses: actions/cache@v4
-        with:
-          path: vcpkg
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('backend/vcpkg.json') }}
-          restore-keys: |
-            vcpkg-${{ runner.os }}-
 
       - uses: ilammy/msvc-dev-cmd@v1
 
@@ -309,14 +288,6 @@ jobs:
           script: |
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-
-      - name: Cache VCPKG
-        uses: actions/cache@v4
-        with:
-          path: vcpkg
-          key: vcpkg-cuda-${{ hashFiles('backend/vcpkg.json') }}
-          restore-keys: |
-            vcpkg-cuda-
 
       - name: Install build tools and MPI
         run: |
