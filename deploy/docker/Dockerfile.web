@@ -23,7 +23,7 @@ RUN npm run build
 # Stage 3: Production server
 FROM node:20-alpine AS runner
 WORKDIR /app
-RUN apk add --no-cache curl
+RUN apk --no-cache upgrade && apk add --no-cache curl
 
 # Remove npm and npx from the final image to resolve vulnerabilities in npm's bundled dependencies
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
