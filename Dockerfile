@@ -34,8 +34,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/bin/qubit_engine /usr/local/bin/qubit_engine
-COPY --from=builder /app/bin/libqubit_engine_core.so /usr/local/lib/
-COPY --from=builder /app/bin/libqubit_engine_proto.so /usr/local/lib/
+
 RUN ldconfig
 
 EXPOSE 50051
