@@ -113,8 +113,7 @@ COPY --from=builder /build/bin/qubit_engine /usr/local/bin/qubit_engine
 COPY --from=builder /usr/local/lib/libhiredis* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libredis++* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libprometheus-cpp* /usr/local/lib/
-COPY --from=builder /build/bin/libqubit_engine_core.so /usr/local/lib/
-COPY --from=builder /build/bin/libqubit_engine_proto.so /usr/local/lib/
+
 RUN ldconfig
 # Also copy nvidia-ml and other potentially needed libs if they are dynamic
 # But for now libcudart is the main one linked.
