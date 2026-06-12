@@ -268,7 +268,7 @@ grpc_generate_cpp(GRPC_SRC_GENERATED_CPP GRPC_HDR_GENERATED_CPP
 )
 
 # --- Proto Library ---
-add_library(qubit_engine_proto SHARED
+add_library(qubit_engine_proto STATIC
     ${GRPC_SRC_GENERATED_CPP}
     ${GRPC_HDR_GENERATED_CPP}
 )
@@ -303,7 +303,7 @@ endif()
 # =================================================================
 # Core Library — shared across all targets to eliminate duplication
 # =================================================================
-add_library(qubit_engine_core SHARED
+add_library(qubit_engine_core STATIC
     src/HardwareConfig.cpp
     src/QuantumRegister.cpp
     src/ConfigManager.cpp
