@@ -959,8 +959,8 @@ void CpuBackend::applyDenseUnitary(const std::vector<size_t> &targets,
     for (long long i = 0; i < static_cast<long long>(local_dim); ++i) {
       if (!(i & m0) && !(i & m1)) {
         size_t i00 = i;
-        size_t i01 = i | m1; // Index 1: targets[1] set
-        size_t i10 = i | m0; // Index 2: targets[0] set
+        size_t i01 = i | m0; // Index 1: targets[0] set
+        size_t i10 = i | m1; // Index 2: targets[1] set
         size_t i11 = i | m0 | m1;
 
         Complex v00 = state[i00];

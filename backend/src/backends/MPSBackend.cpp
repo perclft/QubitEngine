@@ -54,8 +54,30 @@ void MPSBackend::applySingleQubitGate(size_t target,
 void MPSBackend::applyTwoQubitGate(size_t q1, size_t q2,
                                    const std::vector<Complex> &matrix) {
   if (std::abs((int)q1 - (int)q2) != 1) {
-    throw std::runtime_error("MPS two-qubit gates currently require adjacent "
-                             "qubits. SWAP network needed.");
+    static const std::vector<Complex> SWAP_MAT = {
+        1, 0, 0, 0,
+        0, 0, 1, 0,
+        0, 1, 0, 0,
+        0, 0, 0, 1
+    };
+    if (q1 < q2) {
+      for (size_t i = q1; i < q2 - 1; ++i) {
+        applyTwoQubitGate(i, i + 1, SWAP_MAT);
+      }
+      applyTwoQubitGate(q2 - 1, q2, matrix);
+      for (size_t i = q2 - 2; i >= q1 && i != (size_t)-1; --i) {
+        applyTwoQubitGate(i, i + 1, SWAP_MAT);
+      }
+    } else {
+      for (size_t i = q1; i > q2 + 1; --i) {
+        applyTwoQubitGate(i, i - 1, SWAP_MAT);
+      }
+      applyTwoQubitGate(q2 + 1, q2, matrix);
+      for (size_t i = q2 + 2; i <= q1; ++i) {
+        applyTwoQubitGate(i, i - 1, SWAP_MAT);
+      }
+    }
+    return;
   }
 
   size_t left = std::min(q1, q2);

@@ -61,7 +61,7 @@ TEST(JITPropertyTest, O0CompilationDoesNotAlterOriginalCircuitLength) {
               });
 }
 
-TEST(JITPropertyTest, DISABLED_O4OptimizationNeverIncreasesGateCount) {
+TEST(JITPropertyTest, O4OptimizationNeverIncreasesGateCount) {
     rc::check("O4 optimization always yields <= gates than O0",
               [](RandomCircuit circ) {
                   for (auto& g : circ.gates) {

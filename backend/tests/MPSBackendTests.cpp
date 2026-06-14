@@ -20,10 +20,24 @@ TEST(MPSBackendTest, ToffoliNotSupported) {
     EXPECT_THROW(mps.applyToffoli(0, 1, 2), std::runtime_error);
 }
 
-TEST(MPSBackendTest, NonAdjacentTwoQubitGatesThrow) {
+TEST(MPSBackendTest, NonAdjacentTwoQubitGatesWork) {
     MPSBackend mps(3);
-    // CNOT on non-adjacent qubits requires SWAP network which is unimplemented
-    EXPECT_THROW(mps.applyCNOT(0, 2), std::runtime_error);
+    // Apply H(0)
+    mps.applyHadamard(0);
+    // CNOT(0, 2): Control 0, Target 2. Qubits 0 and 2 are non-adjacent.
+    mps.applyCNOT(0, 2);
+    
+    // State should be (|000> + |101>)/sqrt(2)
+    auto probs = mps.getProbabilities();
+    ASSERT_EQ(probs.size(), 8);
+    EXPECT_NEAR(probs[0], 0.5, 1e-6); // |000>
+    EXPECT_NEAR(probs[5], 0.5, 1e-6); // |101> (binary 101 represents qubit 2 = 1, qubit 1 = 0, qubit 0 = 1)
+    EXPECT_NEAR(probs[1], 0.0, 1e-6);
+    EXPECT_NEAR(probs[2], 0.0, 1e-6);
+    EXPECT_NEAR(probs[3], 0.0, 1e-6);
+    EXPECT_NEAR(probs[4], 0.0, 1e-6);
+    EXPECT_NEAR(probs[6], 0.0, 1e-6);
+    EXPECT_NEAR(probs[7], 0.0, 1e-6);
 }
 
 TEST(MPSBackendTest, TooLargeStateVectorThrows) {

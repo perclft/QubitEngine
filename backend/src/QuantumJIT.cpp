@@ -180,7 +180,7 @@ Matrix2x2 QuantumJIT::ry_matrix(double theta) {
 
 // --- Two-Qubit Gate Matrices ---
 Matrix4x4 QuantumJIT::cnot_matrix() {
-  return {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0};
+  return {1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0};
 }
 
 Matrix4x4 QuantumJIT::cz_matrix() {
@@ -215,7 +215,7 @@ bool QuantumJIT::is_identity(const Matrix4x4 &m, double tol) {
 void QuantumJIT::apply_single_to_two(Matrix4x4 &two, const Matrix2x2 &single, int qubit_idx) {
     // qubit_idx 0 is the first target in the two-qubit gate, 1 is the second
     Matrix4x4 result;
-    if (qubit_idx == 0) {
+    if (qubit_idx == 1) {
         // M = (S \otimes I) * T
         for (int i = 0; i < 4; ++i) {
             for (int j = 0; j < 4; ++j) {
@@ -449,8 +449,8 @@ void QuantumJIT::apply_gate_to_unitary(std::vector<Complex>& unitary,
             for (size_t row = 0; row < dim; ++row) {
                 if (!(row & c_mask) && !(row & t_mask)) {
                     size_t r00 = row;
-                    size_t r01 = row | t_mask; // Index 1: targets[1] set
-                    size_t r10 = row | c_mask; // Index 2: targets[0] set
+                    size_t r01 = row | c_mask; // Index 1: targets[0] set
+                    size_t r10 = row | t_mask; // Index 2: targets[1] set
                     size_t r11 = row | c_mask | t_mask;
                     
                     Complex v00 = unitary[r00 * dim + col];
@@ -580,6 +580,7 @@ QuantumJIT::fuse_two_qubit_adjacent(const std::vector<CompiledGate> &gates) {
 
   std::vector<CompiledGate> fused;
   std::unordered_map<int, int> last_gate;
+  std::vector<std::vector<CompiledGate>> original_subcircuits;
 
   for (const auto &g : gates) {
     if (g.type == CompiledGate::TWO_QUBIT) {
@@ -591,7 +592,7 @@ QuantumJIT::fuse_two_qubit_adjacent(const std::vector<CompiledGate> &gates) {
       
       if (it0 != last_gate.end() && it1 != last_gate.end() && it0->second == it1->second) {
         int last_idx = it0->second;
-        if (last_idx >= 0 && last_idx < fused.size() && fused[last_idx].type == CompiledGate::TWO_QUBIT) {
+        if (last_idx >= 0 && last_idx < static_cast<int>(fused.size()) && fused[last_idx].type == CompiledGate::TWO_QUBIT) {
           auto &last = fused[last_idx];
           
           if ((last.target_qubits[0] == q0 && last.target_qubits[1] == q1) ||
@@ -615,6 +616,7 @@ QuantumJIT::fuse_two_qubit_adjacent(const std::vector<CompiledGate> &gates) {
             }
             
             std::copy(m_fused.begin(), m_fused.end(), last.two_matrix.begin());
+            original_subcircuits[last_idx].push_back(g);
             continue;
           }
         }
@@ -628,6 +630,7 @@ QuantumJIT::fuse_two_qubit_adjacent(const std::vector<CompiledGate> &gates) {
                 auto &last = fused[last_idx];
                 int q_pos = (last.target_qubits[0] == q) ? 0 : 1;
                 apply_single_to_two(last.two_matrix, g.single_matrix, q_pos);
+                original_subcircuits[last_idx].push_back(g);
                 continue;
             }
         }
@@ -636,6 +639,7 @@ QuantumJIT::fuse_two_qubit_adjacent(const std::vector<CompiledGate> &gates) {
     // If no fusion occurred, push the gate and update last_gate tracker
     int new_idx = fused.size();
     fused.push_back(g);
+    original_subcircuits.push_back({g});
     for (int q : g.target_qubits) {
       last_gate[q] = new_idx;
     }
@@ -643,14 +647,19 @@ QuantumJIT::fuse_two_qubit_adjacent(const std::vector<CompiledGate> &gates) {
 
   // Final sweep: run KAK decomposition on remaining TWO_QUBIT gates and expand them
   std::vector<CompiledGate> cleaned;
-  for (const auto &g : fused) {
+  for (size_t idx = 0; idx < fused.size(); ++idx) {
+      const auto &g = fused[idx];
       if (g.type == CompiledGate::TWO_QUBIT) {
           if (is_identity(g.two_matrix)) {
               continue; // Strip Identity block
           }
           auto kak = decompose_unitary_kak(g.two_matrix);
           auto synthesized = synthesize_kak(kak, g.target_qubits[0], g.target_qubits[1]);
-          cleaned.insert(cleaned.end(), synthesized.begin(), synthesized.end());
+          if (synthesized.size() <= original_subcircuits[idx].size()) {
+              cleaned.insert(cleaned.end(), synthesized.begin(), synthesized.end());
+          } else {
+              cleaned.insert(cleaned.end(), original_subcircuits[idx].begin(), original_subcircuits[idx].end());
+          }
       } else {
           cleaned.push_back(g);
       }

@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <functional>
 
 // Distributed & Accelerated Comm Libraries
 #ifdef MPI_ENABLED
@@ -71,10 +72,10 @@ private:
   int mpi_rank_ = 0;
   int mpi_size_ = 1;
 
-  // Internal helpers
   void initializeCuda();
   void copyStateToDevice(const std::vector<Complex> &host_state);
   void copyStateToHost(std::vector<Complex> &host_state) const;
+  void applyGateDistributed(std::function<void(void*)> launchKernel);
 
 #ifdef ENABLE_NCCL
   void gatherStateNCCL();
