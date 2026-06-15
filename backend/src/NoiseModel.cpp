@@ -299,9 +299,25 @@ void NoiseModel::addSingleQubitNoise(size_t qubit, NoiseChannel1Q channel) {
 }
 
 void NoiseModel::addTwoQubitNoise(size_t q1, size_t q2, NoiseChannel2Q channel) {
+  // Create swapped channel for the reverse edge (q2, q1)
+  NoiseChannel2Q reversed_channel = channel;
+  reversed_channel.name += "_swapped";
+
+  // Permutation vector for swapping the two qubits (tensor product basis swapping)
+  const int P[4] = {0, 2, 1, 3};
+  for (auto& op : reversed_channel.operators) {
+      std::array<Complex, 16> swapped_matrix;
+      for (int r = 0; r < 4; ++r) {
+          for (int c = 0; c < 4; ++c) {
+              swapped_matrix[r * 4 + c] = op.matrix[P[r] * 4 + P[c]];
+          }
+      }
+      op.matrix = swapped_matrix;
+      op.matrix_dag_self = computeDagSelf4x4(swapped_matrix);
+  }
+
   per_edge_channels_[{q1, q2}].push_back(std::move(channel));
-  // Also add reverse edge to be safe, since physical edges are bidirectional for noise
-  per_edge_channels_[{q2, q1}].push_back(channel);
+  per_edge_channels_[{q2, q1}].push_back(std::move(reversed_channel));
 }
 
 void NoiseModel::setReadoutError(size_t qubit, ReadoutError error) {

@@ -2,6 +2,7 @@
 #include "JobExecutor.hpp"
 #include <spdlog/spdlog.h>
 #include <chrono>
+#include <thread>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -52,8 +53,24 @@ void WorkerPool::runWorkerLoop(int worker_index) {
     spdlog::info("{} started listening for jobs...", worker_id);
 
     while (running_) {
-      // Blocking Pop from Queue with 1 second timeout
-      auto job = redis.bzpopmax("queue:jobs", 1);
+      // Blocking Pop from Queue with 1 second timeout and fail-safe retry logic
+      decltype(redis.bzpopmax("queue:jobs", 1)) job;
+      int retry_delay_ms = 100;
+      const int max_delay_ms = 5000;
+
+      while (running_) {
+        try {
+          job = redis.bzpopmax("queue:jobs", 1);
+          break; // Success, exit retry loop
+        } catch (const std::exception &ex) {
+          spdlog::warn("{} failed to read from Redis: {}. Retrying in {}ms...", 
+                       worker_id, ex.what(), retry_delay_ms);
+          std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
+          retry_delay_ms = std::min(retry_delay_ms * 2, max_delay_ms);
+        }
+      }
+
+      if (!running_) break;
       if (!job) continue;
 
       std::string job_id = std::get<1>(*job);

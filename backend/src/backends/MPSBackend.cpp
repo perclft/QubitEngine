@@ -169,7 +169,23 @@ void MPSBackend::applyTwoQubitGate(size_t q1, size_t q2,
   // The new bond connects U_trunc and (S_trunc * V_adj_trunc).
   // Absorbing S into the right side pushes the canonical center to the right.
   Eigen::MatrixXcd U_trunc = U.leftCols(D_new);
-  Eigen::MatrixXcd S_trunc = S.head(D_new).asDiagonal();
+
+  // Restore remaining singular values so that their sum of squares matches
+  // the pre-truncation sum of squares of all singular values.
+  double sum_squares_orig = 0.0;
+  for (int i = 0; i < S.size(); ++i) {
+    sum_squares_orig += S(i) * S(i);
+  }
+  double sum_squares_trunc = 0.0;
+  for (int i = 0; i < D_new; ++i) {
+    sum_squares_trunc += S(i) * S(i);
+  }
+  double scale_factor = 1.0;
+  if (sum_squares_trunc > 1e-15) {
+    scale_factor = std::sqrt(sum_squares_orig / sum_squares_trunc);
+  }
+
+  Eigen::MatrixXcd S_trunc = (S.head(D_new) * scale_factor).asDiagonal();
   Eigen::MatrixXcd V_adj_trunc = V.leftCols(D_new).adjoint(); // (D_new x cols)
   Eigen::MatrixXcd VS_trunc = S_trunc * V_adj_trunc;
 
@@ -544,9 +560,26 @@ std::vector<Complex> MPSBackend::getStateVector() const {
         "Cannot expand state vector > 30 qubits due to O(2^N) memory limit!");
   }
 
-  // Contract all tensors sequentially...
-  // (Stubbed returning empty for prototype)
-  return {};
+  std::vector<Complex> state = {1.0};
+  for (int q = 0; q < num_qubits; ++q) {
+    const auto& tensor = nodes[q];
+    int L = tensor.left_dim;
+    int R = tensor.right_dim;
+    std::vector<Complex> new_state(R * (1ULL << (q + 1)), Complex(0,0));
+    
+    for (size_t s = 0; s < (1ULL << q); ++s) {
+      for (int l = 0; l < L; ++l) {
+        Complex v = state[l * (1ULL << q) + s];
+        for (int p = 0; p < 2; ++p) {
+          for (int r = 0; r < R; ++r) {
+            new_state[r * (1ULL << (q + 1)) + s + (p << q)] += v * tensor.data[l * 2 * R + p * R + r];
+          }
+        }
+      }
+    }
+    state = std::move(new_state);
+  }
+  return state;
 }
 
 } // namespace qubit_engine

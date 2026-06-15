@@ -78,6 +78,37 @@ def test_gradients():
     else:
         print("FAIL: Gradient mismatch")
 
+def test_mps_backend():
+    print("\n--- Testing MPS Backend via environment variables ---")
+    os.environ["QUBIT_MPS_THRESHOLD"] = "2"
+    os.environ["QUBIT_MPS_BOND_DIMENSION"] = "16"
+    
+    q = qubit_engine.QuantumRegister(3)
+    
+    print("Applying Hadamard on 0...")
+    q.applyHadamard(0)
+    print("Applying CNOT(0, 2)...")
+    q.applyCNOT(0, 2)
+    
+    probs = q.getProbabilities()
+    state = q.getStateVector()
+    
+    print(f"MPS Probabilities: {probs}")
+    print(f"MPS State Vector size: {len(state)}")
+    
+    # Assert correct probabilities of non-adjacent CNOT(0, 2)
+    p000 = probs[0]
+    p101 = probs[5]
+    print(f"MPS P(000): {p000}")
+    print(f"MPS P(101): {p101}")
+    
+    if abs(p000 - 0.5) < 1e-5 and abs(p101 - 0.5) < 1e-5:
+        print("PASS: MPS Non-Adjacent CNOT Correct")
+    else:
+        print("FAIL: MPS Non-Adjacent CNOT Incorrect")
+        sys.exit(1)
+
 if __name__ == "__main__":
     test_basic_circuit()
     test_gradients()
+    test_mps_backend()

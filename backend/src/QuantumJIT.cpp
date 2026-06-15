@@ -215,7 +215,7 @@ bool QuantumJIT::is_identity(const Matrix4x4 &m, double tol) {
 void QuantumJIT::apply_single_to_two(Matrix4x4 &two, const Matrix2x2 &single, int qubit_idx) {
     // qubit_idx 0 is the first target in the two-qubit gate, 1 is the second
     Matrix4x4 result;
-    if (qubit_idx == 1) {
+    if (qubit_idx == 0) {
         // M = (S \otimes I) * T
         for (int i = 0; i < 4; ++i) {
             for (int j = 0; j < 4; ++j) {

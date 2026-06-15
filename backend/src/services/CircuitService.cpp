@@ -135,6 +135,10 @@ grpc::Status CircuitService::RunCircuit(grpc::ServerContext *context,
                                         const qubit_engine::CircuitRequest *request,
                                         qubit_engine::StateResponse *response,
                                         bool authorized) {
+  if (!authorized) {
+    return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "Invalid or missing authorization token");
+  }
+
   spdlog::debug("RunCircuit domain logic invoked!");
 
   int n = request->num_qubits();
@@ -263,6 +267,10 @@ grpc::Status CircuitService::StreamGates(
     grpc::ServerReaderWriter<qubit_engine::StateResponse,
                              qubit_engine::GateStreamRequest> *stream,
     bool authorized) {
+  if (!authorized) {
+    return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "Invalid or missing authorization token");
+  }
+
   qubit_engine::GateStreamRequest first;
   if (!stream->Read(&first)) {
     return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "StreamGates requires an initial init message");
@@ -306,6 +314,10 @@ grpc::Status CircuitService::VisualizeCircuit(
     grpc::ServerContext *context, const qubit_engine::CircuitRequest *request,
     grpc::ServerWriter<qubit_engine::StateResponse> *writer,
     bool authorized) {
+  if (!authorized) {
+    return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "Invalid or missing authorization token");
+  }
+
   spdlog::info("[VisualizeCircuit] Received request for {} qubits.", request->num_qubits());
   qubit_engine::QuantumRegister qreg(request->num_qubits());
 

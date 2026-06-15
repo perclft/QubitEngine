@@ -155,9 +155,9 @@ void SurfaceCode::applyCorrections(const std::vector<std::pair<int, int>>& match
                 target_x = (curr_x < d_ - curr_x) ? 0 : d_;
                 while (curr_x != target_x) {
                     int dx = (target_x > curr_x) ? 1 : -1;
-                    int dy = 1; // arbitrary
-                    int qx = curr_x + (dx > 0 ? 0 : -1);
-                    int qy = curr_y + (dy > 0 ? 0 : -1);
+                    int dy = 0;
+                    int qx = curr_x + (dx > 0 ? 0 : (dx < 0 ? -1 : 0));
+                    int qy = curr_y + (dy > 0 ? 0 : (dy < 0 ? -1 : 0));
                     if (qx >= 0 && qx < d_ && qy >= 0 && qy < d_) backend_->applyZ(qubitIndex(qx, qy));
                     curr_x += dx;
                     curr_y += dy;
@@ -166,10 +166,10 @@ void SurfaceCode::applyCorrections(const std::vector<std::pair<int, int>>& match
                 // Match to Z boundary (y=0 or y=d_)
                 target_y = (curr_y < d_ - curr_y) ? 0 : d_;
                 while (curr_y != target_y) {
-                    int dx = 1; // arbitrary
+                    int dx = 0;
                     int dy = (target_y > curr_y) ? 1 : -1;
-                    int qx = curr_x + (dx > 0 ? 0 : -1);
-                    int qy = curr_y + (dy > 0 ? 0 : -1);
+                    int qx = curr_x + (dx > 0 ? 0 : (dx < 0 ? -1 : 0));
+                    int qy = curr_y + (dy > 0 ? 0 : (dy < 0 ? -1 : 0));
                     if (qx >= 0 && qx < d_ && qy >= 0 && qy < d_) backend_->applyX(qubitIndex(qx, qy));
                     curr_x += dx;
                     curr_y += dy;
@@ -185,11 +185,9 @@ void SurfaceCode::applyCorrections(const std::vector<std::pair<int, int>>& match
             while (curr_x != target_x || curr_y != target_y) {
                 int dx = (target_x > curr_x) ? 1 : ((target_x < curr_x) ? -1 : 0);
                 int dy = (target_y > curr_y) ? 1 : ((target_y < curr_y) ? -1 : 0);
-                if (dx == 0) dx = 1; 
-                if (dy == 0) dy = 1;
                 
-                int qx = curr_x + (dx > 0 ? 0 : -1);
-                int qy = curr_y + (dy > 0 ? 0 : -1);
+                int qx = curr_x + (dx > 0 ? 0 : (dx < 0 ? -1 : 0));
+                int qy = curr_y + (dy > 0 ? 0 : (dy < 0 ? -1 : 0));
                 
                 if (qx >= 0 && qx < d_ && qy >= 0 && qy < d_) {
                     if (is_x) backend_->applyZ(qubitIndex(qx, qy));
