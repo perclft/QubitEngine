@@ -4,6 +4,8 @@
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 #include <chrono>
+#include <random>
+#include <memory>
 
 namespace qubit_engine {
 namespace workers {
@@ -44,22 +46,96 @@ void JobExecutor::executeJob(const std::string &job_id) {
 
   const std::string stream_key = "stream:results:" + job_id;
 
-  // Execute N shots. For now, we run the full circuit per-shot (simple and correct).
-  for (int32_t shot = 1; shot <= shots; ++shot) {
-    qubit_engine::QuantumRegister qreg((size_t)circuit.num_qubits());
-    std::unordered_map<int32_t, bool> measurements;
+  // Determine if the circuit can be simulated once and then sampled.
+  bool is_noisy = (circuit.noise_probability() > 1e-10) || circuit.has_noise_config();
+  bool has_intermediate_measurements = false;
+  bool seen_measure = false;
 
+  for (const auto &op : circuit.operations()) {
+    if (op.type() == qubit_engine::GateOperation::DEPOLARIZING_NOISE ||
+        op.type() == qubit_engine::GateOperation::AMPLITUDE_DAMPING ||
+        op.type() == qubit_engine::GateOperation::PHASE_DAMPING) {
+      is_noisy = true;
+    }
+    if (op.type() == qubit_engine::GateOperation::MEASURE) {
+      seen_measure = true;
+    } else if (seen_measure) {
+      // Non-measure gate after a measure gate => intermediate measurement!
+      has_intermediate_measurements = true;
+    }
+  }
+
+  if (!is_noisy && !has_intermediate_measurements) {
+    spdlog::info("Optimizing job {} execution: single simulation with sampling.", job_id);
+    qubit_engine::QuantumRegister qreg((size_t)circuit.num_qubits());
+    std::unordered_map<int32_t, bool> dummy_measurements;
+
+    // Apply only the non-measure operations (unitary gates)
     for (const auto &op : circuit.operations()) {
-      applyGateForJob(qreg, op, measurements);
+      if (op.type() != qubit_engine::GateOperation::MEASURE) {
+        applyGateForJob(qreg, op, dummy_measurements);
+      }
     }
 
     auto state = qreg.getStateVector();
-    std::string payload =
-        buildJobResultJson(job_id, shot, state, measurements);
 
-    // Push to Redis stream for scheduler to forward via gRPC.
-    std::map<std::string, std::string> fields = {{"data", payload}};
-    redis_.xadd(stream_key, "*", fields.begin(), fields.end());
+    // Prepare probability distribution if there are final measurements
+    bool has_any_measure = false;
+    std::vector<double> probs;
+    std::unique_ptr<std::discrete_distribution<size_t>> dist;
+    std::mt19937 gen;
+
+    for (const auto &op : circuit.operations()) {
+      if (op.type() == qubit_engine::GateOperation::MEASURE) {
+        has_any_measure = true;
+        break;
+      }
+    }
+
+    if (has_any_measure) {
+      probs.resize(state.size());
+      for (size_t i = 0; i < state.size(); ++i) {
+        probs[i] = std::norm(state[i]);
+      }
+      std::random_device rd;
+      gen.seed(rd());
+      dist = std::make_unique<std::discrete_distribution<size_t>>(probs.begin(), probs.end());
+    }
+
+    for (int32_t shot = 1; shot <= shots; ++shot) {
+      std::unordered_map<int32_t, bool> measurements;
+      if (has_any_measure && dist) {
+        size_t x = (*dist)(gen);
+        for (const auto &op : circuit.operations()) {
+          if (op.type() == qubit_engine::GateOperation::MEASURE) {
+            uint32_t q = op.target_qubit();
+            uint32_t reg_id = (op.classical_register() > 0) ? op.classical_register() : q;
+            measurements[static_cast<int32_t>(reg_id)] = ((x >> q) & 1) != 0;
+          }
+        }
+      }
+
+      std::string payload = buildJobResultJson(job_id, shot, state, measurements);
+      std::map<std::string, std::string> fields = {{"data", payload}};
+      redis_.xadd(stream_key, "*", fields.begin(), fields.end());
+    }
+  } else {
+    spdlog::info("Job {} contains noise or intermediate measurements. Using per-shot simulation.", job_id);
+    for (int32_t shot = 1; shot <= shots; ++shot) {
+      qubit_engine::QuantumRegister qreg((size_t)circuit.num_qubits());
+      std::unordered_map<int32_t, bool> measurements;
+
+      for (const auto &op : circuit.operations()) {
+        applyGateForJob(qreg, op, measurements);
+      }
+
+      auto state = qreg.getStateVector();
+      std::string payload =
+          buildJobResultJson(job_id, shot, state, measurements);
+
+      std::map<std::string, std::string> fields = {{"data", payload}};
+      redis_.xadd(stream_key, "*", fields.begin(), fields.end());
+    }
   }
 
   // EOF marker signals end of stream to clients.
