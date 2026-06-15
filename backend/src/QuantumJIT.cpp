@@ -470,6 +470,64 @@ void QuantumJIT::apply_gate_to_unitary(std::vector<Complex>& unitary,
     unitary = std::move(next_unitary);
 }
 
+static void expand_unitary(std::vector<Complex>& unitary, 
+                           const std::vector<int>& old_qubits, 
+                           const std::vector<int>& new_qubits) {
+    if (unitary.empty()) return;
+    if (old_qubits == new_qubits) return;
+    
+    size_t old_dim = 1ULL << old_qubits.size();
+    size_t new_dim = 1ULL << new_qubits.size();
+    
+    std::vector<Complex> expanded(new_dim * new_dim, Complex(0, 0));
+    
+    std::vector<int> old_pos_in_new;
+    for (int q : old_qubits) {
+        auto it = std::find(new_qubits.begin(), new_qubits.end(), q);
+        if (it != new_qubits.end()) {
+            old_pos_in_new.push_back(std::distance(new_qubits.begin(), it));
+        }
+    }
+    
+    std::vector<int> new_only_pos;
+    for (size_t i = 0; i < new_qubits.size(); ++i) {
+        if (std::find(old_qubits.begin(), old_qubits.end(), new_qubits[i]) == old_qubits.end()) {
+            new_only_pos.push_back(i);
+        }
+    }
+    
+    for (size_t r = 0; r < new_dim; ++r) {
+        size_t r_old = 0;
+        for (size_t i = 0; i < old_pos_in_new.size(); ++i) {
+            if ((r >> old_pos_in_new[i]) & 1) {
+                r_old |= (1ULL << i);
+            }
+        }
+        
+        for (size_t c = 0; c < new_dim; ++c) {
+            bool match = true;
+            for (int pos : new_only_pos) {
+                if (((r >> pos) & 1) != ((c >> pos) & 1)) {
+                    match = false;
+                    break;
+                }
+            }
+            if (!match) continue;
+            
+            size_t c_old = 0;
+            for (size_t i = 0; i < old_pos_in_new.size(); ++i) {
+                if ((c >> old_pos_in_new[i]) & 1) {
+                    c_old |= (1ULL << i);
+                }
+            }
+            
+            expanded[r * new_dim + c] = unitary[r_old * old_dim + c_old];
+        }
+    }
+    
+    unitary = std::move(expanded);
+}
+
 std::vector<CompiledGate>
 QuantumJIT::fuse_tensor_network(const std::vector<CompiledGate> &gates) {
   if (gates.empty())
@@ -544,8 +602,10 @@ QuantumJIT::fuse_tensor_network(const std::vector<CompiledGate> &gates) {
       current_unitary.clear();
       apply_gate_to_unitary(current_unitary, current_block_qubits, g);
     } else {
-      current_block_qubits = proposed_qubits;
-      std::sort(current_block_qubits.begin(), current_block_qubits.end());
+      std::vector<int> proposed_qubits_sorted = proposed_qubits;
+      std::sort(proposed_qubits_sorted.begin(), proposed_qubits_sorted.end());
+      expand_unitary(current_unitary, current_block_qubits, proposed_qubits_sorted);
+      current_block_qubits = proposed_qubits_sorted;
       current_dim = 1 << current_block_qubits.size();
       apply_gate_to_unitary(current_unitary, current_block_qubits, g);
     }

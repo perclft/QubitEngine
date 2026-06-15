@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/perclft/QubitEngine/api/auth"
 	api "github.com/perclft/QubitEngine/api/generated"
 	pb "github.com/perclft/QubitEngine/services/cache/generated"
 	"google.golang.org/grpc"
@@ -296,8 +297,42 @@ func main() {
 		os.Exit(1)
 	}
 
+	validateToken := func(ctx context.Context) error {
+		token, err := auth.ExtractTokenFromContext(ctx)
+		if err != nil {
+			return err
+		}
+		_, err = auth.ValidateToken(token)
+		if err != nil {
+			return status.Errorf(codes.Unauthenticated, "invalid authorization token: %v", err)
+		}
+		return nil
+	}
+
+	authInterceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if strings.HasPrefix(info.FullMethod, "/grpc.health.v1.Health/") {
+			return handler(ctx, req)
+		}
+		if err := validateToken(ctx); err != nil {
+			return nil, err
+		}
+		return handler(ctx, req)
+	}
+
+	streamAuthInterceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if strings.HasPrefix(info.FullMethod, "/grpc.health.v1.Health/") {
+			return handler(srv, ss)
+		}
+		if err := validateToken(ss.Context()); err != nil {
+			return err
+		}
+		return handler(srv, ss)
+	}
+
 	grpcServer := grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		grpc.UnaryInterceptor(authInterceptor),
+		grpc.StreamInterceptor(streamAuthInterceptor),
 	)
 	pb.RegisterResultCacheServer(grpcServer, server)
 

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -427,6 +428,9 @@ func main() {
 	}
 
 	authInterceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if strings.HasPrefix(info.FullMethod, "/grpc.health.v1.Health/") {
+			return handler(ctx, req)
+		}
 		newCtx, err := validateToken(ctx)
 		if err != nil {
 			return nil, err
@@ -435,6 +439,9 @@ func main() {
 	}
 
 	streamAuthInterceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if strings.HasPrefix(info.FullMethod, "/grpc.health.v1.Health/") {
+			return handler(srv, ss)
+		}
 		_, err := validateToken(ss.Context())
 		if err != nil {
 			return err

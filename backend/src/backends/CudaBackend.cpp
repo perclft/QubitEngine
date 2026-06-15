@@ -22,6 +22,48 @@ inline MPI_Datatype get_mpi_precision_type() {
 #include <stdexcept>
 #include <string>
 
+#include <array>
+
+namespace {
+
+std::array<qubit_engine::Complex, 4> getReducedDensityMatrix1QHost(const std::vector<qubit_engine::Complex>& host_state, size_t target) {
+  size_t stride = 1ULL << target;
+  qubit_engine::Complex r00(0, 0), r01(0, 0), r11(0, 0);
+
+  for (size_t i = 0; i < host_state.size(); i += 2 * stride) {
+    for (size_t j = i; j < i + stride; ++j) {
+      qubit_engine::Complex c0 = host_state[j];
+      qubit_engine::Complex c1 = host_state[j + stride];
+      r00 += c0 * std::conj(c0);
+      r11 += c1 * std::conj(c1);
+      r01 += c0 * std::conj(c1);
+    }
+  }
+  return {r00, r01, std::conj(r01), r11};
+}
+
+std::array<qubit_engine::Complex, 16> getReducedDensityMatrix2QHost(const std::vector<qubit_engine::Complex>& host_state, size_t q1, size_t q2) {
+  size_t stride1 = 1ULL << q1;
+  size_t stride2 = 1ULL << q2;
+  std::array<qubit_engine::Complex, 16> rdm{};
+  rdm.fill(qubit_engine::Complex(0, 0));
+
+  for (size_t j = 0; j < host_state.size(); ++j) {
+    if (!((j & stride1) || (j & stride2))) {
+      size_t idx[4] = {j, j | stride2, j | stride1, j | stride1 | stride2};
+      qubit_engine::Complex amps[4] = {host_state[idx[0]], host_state[idx[1]], host_state[idx[2]], host_state[idx[3]]};
+      for (int r = 0; r < 4; ++r) {
+        for (int c = 0; c < 4; ++c) {
+          rdm[r * 4 + c] += amps[r] * std::conj(amps[c]);
+        }
+      }
+    }
+  }
+  return rdm;
+}
+
+} // namespace
+
 namespace qubit_engine {
 
 CudaBackend::CudaBackend(size_t num_qubits)
@@ -324,30 +366,43 @@ void CudaBackend::applyNoiseChannel1Q(const NoiseChannel1Q& channel,
                                        size_t target) {
   if (channel.operators.empty()) return;
 
-  // Use the pre-computed uniform probability weights for stochastic unravelling.
-  // This avoids a full state reduction O(2^N) on the GPU per gate.
+  // 1. Get host state vector to compute exact probabilities
+  auto host_state = getStateVector();
+  auto rdm = getReducedDensityMatrix1QHost(host_state, target);
+
+  // 2. Compute exact selection probabilities: P(i) = Tr(Ki† Ki ρ)
+  std::vector<Precision> probabilities;
+  probabilities.reserve(channel.operators.size());
   Precision total_p = 0.0;
+
   for (const auto& op : channel.operators) {
-      total_p += op.probability;
+    const auto& M = op.matrix_dag_self;
+    Complex tr = M[0] * rdm[0] + M[1] * rdm[2] + M[2] * rdm[1] + M[3] * rdm[3];
+    Precision p = std::abs(tr.real());
+    probabilities.push_back(p);
+    total_p += p;
   }
 
+  // 3. Stochastic selection
   static thread_local std::mt19937 gen(std::random_device{}());
   std::uniform_real_distribution<Precision> dis(0.0, total_p);
   Precision r = dis(gen);
 
   const KrausOperator1Q* selected = &channel.operators.back();
+  Precision selected_prob = probabilities.back();
   Precision cumulative = 0.0;
   for (size_t i = 0; i < channel.operators.size(); ++i) {
-    cumulative += channel.operators[i].probability;
+    cumulative += probabilities[i];
     if (r <= cumulative) {
       selected = &channel.operators[i];
+      selected_prob = probabilities[i];
       break;
     }
   }
 
-  if (selected->probability < 1e-20) return;
+  if (selected_prob < 1e-20) return;
 
-  Precision inv_norm = 1.0 / std::sqrt(selected->probability);
+  Precision inv_norm = 1.0 / std::sqrt(selected_prob);
   
   // Convert std::array<Complex, 4> to cuDoubleComplex array for launch
   std::vector<cuDoubleComplex> m(4);
@@ -364,28 +419,49 @@ void CudaBackend::applyNoiseChannel2Q(const NoiseChannel2Q& channel,
                                        size_t q1, size_t q2) {
   if (channel.operators.empty()) return;
 
+  // 1. Get host state vector to compute exact probabilities
+  auto host_state = getStateVector();
+  auto rdm = getReducedDensityMatrix2QHost(host_state, q1, q2);
+
+  // 2. Compute exact selection probabilities
+  std::vector<Precision> probabilities;
+  probabilities.reserve(channel.operators.size());
   Precision total_p = 0.0;
+
   for (const auto& op : channel.operators) {
-      total_p += op.probability;
+    const auto& M = op.matrix_dag_self;
+    Complex tr(0, 0);
+    for (int r = 0; r < 4; ++r) {
+      for (int c = 0; c < 4; ++c) {
+        // Tr(M ρ) = Σ_{r,c} M_{rc} ρ_{cr}
+        tr += M[r * 4 + c] * rdm[c * 4 + r];
+      }
+    }
+    Precision p = std::abs(tr.real());
+    probabilities.push_back(p);
+    total_p += p;
   }
 
+  // 3. Stochastic selection
   static thread_local std::mt19937 gen(std::random_device{}());
   std::uniform_real_distribution<Precision> dis(0.0, total_p);
   Precision r = dis(gen);
 
   const KrausOperator2Q* selected = &channel.operators.back();
+  Precision selected_prob = probabilities.back();
   Precision cumulative = 0.0;
   for (size_t i = 0; i < channel.operators.size(); ++i) {
-    cumulative += channel.operators[i].probability;
+    cumulative += probabilities[i];
     if (r <= cumulative) {
       selected = &channel.operators[i];
+      selected_prob = probabilities[i];
       break;
     }
   }
 
-  if (selected->probability < 1e-20) return;
+  if (selected_prob < 1e-20) return;
 
-  Precision inv_norm = 1.0 / std::sqrt(selected->probability);
+  Precision inv_norm = 1.0 / std::sqrt(selected_prob);
   
   std::vector<cuDoubleComplex> m(16);
   for(int i=0; i<16; ++i) {

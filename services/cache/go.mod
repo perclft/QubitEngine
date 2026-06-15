@@ -21,6 +21,7 @@ require (
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.22.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect

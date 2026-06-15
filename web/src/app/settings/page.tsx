@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Save, Server, Key, Globe } from "lucide-react";
 import { motion } from "framer-motion";
+import { getSettingsAction, saveSettingsAction } from "../actions";
 
 export default function SettingsPage() {
   const [engineAddr, setEngineAddr] = useState("127.0.0.1:50051");
@@ -10,8 +11,16 @@ export default function SettingsPage() {
   const [authToken, setAuthToken] = useState("default-secret-token");
   const [saved, setSaved] = useState(false);
 
-  const handleSave = () => {
-    // In a real app, these would be persisted to env or a config store
+  useEffect(() => {
+    getSettingsAction().then((settings) => {
+      setEngineAddr(settings.engineAddr);
+      setSchedulerAddr(settings.schedulerAddr);
+      setAuthToken(settings.authToken);
+    });
+  }, []);
+
+  const handleSave = async () => {
+    await saveSettingsAction(engineAddr, schedulerAddr, authToken);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
