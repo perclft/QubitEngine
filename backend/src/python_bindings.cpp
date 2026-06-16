@@ -12,6 +12,7 @@
 #include "transpiler/Router.hpp"
 #include "qec/SurfaceCode.hpp"
 #include "qec/ColorCode.hpp"
+#include "qec/DecoderType.hpp"
 #include "QuantumRegister.hpp"
 #include "SPSAOptimizer.hpp"
 #include "Exceptions.hpp"
@@ -540,6 +541,11 @@ PYBIND11_MODULE(core, m) {
           "Run SPSA Optimizer natively in C++");
 
   // QEC bindings
+  py::enum_<qubit_engine::DecoderType>(m, "DecoderType")
+      .value("MWPM", qubit_engine::DecoderType::MWPM)
+      .value("UnionFind", qubit_engine::DecoderType::UnionFind)
+      .export_values();
+
   py::class_<qubit_engine::SyndromeDefect>(m, "SyndromeDefect")
       .def(py::init<>())
       .def_readwrite("id", &qubit_engine::SyndromeDefect::id)
@@ -549,7 +555,7 @@ PYBIND11_MODULE(core, m) {
       .def_readwrite("time", &qubit_engine::SyndromeDefect::time);
 
   py::class_<qubit_engine::SurfaceCode>(m, "SurfaceCode")
-      .def(py::init<int>(), py::arg("distance"))
+      .def(py::init<int, qubit_engine::DecoderType>(), py::arg("distance"), py::arg("decoder_type") = qubit_engine::DecoderType::MWPM)
       .def("simulate", &qubit_engine::SurfaceCode::simulate, 
            py::arg("num_rounds"), py::arg("noise_probability"),
            "Simulate surface code for num_rounds with given physical depolarizing noise_probability. Returns True if logical state was preserved.")
@@ -576,7 +582,7 @@ PYBIND11_MODULE(core, m) {
       }, py::arg("noise_probability"), "Extract syndromes as a zero-copy NumPy array [N, 5] for PyTorch");
 
   py::class_<qubit_engine::ColorCode>(m, "ColorCode")
-      .def(py::init<int>(), py::arg("distance"))
+      .def(py::init<int, qubit_engine::DecoderType>(), py::arg("distance"), py::arg("decoder_type") = qubit_engine::DecoderType::MWPM)
       .def("simulate", &qubit_engine::ColorCode::simulate, 
            py::arg("num_rounds"), py::arg("noise_probability"),
            "Simulate color code.")

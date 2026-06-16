@@ -69,11 +69,6 @@ def test_mpi_sharding():
     
     return True
 
-    if rank == 0:
-        print("MPI Sharding Integration Test: PASSED")
-    
-    return True
-
 if __name__ == "__main__":
     try:
         if test_mpi_sharding():

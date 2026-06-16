@@ -211,12 +211,14 @@ TEST(CircuitOptimizerTest, TranspilerApproximation_SnappingRotations) {
 }
 
 TEST(CircuitOptimizerTest, TranspilerApproximation_StochasticHalfway) {
-  // RZ(pi/4) is exactly halfway between 0 and pi/2.
-  // In deterministic mode, it rounds up to S.
-  std::vector<Gate> tape_det = { makeGate(Gate::RZ, {0}, {3.141592653589793 / 4.0}) };
+  // RZ(pi/4) is exactly halfway (0.5 steps) between 0 and pi/2.
+  // In round-half-to-even mode, it rounds down to 0. 
+  // RZ(3*pi/4) is exactly halfway (1.5 steps) between pi/2 and pi.
+  // In round-half-to-even mode, it rounds up to 2 (Z).
+  std::vector<Gate> tape_det = { makeGate(Gate::RZ, {0}, {3.141592653589793 * 3.0 / 4.0}) };
   CircuitOptimizer::transpileToClifford(tape_det, true, false);
   ASSERT_EQ(tape_det.size(), 1);
-  EXPECT_EQ(tape_det[0].type, Gate::PHASE_S);
+  EXPECT_EQ(tape_det[0].type, Gate::Z);
 
   // In stochastic mode, over 100 runs, it should result in roughly 50% PHASE_S and 50% empty.
   int phase_s_count = 0;

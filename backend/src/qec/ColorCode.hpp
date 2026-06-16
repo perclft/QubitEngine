@@ -5,6 +5,8 @@
 #include <memory>
 #include "../backends/StabilizerBackend.hpp"
 #include "MWPMDecoder.hpp"
+#include "UnionFindDecoder.hpp"
+#include "DecoderType.hpp"
 #include "qubit_engine_export.h"
 
 namespace qubit_engine {
@@ -12,7 +14,7 @@ namespace qubit_engine {
 // Implements a 6.6.6 triangular Color Code
 class QUBIT_ENGINE_EXPORT ColorCode {
 public:
-    ColorCode(int distance);
+    ColorCode(int distance, DecoderType decoder_type = DecoderType::MWPM);
     ~ColorCode() = default;
 
     std::vector<SyndromeDefect> extractSyndromes(double noise_probability);
@@ -28,6 +30,8 @@ private:
     
     std::unique_ptr<StabilizerBackend> backend_;
     MWPMDecoder decoder_;
+    UnionFindDecoder uf_decoder_;
+    DecoderType decoder_type_;
 
     std::vector<int> prev_syndromes_;
 

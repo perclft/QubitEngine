@@ -4,7 +4,8 @@
 
 namespace qubit_engine {
 
-SurfaceCode::SurfaceCode(int distance) : d_(distance) {
+SurfaceCode::SurfaceCode(int distance, DecoderType decoder_type) 
+    : d_(distance), decoder_type_(decoder_type) {
     num_data_qubits_ = d_ * d_;
     buildStabilizers();
     num_measure_qubits_ = x_stabilizers_.size() + z_stabilizers_.size();
@@ -13,6 +14,7 @@ SurfaceCode::SurfaceCode(int distance) : d_(distance) {
     backend_ = std::make_unique<StabilizerBackend>(total_qubits);
     prev_syndromes_.resize(num_measure_qubits_, 0);
     decoder_.setDistance(d_);
+    uf_decoder_.setDistance(d_);
 }
 
 void SurfaceCode::buildStabilizers() {
@@ -123,7 +125,12 @@ bool SurfaceCode::decodeAndCorrect() {
     std::vector<SyndromeDefect> defects = extractSyndromes(0.0);
     if (defects.empty()) return true;
 
-    auto matches = decoder_.decode(defects);
+    std::vector<std::pair<int, int>> matches;
+    if (decoder_type_ == DecoderType::UnionFind) {
+        matches = uf_decoder_.decode(defects);
+    } else {
+        matches = decoder_.decode(defects);
+    }
     applyCorrections(matches);
     return true;
 }
@@ -217,7 +224,12 @@ bool SurfaceCode::simulate(int num_rounds, double noise_probability) {
         }
         
         // Decode
-        auto matches = decoder_.decode(defects);
+        std::vector<std::pair<int, int>> matches;
+        if (decoder_type_ == DecoderType::UnionFind) {
+            matches = uf_decoder_.decode(defects);
+        } else {
+            matches = decoder_.decode(defects);
+        }
         
         // Apply Corrections
         applyCorrections(matches);

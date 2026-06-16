@@ -3,7 +3,7 @@
 
 namespace qubit_engine {
 
-ColorCode::ColorCode(int distance) : d_(distance) {
+ColorCode::ColorCode(int distance, DecoderType decoder_type) : d_(distance), decoder_type_(decoder_type) {
     // 6.6.6 Triangular Color Code.
     // For d=3, this is exactly the 7-qubit Steane code.
     if (d_ == 3) {
@@ -22,6 +22,7 @@ ColorCode::ColorCode(int distance) : d_(distance) {
     backend_ = std::make_unique<StabilizerBackend>(total_qubits);
     prev_syndromes_.resize(num_measure_qubits_, 0);
     decoder_.setDistance(d_);
+    uf_decoder_.setDistance(d_);
 }
 
 void ColorCode::buildStabilizers() {
@@ -118,7 +119,12 @@ bool ColorCode::decodeAndCorrect() {
     std::vector<SyndromeDefect> defects = extractSyndromes(0.0);
     if (defects.empty()) return true;
 
-    auto matches = decoder_.decode(defects);
+    std::vector<std::pair<int, int>> matches;
+    if (decoder_type_ == DecoderType::UnionFind) {
+        matches = uf_decoder_.decode(defects);
+    } else {
+        matches = decoder_.decode(defects);
+    }
     applyCorrections(matches);
     return true;
 }
@@ -131,7 +137,12 @@ bool ColorCode::simulate(int num_rounds, double noise_probability) {
         if (t == 0) continue;
         
         for (auto& d : defects) d.time = t;
-        auto matches = decoder_.decode(defects);
+        std::vector<std::pair<int, int>> matches;
+        if (decoder_type_ == DecoderType::UnionFind) {
+            matches = uf_decoder_.decode(defects);
+        } else {
+            matches = decoder_.decode(defects);
+        }
         applyCorrections(matches);
     }
     

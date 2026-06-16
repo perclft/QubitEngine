@@ -134,8 +134,13 @@ void CircuitOptimizer::transpileToClifford(
       if (use_stochastic) {
         rounded_steps = (dis(gen) < 0.5) ? static_cast<int>(std::floor(steps)) : static_cast<int>(std::ceil(steps));
       } else {
-        // Deterministic snapping: round up
-        rounded_steps = static_cast<int>(std::ceil(steps));
+        // Deterministic snapping: round-half-to-even (Bankers' rounding) to avoid phase drift
+        int floor_steps = static_cast<int>(std::floor(steps));
+        if (floor_steps % 2 == 0) {
+          rounded_steps = floor_steps;
+        } else {
+          rounded_steps = floor_steps + 1;
+        }
       }
     } else {
       rounded_steps = static_cast<int>(std::round(steps));

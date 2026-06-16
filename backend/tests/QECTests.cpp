@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "qec/SurfaceCode.hpp"
 #include "qec/MWPMDecoder.hpp"
+#include "qec/DecoderType.hpp"
 #include "backends/StabilizerBackend.hpp"
 
 using namespace qubit_engine;
@@ -93,6 +94,12 @@ TEST(SurfaceCodeTest, HighNoiseThreshold) {
     SUCCEED();
 }
 
+TEST(SurfaceCodeTest, UnionFindPerfectExecution_D3) {
+    SurfaceCode sc(3, DecoderType::UnionFind);
+    bool success = sc.simulate(5, 0.0);
+    EXPECT_TRUE(success);
+}
+
 // ============================================================================
 // UnionFind Decoder Tests
 // ============================================================================
@@ -131,6 +138,12 @@ TEST(ColorCodeTest, Initialization_D3) {
 
 TEST(ColorCodeTest, PerfectExecution_D3) {
     ColorCode cc(3);
+    bool success = cc.simulate(5, 0.0);
+    EXPECT_TRUE(success);
+}
+
+TEST(ColorCodeTest, UnionFindPerfectExecution_D3) {
+    ColorCode cc(3, DecoderType::UnionFind);
     bool success = cc.simulate(5, 0.0);
     EXPECT_TRUE(success);
 }

@@ -5,6 +5,8 @@
 #include <memory>
 #include "../backends/StabilizerBackend.hpp"
 #include "MWPMDecoder.hpp"
+#include "UnionFindDecoder.hpp"
+#include "DecoderType.hpp"
 #include "qubit_engine_export.h"
 
 namespace qubit_engine {
@@ -19,7 +21,7 @@ struct QUBIT_ENGINE_EXPORT Stabilizer {
 // Implements a distance-d Surface Code simulation
 class QUBIT_ENGINE_EXPORT SurfaceCode {
 public:
-    SurfaceCode(int distance);
+    SurfaceCode(int distance, DecoderType decoder_type = DecoderType::MWPM);
     ~SurfaceCode() = default;
 
     // Runs a single round of syndrome extraction and returns detected defects
@@ -37,6 +39,8 @@ private:
     
     std::unique_ptr<StabilizerBackend> backend_;
     MWPMDecoder decoder_;
+    UnionFindDecoder uf_decoder_;
+    DecoderType decoder_type_;
 
     // To track the previous syndrome outcomes for time-domain defects
     std::vector<int> prev_syndromes_;
