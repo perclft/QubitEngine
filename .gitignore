@@ -61,3 +61,9 @@ go.work.sum
 # Coverage Reports
 coverage/
 *.lcov
+
+# Cuda Build Artifacts
+build_cuda/
+
+# Python packaging metadata
+*.egg-info/

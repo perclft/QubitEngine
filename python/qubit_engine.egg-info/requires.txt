@@ -1,8 +1,0 @@
-numpy>=1.20.0
-
-[qiskit]
-qiskit>=1.0.0
-
-[test]
-pytest>=7.0.0
-qiskit[visualization]>=1.0.0
