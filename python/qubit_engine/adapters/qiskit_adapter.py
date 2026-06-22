@@ -8,6 +8,7 @@ from qiskit.circuit import QuantumCircuit
 
 # Import our C++ backend
 from qubit_engine.core import QuantumRegister
+from qubit_engine.gate_mapping import dispatch_gate
 
 class QubitEngineJob(JobV1):
     def __init__(self, backend, job_id, result):
@@ -135,57 +136,11 @@ class QubitEngineBackend(BackendV2):
                 def apply_gates(r):
                     for instruction in circ.data:
                         inst = instruction.operation
-                        qargs = instruction.qubits
                         name = inst.name
-                        
-                        if name == "h":
-                            target = circ.find_bit(qargs[0]).index
-                            r.applyHadamard(target)
-                        elif name == "x":
-                            target = circ.find_bit(qargs[0]).index
-                            r.applyX(target)
-                        elif name == "y":
-                            target = circ.find_bit(qargs[0]).index
-                            r.applyY(target)
-                        elif name == "z":
-                            target = circ.find_bit(qargs[0]).index
-                            r.applyZ(target)
-                        elif name == "s":
-                            target = circ.find_bit(qargs[0]).index
-                            r.applyPhaseS(target)
-                        elif name == "t":
-                            target = circ.find_bit(qargs[0]).index
-                            r.applyPhaseT(target)
-                        elif name == "cx":
-                            control = circ.find_bit(qargs[0]).index
-                            target = circ.find_bit(qargs[1]).index
-                            r.applyCNOT(control, target)
-                        elif name == "ccx":
-                            c1 = circ.find_bit(qargs[0]).index
-                            c2 = circ.find_bit(qargs[1]).index
-                            target = circ.find_bit(qargs[2]).index
-                            r.applyToffoli(c1, c2, target)
-                        elif name == "swap":
-                            q1 = circ.find_bit(qargs[0]).index
-                            q2 = circ.find_bit(qargs[1]).index
-                            r.applySWAP(q1, q2)
-                        elif name == "cz":
-                            control = circ.find_bit(qargs[0]).index
-                            target = circ.find_bit(qargs[1]).index
-                            r.applyCZ(control, target)
-                        elif name == "ry":
-                            target = circ.find_bit(qargs[0]).index
-                            r.applyRotationY(target, float(inst.params[0]))
-                        elif name == "rz":
-                            target = circ.find_bit(qargs[0]).index
-                            r.applyRotationZ(target, float(inst.params[0]))
-                        elif name == "rx":
-                            target = circ.find_bit(qargs[0]).index
-                            r.applyRotationX(target, float(inst.params[0]))
-                        elif name == "measure" or name == "barrier":
-                            pass
-                        else:
-                            raise Exception(f"Gate '{name}' is not currently supported natively by QubitEngineAdapter.")
+                        if name == "measure" or name == "barrier":
+                            continue
+                        qubits_indices = [circ.find_bit(q).index for q in instruction.qubits]
+                        dispatch_gate(r, name, qubits_indices, inst.params)
 
                 counts = {}
                 state = None
@@ -212,38 +167,12 @@ class QubitEngineBackend(BackendV2):
                             elif name == "barrier":
                                 pass
                             else:
-                                if name == "h":
-                                    reg.applyHadamard(circ.find_bit(qargs[0]).index)
-                                elif name == "x":
-                                    reg.applyX(circ.find_bit(qargs[0]).index)
-                                elif name == "y":
-                                    reg.applyY(circ.find_bit(qargs[0]).index)
-                                elif name == "z":
-                                    reg.applyZ(circ.find_bit(qargs[0]).index)
-                                elif name == "s":
-                                    reg.applyPhaseS(circ.find_bit(qargs[0]).index)
-                                elif name == "t":
-                                    reg.applyPhaseT(circ.find_bit(qargs[0]).index)
-                                elif name == "cx":
-                                    reg.applyCNOT(circ.find_bit(qargs[0]).index, circ.find_bit(qargs[1]).index)
-                                elif name == "ccx":
-                                    reg.applyToffoli(circ.find_bit(qargs[0]).index, circ.find_bit(qargs[1]).index, circ.find_bit(qargs[2]).index)
-                                elif name == "swap":
-                                    reg.applySWAP(circ.find_bit(qargs[0]).index, circ.find_bit(qargs[1]).index)
-                                elif name == "cz":
-                                    reg.applyCZ(circ.find_bit(qargs[0]).index, circ.find_bit(qargs[1]).index)
-                                elif name == "ry":
-                                    reg.applyRotationY(circ.find_bit(qargs[0]).index, float(inst.params[0]))
-                                elif name == "rz":
-                                    reg.applyRotationZ(circ.find_bit(qargs[0]).index, float(inst.params[0]))
-                                elif name == "rx":
-                                    reg.applyRotationX(circ.find_bit(qargs[0]).index, float(inst.params[0]))
-                                else:
-                                    raise Exception(f"Gate '{name}' is not currently supported natively by QubitEngineAdapter.")
+                                qubits_indices = [circ.find_bit(q).index for q in qargs]
+                                dispatch_gate(reg, name, qubits_indices, inst.params)
 
                         if circ.num_clbits > 0:
-                            hex_key = hex(cl_val)
-                            counts[hex_key] = counts.get(hex_key, 0) + 1
+                            bin_key = format(cl_val, f'0{circ.num_clbits}b')
+                            counts[bin_key] = counts.get(bin_key, 0) + 1
                     
                     state = reg.getStateVector()
                 else:
@@ -261,8 +190,8 @@ class QubitEngineBackend(BackendV2):
                             for q_idx, c_idx in measurements:
                                 bit_val = (int(sample) >> q_idx) & 1
                                 cl_val |= (bit_val << c_idx)
-                            hex_key = hex(cl_val)
-                            counts[hex_key] = counts.get(hex_key, 0) + 1
+                            bin_key = format(cl_val, f'0{circ.num_clbits}b')
+                            counts[bin_key] = counts.get(bin_key, 0) + 1
 
                 # Format generic result
                 exp_res = ExperimentResult(

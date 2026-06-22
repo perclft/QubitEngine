@@ -18,6 +18,7 @@ class CMakeExtension(Extension):
 
 class CMakeBuild(build_ext):
     def build_extension(self, ext: CMakeExtension):
+        single_config = False
         # We need to point to the `backend` directory since that holds the CMakeLists.txt
         extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
         

@@ -94,7 +94,7 @@ func (s *CacheServer) CacheResult(ctx context.Context, req *pb.CacheRequest) (*p
 		return nil, status.Errorf(codes.Internal, "failed to cache: %v", err)
 	}
 
-	slog.Info("Cached result", "hash", req.CircuitHash[:16], "qubits", req.NumQubits, "ops", req.NumOperations, "ttl", ttl)
+	slog.Info("Cached result", "hash", shortHash(req.CircuitHash), "qubits", req.NumQubits, "ops", req.NumOperations, "ttl", ttl)
 
 	return &pb.CacheResponse{
 		Success:  true,
@@ -132,7 +132,7 @@ func (s *CacheServer) GetCachedResult(ctx context.Context, req *pb.CacheLookup) 
 	updatedData, _ := proto.Marshal(&entry)
 	s.rdb.Set(ctx, cacheKey, updatedData, redis.KeepTTL) // Keep existing TTL
 
-	slog.Info("Cache HIT", "hash", req.CircuitHash[:16], "hits", entry.HitCount)
+	slog.Info("Cache HIT", "hash", shortHash(req.CircuitHash), "hits", entry.HitCount)
 
 	return &pb.CacheHit{
 		Found:     true,
@@ -156,7 +156,7 @@ func (s *CacheServer) InvalidateCache(ctx context.Context, req *pb.CacheLookup) 
 	}
 
 	if deleted > 0 {
-		slog.Info("Cache invalidated", "hash", req.CircuitHash[:16])
+		slog.Info("Cache invalidated", "hash", shortHash(req.CircuitHash))
 		return &pb.CacheResponse{Success: true, Message: "Cache invalidated"}, nil
 	}
 
@@ -215,6 +215,13 @@ func (s *CacheServer) GetCacheStats(ctx context.Context, req *pb.CacheEmpty) (*p
 // ------------------------------------------------------------------
 // Helper: Hash a circuit for cache key
 // ------------------------------------------------------------------
+
+func shortHash(h string) string {
+	if len(h) > 16 {
+		return h[:16]
+	}
+	return h
+}
 
 func HashCircuit(numQubits int32, operations []byte) string {
 	h := sha256.New()

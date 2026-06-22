@@ -14,7 +14,7 @@ func main() {
         Subject:   "test-user",
         Issuer:    "qubit-engine",
         Audience:  jwt.ClaimStrings{"qubit-engine-api"},
-        ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * 365 * 24 * time.Hour)),
+        ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
     })
     s, _ := token.SignedString([]byte(secret))
     fmt.Println(s)

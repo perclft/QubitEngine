@@ -13,15 +13,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func getJwtSecret() []byte {
+func getJwtSecret() ([]byte, error) {
 	secret := os.Getenv("QUBIT_ENGINE_JWT_SECRET")
 	if secret == "" {
 		if os.Getenv("QUBIT_ENGINE_SKIP_AUTH") == "1" {
-			return []byte("dummy-skip-secret")
+			return []byte("dummy-skip-secret"), nil
 		}
-		panic("QUBIT_ENGINE_JWT_SECRET is required but not set")
+		return nil, fmt.Errorf("QUBIT_ENGINE_JWT_SECRET is required but not set")
 	}
-	return []byte(secret)
+	return []byte(secret), nil
 }
 
 func GenerateToken(userID string, expiry time.Duration) (string, error) {
@@ -32,7 +32,11 @@ func GenerateToken(userID string, expiry time.Duration) (string, error) {
 		ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 		IssuedAt:  jwt.NewNumericDate(time.Now()),
 	})
-	return token.SignedString(getJwtSecret())
+	secret, err := getJwtSecret()
+	if err != nil {
+		return "", err
+	}
+	return token.SignedString(secret)
 }
 
 func ValidateToken(tokenString string) (string, error) {
@@ -44,7 +48,7 @@ func ValidateToken(tokenString string) (string, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
-		return getJwtSecret(), nil
+		return getJwtSecret()
 	})
 
 	if err != nil {

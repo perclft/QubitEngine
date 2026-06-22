@@ -4,6 +4,7 @@ from typing import List, Tuple, Any, Optional, Dict
 from .core import QuantumRegister, StabilizerBackend, GPUQuantumRegister, NoiseModel
 from .result import Result
 import time
+from .gate_mapping import dispatch_gate
 
 class Circuit:
     """A quantum circuit builder that supports fluent chaining."""
@@ -76,20 +77,7 @@ class Circuit:
     def _apply_to_register(self, qreg) -> None:
         """Replay instructions onto a QuantumRegister backend."""
         for inst, qubits, params in self.instructions:
-            if inst == "H": qreg.applyHadamard(qubits[0])
-            elif inst == "X": qreg.applyX(qubits[0])
-            elif inst == "Y": qreg.applyY(qubits[0])
-            elif inst == "Z": qreg.applyZ(qubits[0])
-            elif inst == "S": qreg.applyPhaseS(qubits[0])
-            elif inst == "T": qreg.applyPhaseT(qubits[0])
-            elif inst == "RX": qreg.applyRotationX(qubits[0], params[0])
-            elif inst == "RY": qreg.applyRotationY(qubits[0], params[0])
-            elif inst == "RZ": qreg.applyRotationZ(qubits[0], params[0])
-            elif inst == "CX": qreg.applyCNOT(qubits[0], qubits[1])
-            elif inst == "CZ": qreg.applyCZ(qubits[0], qubits[1])
-            elif inst == "SWAP": qreg.applySWAP(qubits[0], qubits[1])
-            elif inst == "CCX": qreg.applyToffoli(qubits[0], qubits[1], qubits[2])
-            elif inst == "MEASURE": qreg.measure(qubits[0])
+            dispatch_gate(qreg, inst, qubits, params)
             
     def run(self, shots: int = 1024, noise: Optional[NoiseModel] = None, backend: str = "auto") -> Result:
         """Execute the circuit."""
@@ -123,22 +111,11 @@ class Circuit:
                 # Replay
                 outcome = 0
                 for inst, qubits, params in self.instructions:
-                    if inst == "H": qreg.applyHadamard(qubits[0])
-                    elif inst == "X": qreg.applyX(qubits[0])
-                    elif inst == "Y": qreg.applyY(qubits[0])
-                    elif inst == "Z": qreg.applyZ(qubits[0])
-                    elif inst == "S": qreg.applyPhaseS(qubits[0])
-                    elif inst == "T": qreg.applyPhaseT(qubits[0])
-                    elif inst == "RX": qreg.applyRotationX(qubits[0], params[0])
-                    elif inst == "RY": qreg.applyRotationY(qubits[0], params[0])
-                    elif inst == "RZ": qreg.applyRotationZ(qubits[0], params[0])
-                    elif inst == "CX": qreg.applyCNOT(qubits[0], qubits[1])
-                    elif inst == "CZ": qreg.applyCZ(qubits[0], qubits[1])
-                    elif inst == "SWAP": qreg.applySWAP(qubits[0], qubits[1])
-                    elif inst == "CCX": qreg.applyToffoli(qubits[0], qubits[1], qubits[2])
-                    elif inst == "MEASURE": 
+                    if inst == "MEASURE": 
                         res = qreg.measure(qubits[0])
                         if res: outcome |= (1 << qubits[0])
+                    else:
+                        dispatch_gate(qreg, inst, qubits, params)
                 
                 bits = format(outcome, f'0{self.num_qubits}b')[::-1] # Qiskit-style endianness
                 counts[bits] = counts.get(bits, 0) + 1

@@ -72,12 +72,13 @@ class QubitEngineDevice(Device):
         if isinstance(observable, qml.operation.Tensor):
             # Tensor product of Pauli observables
             pauli_map = {"PauliX": "X", "PauliY": "Y", "PauliZ": "Z", "Identity": "I"}
-            hamiltonian = []
+            term_parts = []
             for obs in observable.obs:
                 pauli = pauli_map.get(obs.name, "I")
                 wire = self.wires.index(obs.wires[0])
-                hamiltonian.append((1.0, f"{pauli}{wire}"))
-            return core.get_expectation_value(self._reg, hamiltonian)
+                term_parts.append(f"{pauli}{wire}")
+            term_string = " ".join(term_parts)
+            return core.get_expectation_value(self._reg, [(1.0, term_string)])
 
         pauli_map = {"PauliX": "X", "PauliY": "Y", "PauliZ": "Z", "Identity": "I"}
         pauli = pauli_map.get(observable.name, "I")

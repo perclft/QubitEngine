@@ -213,9 +213,17 @@ func (s *SchedulerServer) SubmitJob(ctx context.Context, req *pb.JobRequest) (*p
 			Score:  float64(now),
 			Member: jobID,
 		})
+		s.rdb.ZAdd(ctx, fmt.Sprintf("index:jobs:state:%d", job.State), &redis.Z{
+			Score:  float64(now),
+			Member: jobID,
+		})
 		
 		if job.UserID != "" {
 			s.rdb.ZAdd(ctx, "index:jobs:user:"+job.UserID, &redis.Z{
+				Score:  float64(now),
+				Member: jobID,
+			})
+			s.rdb.ZAdd(ctx, fmt.Sprintf("index:jobs:user:%s:state:%d", job.UserID, job.State), &redis.Z{
 				Score:  float64(now),
 				Member: jobID,
 			})
@@ -318,12 +326,23 @@ func (s *SchedulerServer) updateJobState(ctx context.Context, jobID string, stat
 	if err := json.Unmarshal(jobBytes, &job); err != nil {
 		return
 	}
+	oldState := job.State
 	job.State = state
 	job.ErrorMessage = errMsg
 	if state == models.StateCompleted || state == models.StateFailed || state == models.StateCancelled {
 		job.CompletedAt = time.Now().Unix()
 	}
 	s.saveJob(ctx, &job)
+
+	// Update state indexes
+	if oldState != state {
+		s.rdb.ZRem(ctx, fmt.Sprintf("index:jobs:state:%d", oldState), jobID)
+		s.rdb.ZAdd(ctx, fmt.Sprintf("index:jobs:state:%d", state), &redis.Z{Score: float64(job.SubmittedAt), Member: jobID})
+		if job.UserID != "" {
+			s.rdb.ZRem(ctx, fmt.Sprintf("index:jobs:user:%s:state:%d", job.UserID, oldState), jobID)
+			s.rdb.ZAdd(ctx, fmt.Sprintf("index:jobs:user:%s:state:%d", job.UserID, state), &redis.Z{Score: float64(job.SubmittedAt), Member: jobID})
+		}
+	}
 }
 
 func (s *SchedulerServer) saveJob(ctx context.Context, job *models.Job) {
@@ -355,22 +374,27 @@ func (s *SchedulerServer) ListJobs(ctx context.Context, req *pb.ListJobsRequest)
 	start := int64(offset)
 	stop := int64(offset + pageSize - 1)
 
+	var indexKey string
 	if req.UserId != "" {
-		allIDs, err = s.rdb.ZRevRange(ctx, "index:jobs:user:"+req.UserId, start, stop).Result()
+		if req.StateFilter != pb.JobState_STATE_UNKNOWN {
+			indexKey = fmt.Sprintf("index:jobs:user:%s:state:%d", req.UserId, req.StateFilter)
+		} else {
+			indexKey = "index:jobs:user:" + req.UserId
+		}
 	} else {
-		allIDs, err = s.rdb.ZRevRange(ctx, "index:jobs:all", start, stop).Result()
+		if req.StateFilter != pb.JobState_STATE_UNKNOWN {
+			indexKey = fmt.Sprintf("index:jobs:state:%d", req.StateFilter)
+		} else {
+			indexKey = "index:jobs:all"
+		}
 	}
 
+	allIDs, err = s.rdb.ZRevRange(ctx, indexKey, start, stop).Result()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to list jobs: %v", err)
 	}
 
-	var totalCount int64
-	if req.UserId != "" {
-		totalCount, _ = s.rdb.ZCard(ctx, "index:jobs:user:"+req.UserId).Result()
-	} else {
-		totalCount, _ = s.rdb.ZCard(ctx, "index:jobs:all").Result()
-	}
+	totalCount, _ := s.rdb.ZCard(ctx, indexKey).Result()
 
 	var jobs []*pb.JobStatus
 	if len(allIDs) > 0 {
@@ -395,10 +419,6 @@ func (s *SchedulerServer) ListJobs(ctx context.Context, req *pb.ListJobsRequest)
 			}
 			var job models.Job
 			if err := json.Unmarshal([]byte(jobStr), &job); err != nil {
-				continue
-			}
-
-			if req.StateFilter != pb.JobState_STATE_UNKNOWN && pb.JobState(job.State) != req.StateFilter {
 				continue
 			}
 

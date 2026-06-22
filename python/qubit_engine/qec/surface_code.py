@@ -1,5 +1,5 @@
 
-import qubit_engine_python as qep
+from qubit_engine import core as qep
 import math
 
 class SurfaceCode:
@@ -41,7 +41,7 @@ class SurfaceCode:
         self.x_stabilizers = {
             9:  [0, 3],       # X1 checks D1, D4
             10: [1, 2, 4, 5], # X2 checks D2, D3, D5, D6
-            11: [6, 7],       # X3 checks D7, D7? Wait: D7, D4? Fix below
+            11: [3, 6],       # X3 checks D4, D7
             12: [7, 8]        # X4 checks D8, D9
         }
         

@@ -135,7 +135,10 @@ func (b *IBMQuantumBackend) Submit(ctx context.Context, circuit *Circuit) (strin
 	}
 	
 	// Make API request
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal payload: %w", err)
+	}
 	req, _ := http.NewRequestWithContext(ctx, "POST", b.baseURL+"/jobs", 
 		bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+b.apiKey)
@@ -146,11 +149,17 @@ func (b *IBMQuantumBackend) Submit(ctx context.Context, circuit *Circuit) (strin
 		return "", fmt.Errorf("IBM submit failed: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("IBM API returned status: %s", resp.Status)
+	}
 	
 	var result struct {
 		ID string `json:"id"`
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("failed to decode IBM response: %w", err)
+	}
 	
 	return result.ID, nil
 }

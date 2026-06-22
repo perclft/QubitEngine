@@ -42,6 +42,9 @@ func readSharedMemory(descriptor string, numQubits int32) ([]*pb.StateResponse_C
 	}
 	defer procUnmapViewOfFile.Call(addr)
 
+	if numQubits < 1 || numQubits > 30 {
+		return nil, fmt.Errorf("numQubits %d is out of bounds", numQubits)
+	}
 	numElements := 1 << numQubits
 
 	result := make([]*pb.StateResponse_ComplexNumber, numElements)
