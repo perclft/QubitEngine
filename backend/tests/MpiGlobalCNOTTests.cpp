@@ -72,21 +72,23 @@ int main(int argc, char **argv) {
 
   size_t control_rank_bit = (1ULL << control_qubit) / state.size();
   size_t target_rank_bit = (1ULL << target_qubit) / state.size();
-
-  bool has_control = (rank & control_rank_bit) != 0;
-  bool has_target = (rank & target_rank_bit) != 0;
-
-  if (!has_control && !has_target) {
-    // Rank 0: Should have amplitude 1/sqrt(2) at index 0 (|00000>)
+  size_t expected_target_rank = control_rank_bit | target_rank_bit;
+  if (rank == 0) {
+    if (!are_close(state[0], inv_sqrt2)) {
+      std::cerr << "[Rank 0] FAIL: Expected state[0] = 1/sqrt(2), got " << state[0] << std::endl;
+      MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+  } else if (static_cast<size_t>(rank) == expected_target_rank) {
     if (!are_close(state[0], inv_sqrt2)) {
       std::cerr << "[Rank " << rank << "] FAIL: Expected state[0] = 1/sqrt(2), got " << state[0] << std::endl;
       MPI_Abort(MPI_COMM_WORLD, 1);
     }
-  } else if (has_control && has_target) {
-    // Rank with both control and target bits set: Should have amplitude 1/sqrt(2) at index 0 (|11000>)
-    if (!are_close(state[0], inv_sqrt2)) {
-      std::cerr << "[Rank " << rank << "] FAIL: Expected state[0] = 1/sqrt(2), got " << state[0] << std::endl;
-      MPI_Abort(MPI_COMM_WORLD, 1);
+  } else {
+    for (size_t i = 0; i < state.size(); ++i) {
+      if (!are_close(state[i], 0.0)) {
+        std::cerr << "[Rank " << rank << "] FAIL: Expected zero state at index " << i << ", got " << state[i] << std::endl;
+        MPI_Abort(MPI_COMM_WORLD, 1);
+      }
     }
   }
 
