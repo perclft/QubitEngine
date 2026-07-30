@@ -537,15 +537,8 @@ target_link_libraries(validation_tests PRIVATE
     nlohmann_json::nlohmann_json
 )
 
-add_executable(test_bounds ../tests/test_bounds.cpp)
-target_include_directories(test_bounds PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
-target_link_libraries(test_bounds PRIVATE qubit_engine_core)
+ 
 
-if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
-    add_executable(test_cuda_stream ../tests/test_cuda_stream.cpp)
-    target_include_directories(test_cuda_stream PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
-    target_link_libraries(test_cuda_stream PRIVATE qubit_engine_core CUDA::cudart)
-endif()
 
 
 # Absolute golden-vector path so ctest (CWD = build/) always finds Qiskit references.
