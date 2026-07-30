@@ -167,14 +167,15 @@ void CpuBackend::applyHadamard(size_t target) {
     } else {
       for (long long i = 0; i < static_cast<long long>(local_dim);
            i += 2 * stride) {
+        long long j = i;
+        if (stride >= 2) {
+          long long end_k = i + stride - 1;
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static)
 #endif
-        long long j = i;
-        if (stride >= 2) {
-          for (; j + 1 < i + stride; j += 2) {
-            double *ptr_a = reinterpret_cast<double *>(&state[j]);
-            double *ptr_b = reinterpret_cast<double *>(&state[j + stride]);
+          for (long long k = i; k < end_k; k += 2) {
+            double *ptr_a = reinterpret_cast<double *>(&state[k]);
+            double *ptr_b = reinterpret_cast<double *>(&state[k + stride]);
             __m256d v_a = _mm256_loadu_pd(ptr_a);
             __m256d v_b = _mm256_loadu_pd(ptr_b);
             __m256d v_sum = _mm256_add_pd(v_a, v_b);
@@ -184,6 +185,7 @@ void CpuBackend::applyHadamard(size_t target) {
             _mm256_storeu_pd(ptr_a, v_sum);
             _mm256_storeu_pd(ptr_b, v_diff);
           }
+          j = i + ((stride / 2) * 2);
         }
         for (; j < i + stride; ++j) {
           Complex a = state[j];

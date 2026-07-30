@@ -62,11 +62,38 @@ type userLimiter struct {
 }
 
 const (
-	maxQubits     = 32
-	maxOperations = 10000
-	refillRate    = 0.1 // tokens per second (1 every 10s)
-	burstSize     = 5.0
+	maxQubits          = 32
+	maxOperations      = 10000
+	refillRate         = 0.1 // tokens per second (1 every 10s)
+	burstSize          = 5.0
+	MaxLimiterEntries  = 1000
+	limiterInactivity  = 5 * time.Minute
 )
+
+func (s *SchedulerServer) getOrCreateLimiter(userID string) *userLimiter {
+	now := time.Now()
+	lim, loaded := s.limiters.LoadOrStore(userID, &userLimiter{tokens: burstSize, last: now})
+	if !loaded {
+		s.cleanupLimiters(now)
+	}
+	return lim.(*userLimiter)
+}
+
+func (s *SchedulerServer) cleanupLimiters(now time.Time) {
+	count := 0
+	s.limiters.Range(func(key, value interface{}) bool {
+		count++
+		l := value.(*userLimiter)
+		l.mu.Lock()
+		inactive := now.Sub(l.last) > limiterInactivity
+		l.mu.Unlock()
+
+		if inactive || count > MaxLimiterEntries {
+			s.limiters.Delete(key)
+		}
+		return true
+	})
+}
 
 func NewSchedulerServer(rdb *redis.Client, engineAddr string, engineToken string) *SchedulerServer {
 	cb := gobreaker.NewCircuitBreaker(gobreaker.Settings{
@@ -118,10 +145,9 @@ func (s *SchedulerServer) StartWorkers(ctx context.Context) {
 }
 
 func (s *SchedulerServer) SubmitJob(ctx context.Context, req *pb.JobRequest) (*pb.JobHandle, error) {
-	// 1. Rate Limiting
+	// 1. Rate Limiting with bounded eviction
 	if req.UserId != "" {
-		lim, _ := s.limiters.LoadOrStore(req.UserId, &userLimiter{tokens: burstSize, last: time.Now()})
-		l := lim.(*userLimiter)
+		l := s.getOrCreateLimiter(req.UserId)
 		
 		l.mu.Lock()
 		now_lim := time.Now()

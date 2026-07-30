@@ -88,7 +88,7 @@ if(ENABLE_HW_ACCEL)
         # Linux/Mac (GCC/Clang)
         if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "x86_64" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "amd64")
             message(STATUS "Enabling AVX2 instructions for GCC/Clang")
-            add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-mavx2 -mfma>)
+            add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-mavx2> $<$<COMPILE_LANGUAGE:CXX>:-mfma>)
         elseif(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm64" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
             message(STATUS "Enabling NEON instructions for ARM64")
         endif()
@@ -287,7 +287,8 @@ target_link_libraries(qubit_engine_proto
 target_include_directories(qubit_engine_proto PUBLIC ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 target_compile_options(qubit_engine_proto PUBLIC
     $<$<CXX_COMPILER_ID:MSVC>:/FIqubit_engine_proto_export.h>
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-include qubit_engine_proto_export.h>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-include>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:qubit_engine_proto_export.h>
 )
 set_target_properties(qubit_engine_proto PROPERTIES POSITION_INDEPENDENT_CODE ON WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
@@ -585,6 +586,14 @@ if(MPI_FOUND)
         $<$<BOOL:${ENABLE_PROMETHEUS}>:prometheus-cpp::core>
         spdlog::spdlog
     )
+
+    add_executable(mpi_cnot_test tests/MpiGlobalCNOTTests.cpp)
+    target_include_directories(mpi_cnot_test PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+    target_link_libraries(mpi_cnot_test PRIVATE
+        qubit_engine_core
+        spdlog::spdlog
+    )
+    add_test(NAME MPIGlobalCNOTTest COMMAND mpi_cnot_test)
 endif()
 
 # =================================================================
