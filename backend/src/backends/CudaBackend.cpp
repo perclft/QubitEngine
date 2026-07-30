@@ -590,11 +590,22 @@ double CudaBackend::expectationValue(const std::string &pauli_string) const {
   // Allocate device-side pauli ops and result
   int *d_pauli_ops = nullptr;
   double *d_result = nullptr;
-  cudaMalloc(&d_pauli_ops, num_qubits_ * sizeof(int));
-  cudaMalloc(&d_result, sizeof(double));
+  cudaError_t err = cudaMalloc(&d_pauli_ops, num_qubits_ * sizeof(int));
+  if (err != cudaSuccess) throw std::runtime_error("CUDA Error: " + std::string(cudaGetErrorString(err)));
+  
+  err = cudaMalloc(&d_result, sizeof(double));
+  if (err != cudaSuccess) {
+      cudaFree(d_pauli_ops);
+      throw std::runtime_error("CUDA Error: " + std::string(cudaGetErrorString(err)));
+  }
 
-  cudaMemcpy(d_pauli_ops, h_pauli_ops.data(), num_qubits_ * sizeof(int),
+  err = cudaMemcpy(d_pauli_ops, h_pauli_ops.data(), num_qubits_ * sizeof(int),
              cudaMemcpyHostToDevice);
+  if (err != cudaSuccess) {
+      cudaFree(d_pauli_ops);
+      cudaFree(d_result);
+      throw std::runtime_error("CUDA Error: " + std::string(cudaGetErrorString(err)));
+  }
 
   // If mpi_size_ > 1, we must gather the state vector first!
   void *eval_state = device_state_;
@@ -675,9 +686,15 @@ std::vector<Complex> CudaBackend::getStateVectorAsync() const {
   }
 
   // Async copy on secondary telemetry stream
+  cudaEvent_t compute_done;
+  cudaEventCreate(&compute_done);
+  cudaEventRecord(compute_done, 0); // record on default stream
+  cudaStreamWaitEvent((cudaStream_t)telemetry_stream_, compute_done, 0);
+  
   cudaMemcpyAsync(pinned_telemetry_buf_, device_state_, bytes,
                   cudaMemcpyDeviceToHost, (cudaStream_t)telemetry_stream_);
   cudaStreamSynchronize((cudaStream_t)telemetry_stream_);
+  cudaEventDestroy(compute_done);
 
   // Copy from pinned buffer to vector
   std::vector<Complex> host_state(dim);

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"runtime"
@@ -57,9 +58,10 @@ func (t tokenAuth) RequireTransportSecurity() bool {
 }
 
 type userLimiter struct {
-	tokens float64
-	last   time.Time
-	mu     sync.Mutex
+	tokens  float64
+	last    time.Time
+	mu      sync.Mutex
+	deleted bool
 }
 
 type limiterEntry struct {
@@ -105,14 +107,14 @@ func (s *SchedulerServer) cleanupLimiters() {
 		k := key.(string)
 		l := value.(*userLimiter)
 		l.mu.Lock()
-		lastAccess := l.last
-		l.mu.Unlock()
-
-		if now.Sub(lastAccess) > limiterInactivity {
+		
+		if now.Sub(l.last) > limiterInactivity {
+			l.deleted = true
 			s.limiters.Delete(k)
 		} else {
-			entries = append(entries, limiterEntry{key: k, last: lastAccess})
+			entries = append(entries, limiterEntry{key: k, last: l.last})
 		}
+		l.mu.Unlock()
 		return true
 	})
 
@@ -122,7 +124,14 @@ func (s *SchedulerServer) cleanupLimiters() {
 		})
 		toEvict := len(entries) - MaxLimiterEntries
 		for i := 0; i < toEvict; i++ {
-			s.limiters.Delete(entries[i].key)
+			key := entries[i].key
+			if val, ok := s.limiters.Load(key); ok {
+				l := val.(*userLimiter)
+				l.mu.Lock()
+				l.deleted = true
+				s.limiters.Delete(key)
+				l.mu.Unlock()
+			}
 		}
 	}
 }
@@ -179,9 +188,17 @@ func (s *SchedulerServer) StartWorkers(ctx context.Context) {
 func (s *SchedulerServer) SubmitJob(ctx context.Context, req *pb.JobRequest) (*pb.JobHandle, error) {
 	// 1. Rate Limiting with bounded eviction
 	if req.UserId != "" {
-		l := s.getOrCreateLimiter(req.UserId)
+		var l *userLimiter
+		for {
+			l = s.getOrCreateLimiter(req.UserId)
+			l.mu.Lock()
+			if l.deleted {
+				l.mu.Unlock()
+				continue
+			}
+			break
+		}
 		
-		l.mu.Lock()
 		now_lim := time.Now()
 		dt := now_lim.Sub(l.last).Seconds()
 		l.tokens += dt * refillRate
@@ -208,6 +225,10 @@ func (s *SchedulerServer) SubmitJob(ctx context.Context, req *pb.JobRequest) (*p
 
 	if req.Circuit.NumQubits > maxQubits {
 		return nil, status.Errorf(codes.InvalidArgument, "numQubits %d exceeds maximum allowed (%d)", req.Circuit.NumQubits, maxQubits)
+	}
+
+	if req.Circuit.NumQubits == 0 {
+		return nil, status.Error(codes.InvalidArgument, "numQubits must be greater than 0")
 	}
 
 	if len(req.Circuit.Operations) > maxOperations {
@@ -394,30 +415,49 @@ func (s *SchedulerServer) CancelJob(ctx context.Context, handle *pb.JobHandle) (
 }
 
 func (s *SchedulerServer) updateJobState(ctx context.Context, jobID string, state models.JobState, errMsg string) {
-	jobBytes, err := s.rdb.Get(ctx, "job:"+jobID).Bytes()
-	if err != nil {
-		return
-	}
-	var job models.Job
-	if err := json.Unmarshal(jobBytes, &job); err != nil {
-		return
-	}
-	oldState := job.State
-	job.State = state
-	job.ErrorMessage = errMsg
-	if state == models.StateCompleted || state == models.StateFailed || state == models.StateCancelled {
-		job.CompletedAt = time.Now().Unix()
-	}
-	s.saveJob(ctx, &job)
+	script := redis.NewScript(`
+		local jobStr = redis.call("GET", KEYS[1])
+		if not jobStr then return false end
+		local job = cjson.decode(jobStr)
+		local oldState = job.state or 0
+		local userId = job.user_id or ""
+		local submittedAt = job.submitted_at or 0
+		local newState = tonumber(ARGV[1])
+		job.state = newState
+		if ARGV[2] ~= "" then job.error_message = ARGV[2] end
+		if tonumber(ARGV[3]) > 0 then job.completed_at = tonumber(ARGV[3]) end
+		redis.call("SET", KEYS[1], cjson.encode(job), "KEEPTTL")
+		
+		if oldState ~= newState then
+			local jobId = ARGV[4]
+			redis.call("ZREM", "index:jobs:state:" .. oldState, jobId)
+			redis.call("ZADD", "index:jobs:state:" .. newState, submittedAt, jobId)
+			if userId ~= "" then
+				redis.call("ZREM", "index:jobs:user:" .. userId .. ":state:" .. oldState, jobId)
+				redis.call("ZADD", "index:jobs:user:" .. userId .. ":state:" .. newState, submittedAt, jobId)
+			end
+		end
+		
+		return true
+	`)
 
-	// Update state indexes
-	if oldState != state {
-		s.rdb.ZRem(ctx, fmt.Sprintf("index:jobs:state:%d", oldState), jobID)
-		s.rdb.ZAdd(ctx, fmt.Sprintf("index:jobs:state:%d", state), &redis.Z{Score: float64(job.SubmittedAt), Member: jobID})
-		if job.UserID != "" {
-			s.rdb.ZRem(ctx, fmt.Sprintf("index:jobs:user:%s:state:%d", job.UserID, oldState), jobID)
-			s.rdb.ZAdd(ctx, fmt.Sprintf("index:jobs:user:%s:state:%d", job.UserID, state), &redis.Z{Score: float64(job.SubmittedAt), Member: jobID})
+	completedAt := int64(0)
+	if state == models.StateCompleted || state == models.StateFailed || state == models.StateCancelled {
+		completedAt = time.Now().Unix()
+	}
+
+	res, err := script.Run(ctx, s.rdb, []string{"job:" + jobID}, int(state), errMsg, completedAt, jobID).Result()
+	if err != nil {
+		if err == redis.Nil {
+			log.Printf("updateJobState: job %s not found (expired or missing), update skipped\n", jobID)
+		} else {
+			log.Printf("updateJobState: script execution failed for job %s: %v\n", jobID, err)
 		}
+		return
+	}
+	if res == nil {
+		log.Printf("updateJobState: job %s not found (expired or missing), update skipped\n", jobID)
+		return
 	}
 }
 

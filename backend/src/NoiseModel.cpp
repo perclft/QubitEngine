@@ -99,9 +99,9 @@ static std::array<Complex, 16> scale4x4(Precision s,
 // ============================================================================
 
 NoiseChannel1Q makeDepolarizingChannel1Q(Precision p) {
-  if (p < 0.0 || p > 1.0) {
+  if (p < 0.0 || p > 0.75) {
     throw std::invalid_argument(
-        "Depolarizing probability must be in [0, 1], got " + std::to_string(p));
+        "Depolarizing probability 1Q must be in [0, 0.75], got " + std::to_string(p));
   }
 
   NoiseChannel1Q channel;
@@ -123,9 +123,9 @@ NoiseChannel1Q makeDepolarizingChannel1Q(Precision p) {
 // ============================================================================
 
 NoiseChannel2Q makeDepolarizingChannel2Q(Precision p) {
-  if (p < 0.0 || p > 1.0) {
+  if (p < 0.0 || p > 15.0 / 16.0) {
     throw std::invalid_argument(
-        "Depolarizing probability must be in [0, 1], got " + std::to_string(p));
+        "Depolarizing probability 2Q must be in [0, 15/16], got " + std::to_string(p));
   }
 
   NoiseChannel2Q channel;

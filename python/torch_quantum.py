@@ -56,8 +56,8 @@ class QuantumFunction(torch.autograd.Function):
         ctx.save_for_backward(params, inputs)
 
         # Convert tensors to numpy arrays (zero-copy if on CPU)
-        params_np = params_2d.detach().cpu().numpy()
-        inputs_np = inputs_2d.detach().cpu().numpy()
+        params_np = params_2d.detach().cpu().contiguous().numpy()
+        inputs_np = inputs_2d.detach().cpu().contiguous().numpy()
 
         # Call the parallel batched expectation value helper
         energies = qubit_engine.get_expectation_value_batched(
@@ -83,8 +83,8 @@ class QuantumFunction(torch.autograd.Function):
         if inputs_2d.shape[0] < batch_size:
             inputs_2d = inputs_2d.expand(batch_size, -1)
 
-        params_np = params_2d.detach().cpu().numpy()
-        inputs_np = inputs_2d.detach().cpu().numpy()
+        params_np = params_2d.detach().cpu().contiguous().numpy()
+        inputs_np = inputs_2d.detach().cpu().contiguous().numpy()
 
         # Call C++ parallel batched gradient solver
         batch_grads = qubit_engine.get_gradients_batched(

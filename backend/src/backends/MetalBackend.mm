@@ -417,10 +417,9 @@ void MetalBackend::applyDenseUnitary(const std::vector<size_t> &targets,
         m[i].real = (float)matrix[i].real();
         m[i].imag = (float)matrix[i].imag();
     }
-    id<MTLBuffer> mBuf = [device newBufferWithBytes:m.data() length:4*sizeof(MetalComplex) options:MTLResourceStorageModeShared];
     dispatchWithBuffers(denseUnitary1qPipeline_, dim / 2,
-                        {{0, gpuBuffer_}, {2, (__bridge void*)mBuf}},
-                        {{1, &stride, sizeof(uint32_t)}});
+                        {{0, gpuBuffer_}},
+                        {{1, &stride, sizeof(uint32_t)}, {2, m.data(), 4*sizeof(MetalComplex)}});
   } else if (targets.size() == 2) {
     uint32_t s_low = (uint32_t)targets[0];
     uint32_t s_high = (uint32_t)targets[1];
@@ -430,10 +429,9 @@ void MetalBackend::applyDenseUnitary(const std::vector<size_t> &targets,
         m[i].real = (float)matrix[i].real();
         m[i].imag = (float)matrix[i].imag();
     }
-    id<MTLBuffer> mBuf = [device newBufferWithBytes:m.data() length:16*sizeof(MetalComplex) options:MTLResourceStorageModeShared];
     dispatchWithBuffers(denseUnitary2qPipeline_, dim / 4,
-                        {{0, gpuBuffer_}, {3, (__bridge void*)mBuf}},
-                        {{1, &s_low, sizeof(uint32_t)}, {2, &s_high, sizeof(uint32_t)}});
+                        {{0, gpuBuffer_}},
+                        {{1, &s_low, sizeof(uint32_t)}, {2, &s_high, sizeof(uint32_t)}, {3, m.data(), 16*sizeof(MetalComplex)}});
   }
 }
 
@@ -487,13 +485,10 @@ void MetalBackend::applyNoiseChannel1Q(const NoiseChannel1Q& channel, size_t tar
       m[i].imag = static_cast<float>(selected->matrix[i].imag());
   }
 
-  id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
-  id<MTLBuffer> mBuf = [device newBufferWithBytes:m.data() length:4*sizeof(MetalComplex) options:MTLResourceStorageModeShared];
-
   size_t dim = 1ULL << num_qubits_;
   dispatchWithBuffers(kraus1qPipeline_, dim / 2,
-                      {{0, gpuBuffer_}, {2, (__bridge void*)mBuf}},
-                      {{1, &stride, sizeof(uint32_t)}, {3, &inv_norm, sizeof(float)}});
+                      {{0, gpuBuffer_}},
+                      {{1, &stride, sizeof(uint32_t)}, {2, m.data(), 4*sizeof(MetalComplex)}, {3, &inv_norm, sizeof(float)}});
 }
 
 void MetalBackend::applyNoiseChannel2Q(const NoiseChannel2Q& channel, size_t q1, size_t q2) {
@@ -535,12 +530,9 @@ void MetalBackend::applyNoiseChannel2Q(const NoiseChannel2Q& channel, size_t q1,
   uint32_t s_high = static_cast<uint32_t>(std::max(q1, q2));
   size_t dim = 1ULL << num_qubits_;
 
-  id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
-  id<MTLBuffer> mBuf = [device newBufferWithBytes:m.data() length:16*sizeof(MetalComplex) options:MTLResourceStorageModeShared];
-
   dispatchWithBuffers(kraus2qPipeline_, dim / 4,
-                      {{0, gpuBuffer_}, {3, (__bridge void*)mBuf}},
-                      {{1, &s_low, sizeof(uint32_t)}, {2, &s_high, sizeof(uint32_t)}, {4, &inv_norm, sizeof(float)}});
+                      {{0, gpuBuffer_}},
+                      {{1, &s_low, sizeof(uint32_t)}, {2, &s_high, sizeof(uint32_t)}, {3, m.data(), 16*sizeof(MetalComplex)}, {4, &inv_norm, sizeof(float)}});
 }
 
 int MetalBackend::measure(size_t target) {

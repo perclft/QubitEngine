@@ -80,7 +80,7 @@ if(ENABLE_HW_ACCEL)
         if(${HOST_ARCH} MATCHES "AMD64" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "AMD64")
              message(STATUS "Enabling AVX2 instructions for MSVC")
              # Use generator expression to avoid passing this to nvcc
-             add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/arch:AVX2>)
+             set(HW_ACCEL_FLAGS $<$<COMPILE_LANGUAGE:CXX>:/arch:AVX2>)
         else()
              message(STATUS "Not x64, skipping AVX2 for MSVC")
         endif()
@@ -88,7 +88,7 @@ if(ENABLE_HW_ACCEL)
         # Linux/Mac (GCC/Clang)
         if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "x86_64" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "amd64")
             message(STATUS "Enabling AVX2 instructions for GCC/Clang")
-            add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-mavx2> $<$<COMPILE_LANGUAGE:CXX>:-mfma>)
+            set(HW_ACCEL_FLAGS $<$<COMPILE_LANGUAGE:CXX>:-mavx2> $<$<COMPILE_LANGUAGE:CXX>:-mfma>)
         elseif(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm64" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
             message(STATUS "Enabling NEON instructions for ARM64")
         endif()
@@ -356,6 +356,10 @@ if(NOT MSVC AND NOT APPLE)
     target_compile_options(qubit_engine_core PRIVATE "-fno-semantic-interposition")
 endif()
 
+if(HW_ACCEL_FLAGS)
+    target_compile_options(qubit_engine_core PRIVATE ${HW_ACCEL_FLAGS})
+endif()
+
 target_link_libraries(qubit_engine_core PUBLIC qubit_engine_proto)
 
 
@@ -532,6 +536,17 @@ target_link_libraries(validation_tests PRIVATE
     ${HIREDIS_LIB}
     nlohmann_json::nlohmann_json
 )
+
+add_executable(test_bounds ../tests/test_bounds.cpp)
+target_include_directories(test_bounds PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(test_bounds PRIVATE qubit_engine_core)
+
+if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
+    add_executable(test_cuda_stream ../tests/test_cuda_stream.cpp)
+    target_include_directories(test_cuda_stream PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+    target_link_libraries(test_cuda_stream PRIVATE qubit_engine_core CUDA::cudart)
+endif()
+
 
 # Absolute golden-vector path so ctest (CWD = build/) always finds Qiskit references.
 file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/tests/validation/golden" QUBIT_ENGINE_GOLDEN_DIR)

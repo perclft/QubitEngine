@@ -185,13 +185,12 @@ void CpuBackend::applyHadamard(size_t target) {
             _mm256_storeu_pd(ptr_a, v_sum);
             _mm256_storeu_pd(ptr_b, v_diff);
           }
-          j = i + ((stride / 2) * 2);
-        }
-        for (; j < i + stride; ++j) {
-          Complex a = state[j];
-          Complex b = state[j + stride];
-          state[j] = (a + b) * INV_SQRT_2;
-          state[j + stride] = (a - b) * INV_SQRT_2;
+        } else {
+          // stride == 1
+          Complex a = state[i];
+          Complex b = state[i + stride];
+          state[i] = (a + b) * INV_SQRT_2;
+          state[i + stride] = (a - b) * INV_SQRT_2;
         }
       }
     }
