@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -61,6 +62,11 @@ type userLimiter struct {
 	mu     sync.Mutex
 }
 
+type limiterEntry struct {
+	key  string
+	last time.Time
+}
+
 const (
 	maxQubits          = 32
 	maxOperations      = 10000
@@ -72,27 +78,53 @@ const (
 
 func (s *SchedulerServer) getOrCreateLimiter(userID string) *userLimiter {
 	now := time.Now()
-	lim, loaded := s.limiters.LoadOrStore(userID, &userLimiter{tokens: burstSize, last: now})
-	if !loaded {
-		s.cleanupLimiters(now)
-	}
+	lim, _ := s.limiters.LoadOrStore(userID, &userLimiter{tokens: burstSize, last: now})
 	return lim.(*userLimiter)
 }
 
-func (s *SchedulerServer) cleanupLimiters(now time.Time) {
-	count := 0
+func (s *SchedulerServer) StartLimiterCleaner(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Minute)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				ticker.Stop()
+				return
+			case <-ticker.C:
+				s.cleanupLimiters()
+			}
+		}
+	}()
+}
+
+func (s *SchedulerServer) cleanupLimiters() {
+	now := time.Now()
+	var entries []limiterEntry
+
 	s.limiters.Range(func(key, value interface{}) bool {
-		count++
+		k := key.(string)
 		l := value.(*userLimiter)
 		l.mu.Lock()
-		inactive := now.Sub(l.last) > limiterInactivity
+		lastAccess := l.last
 		l.mu.Unlock()
 
-		if inactive || count > MaxLimiterEntries {
-			s.limiters.Delete(key)
+		if now.Sub(lastAccess) > limiterInactivity {
+			s.limiters.Delete(k)
+		} else {
+			entries = append(entries, limiterEntry{key: k, last: lastAccess})
 		}
 		return true
 	})
+
+	if len(entries) > MaxLimiterEntries {
+		sort.Slice(entries, func(i, j int) bool {
+			return entries[i].last.Before(entries[j].last)
+		})
+		toEvict := len(entries) - MaxLimiterEntries
+		for i := 0; i < toEvict; i++ {
+			s.limiters.Delete(entries[i].key)
+		}
+	}
 }
 
 func NewSchedulerServer(rdb *redis.Client, engineAddr string, engineToken string) *SchedulerServer {
