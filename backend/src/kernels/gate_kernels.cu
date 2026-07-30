@@ -34,14 +34,14 @@ __device__ cuDoubleComplex scale(cuDoubleComplex a, double s) {
 
 // Hadamard Kernel
 __global__ void kHadamard(cuDoubleComplex *state, int num_qubits, int target) {
-  int idx = blockIdx.x * blockDim.x + threadIdx.x;
-  int half_dim = 1 << (num_qubits - 1);
+  size_t idx = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  size_t half_dim = 1ULL << (num_qubits - 1);
 
   if (idx >= half_dim)
     return;
 
-  int i0 = ((idx >> target) << (target + 1)) | (idx & ((1 << target) - 1));
-  int i1 = i0 | (1 << target);
+  size_t i0 = ((idx >> target) << (target + 1)) | (idx & ((1ULL << target) - 1));
+  size_t i1 = i0 | (1ULL << target);
 
   cuDoubleComplex v0 = state[i0];
   cuDoubleComplex v1 = state[i1];
@@ -323,10 +323,10 @@ namespace cuda {
 
 static void launchKernel1Q(void (*kernel)(cuDoubleComplex *, int, int),
                            void *deviceState, int num_qubits, int target) {
-  int half_dim = 1 << (num_qubits - 1);
-  int blockSize = 256;
-  int numBlocks = (half_dim + blockSize - 1) / blockSize;
-  kernel<<<numBlocks, blockSize>>>((cuDoubleComplex *)deviceState, num_qubits,
+  size_t half_dim = 1ULL << (num_qubits - 1);
+  size_t blockSize = 256;
+  size_t numBlocks = (half_dim + blockSize - 1) / blockSize;
+  kernel<<<static_cast<unsigned int>(numBlocks), static_cast<unsigned int>(blockSize)>>>((cuDoubleComplex *)deviceState, num_qubits,
                                    target);
   // cudaDeviceSynchronize(); // Phase 4: Async kernels
 }

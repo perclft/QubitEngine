@@ -282,19 +282,60 @@ NoiseChannel1Q makeThermalRelaxationChannel(Precision t1, Precision t2, Precisio
   return channel;
 }
 
+static void validateChannel1Q(const NoiseChannel1Q& channel) {
+  if (channel.operators.empty()) return;
+  std::array<Complex, 4> sum_dag_self{};
+  for (const auto& op : channel.operators) {
+    for (int k = 0; k < 4; ++k) {
+      sum_dag_self[k] += op.matrix_dag_self[k];
+    }
+  }
+  double err = std::abs(sum_dag_self[0] - Complex(1, 0)) +
+               std::abs(sum_dag_self[3] - Complex(1, 0)) +
+               std::abs(sum_dag_self[1]) + std::abs(sum_dag_self[2]);
+  if (err > 1e-3) {
+    throw std::invalid_argument("NoiseChannel1Q " + channel.name +
+                                " violates Kraus completeness relation (sum K_i^dag K_i != I).");
+  }
+}
+
+static void validateChannel2Q(const NoiseChannel2Q& channel) {
+  if (channel.operators.empty()) return;
+  std::array<Complex, 16> sum_dag_self{};
+  for (const auto& op : channel.operators) {
+    for (int k = 0; k < 16; ++k) {
+      sum_dag_self[k] += op.matrix_dag_self[k];
+    }
+  }
+  double err = 0.0;
+  for (int r = 0; r < 4; ++r) {
+    for (int c = 0; c < 4; ++c) {
+      Complex expected = (r == c) ? Complex(1, 0) : Complex(0, 0);
+      err += std::abs(sum_dag_self[r * 4 + c] - expected);
+    }
+  }
+  if (err > 1e-3) {
+    throw std::invalid_argument("NoiseChannel2Q " + channel.name +
+                                " violates Kraus completeness relation (sum K_i^dag K_i != I).");
+  }
+}
+
 // ============================================================================
 // NoiseModel — Configuration API
 // ============================================================================
 
 void NoiseModel::addSingleQubitNoise(NoiseChannel1Q channel) {
+  validateChannel1Q(channel);
   single_qubit_channels_.push_back(std::move(channel));
 }
 
 void NoiseModel::addTwoQubitNoise(NoiseChannel2Q channel) {
+  validateChannel2Q(channel);
   two_qubit_channels_.push_back(std::move(channel));
 }
 
 void NoiseModel::addSingleQubitNoise(size_t qubit, NoiseChannel1Q channel) {
+  validateChannel1Q(channel);
   per_qubit_channels_[qubit].push_back(std::move(channel));
 }
 

@@ -140,7 +140,10 @@ func (s *SchedulerServer) SubmitJob(ctx context.Context, req *pb.JobRequest) (*p
 		l.mu.Unlock()
 	}
 
-	// 2. Input Validation
+	if req.Shots <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "shots must be greater than 0")
+	}
+
 	if req.Circuit == nil {
 		return nil, status.Error(codes.InvalidArgument, "circuit is required")
 	}
@@ -151,6 +154,18 @@ func (s *SchedulerServer) SubmitJob(ctx context.Context, req *pb.JobRequest) (*p
 
 	if len(req.Circuit.Operations) > maxOperations {
 		return nil, status.Errorf(codes.InvalidArgument, "too many operations: %d (max %d)", len(req.Circuit.Operations), maxOperations)
+	}
+
+	for _, op := range req.Circuit.Operations {
+		if op.TargetQubit >= uint32(req.Circuit.NumQubits) {
+			return nil, status.Errorf(codes.InvalidArgument, "target qubit index %d out of range [0, %d)", op.TargetQubit, req.Circuit.NumQubits)
+		}
+		if op.ControlQubit != 0 && op.ControlQubit >= uint32(req.Circuit.NumQubits) {
+			return nil, status.Errorf(codes.InvalidArgument, "control qubit index %d out of range [0, %d)", op.ControlQubit, req.Circuit.NumQubits)
+		}
+		if op.SecondControlQubit != 0 && op.SecondControlQubit >= uint32(req.Circuit.NumQubits) {
+			return nil, status.Errorf(codes.InvalidArgument, "second control qubit index %d out of range [0, %d)", op.SecondControlQubit, req.Circuit.NumQubits)
+		}
 	}
 
 	jobID := uuid.New().String()
@@ -304,9 +319,12 @@ func (s *SchedulerServer) CancelJob(ctx context.Context, handle *pb.JobHandle) (
 		return &pb.CancelResponse{Success: true, Message: "Job cancelled from queue"}, nil
 	}
 
-	s.mu.RLock()
+	s.mu.Lock()
 	cancel, exists := s.workerCancel[handle.JobId]
-	s.mu.RUnlock()
+	if exists {
+		delete(s.workerCancel, handle.JobId)
+	}
+	s.mu.Unlock()
 
 	if exists {
 		cancel()
@@ -485,6 +503,9 @@ func (s *SchedulerServer) StreamJobResults(handle *pb.JobHandle, stream pb.Quant
 			continue
 		}
 		if err != nil {
+			if stream.Context().Err() != nil {
+				return stream.Context().Err()
+			}
 			return status.Errorf(codes.Internal, "redis stream error: %v", err)
 		}
 

@@ -170,19 +170,26 @@ void CpuBackend::applyHadamard(size_t target) {
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static)
 #endif
-        for (long long j = i; j < i + stride; j += 2) {
-          // Checking boundary inside parallel loop might be tricky, simplified
-          // assuming aligned
-          double *ptr_a = reinterpret_cast<double *>(&state[j]);
-          double *ptr_b = reinterpret_cast<double *>(&state[j + stride]);
-          __m256d v_a = _mm256_loadu_pd(ptr_a);
-          __m256d v_b = _mm256_loadu_pd(ptr_b);
-          __m256d v_sum = _mm256_add_pd(v_a, v_b);
-          __m256d v_diff = _mm256_sub_pd(v_a, v_b);
-          v_sum = _mm256_mul_pd(v_sum, v_inv_sqrt2);
-          v_diff = _mm256_mul_pd(v_diff, v_inv_sqrt2);
-          _mm256_storeu_pd(ptr_a, v_sum);
-          _mm256_storeu_pd(ptr_b, v_diff);
+        long long j = i;
+        if (stride >= 2) {
+          for (; j + 1 < i + stride; j += 2) {
+            double *ptr_a = reinterpret_cast<double *>(&state[j]);
+            double *ptr_b = reinterpret_cast<double *>(&state[j + stride]);
+            __m256d v_a = _mm256_loadu_pd(ptr_a);
+            __m256d v_b = _mm256_loadu_pd(ptr_b);
+            __m256d v_sum = _mm256_add_pd(v_a, v_b);
+            __m256d v_diff = _mm256_sub_pd(v_a, v_b);
+            v_sum = _mm256_mul_pd(v_sum, v_inv_sqrt2);
+            v_diff = _mm256_mul_pd(v_diff, v_inv_sqrt2);
+            _mm256_storeu_pd(ptr_a, v_sum);
+            _mm256_storeu_pd(ptr_b, v_diff);
+          }
+        }
+        for (; j < i + stride; ++j) {
+          Complex a = state[j];
+          Complex b = state[j + stride];
+          state[j] = (a + b) * INV_SQRT_2;
+          state[j + stride] = (a - b) * INV_SQRT_2;
         }
       }
     }

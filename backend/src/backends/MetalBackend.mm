@@ -37,6 +37,28 @@ MetalBackend::MetalBackend(size_t num_qubits)
 MetalBackend::~MetalBackend() {
   if (lastCommandBuffer_)
     CFRelease(lastCommandBuffer_);
+  if (hadamardPipeline_) CFRelease(hadamardPipeline_);
+  if (paulixPipeline_) CFRelease(paulixPipeline_);
+  if (pauliyPipeline_) CFRelease(pauliyPipeline_);
+  if (paulizPipeline_) CFRelease(paulizPipeline_);
+  if (rxPipeline_) CFRelease(rxPipeline_);
+  if (ryPipeline_) CFRelease(ryPipeline_);
+  if (rzPipeline_) CFRelease(rzPipeline_);
+  if (phaseSPipeline_) CFRelease(phaseSPipeline_);
+  if (phaseTPipeline_) CFRelease(phaseTPipeline_);
+  if (cnotPipeline_) CFRelease(cnotPipeline_);
+  if (toffoliPipeline_) CFRelease(toffoliPipeline_);
+  if (measureProb0Pipeline_) CFRelease(measureProb0Pipeline_);
+  if (projectStatePipeline_) CFRelease(projectStatePipeline_);
+  if (expectationZPipeline_) CFRelease(expectationZPipeline_);
+  if (computeProbabilitiesPipeline_) CFRelease(computeProbabilitiesPipeline_);
+  if (diagonalExpectationPipeline_) CFRelease(diagonalExpectationPipeline_);
+  if (denseUnitary1qPipeline_) CFRelease(denseUnitary1qPipeline_);
+  if (denseUnitary2qPipeline_) CFRelease(denseUnitary2qPipeline_);
+  if (kraus1qPipeline_) CFRelease(kraus1qPipeline_);
+  if (swapPipeline_) CFRelease(swapPipeline_);
+  if (czPipeline_) CFRelease(czPipeline_);
+  if (kraus2qPipeline_) CFRelease(kraus2qPipeline_);
   if (gpuBuffer_)
     CFRelease(gpuBuffer_);
   if (device_)

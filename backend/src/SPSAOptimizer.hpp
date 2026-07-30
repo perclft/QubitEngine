@@ -77,7 +77,8 @@ public:
       // Since delta_i is +/- 1, 1/delta_i = delta_i.
       // So g_i = (y_plus - y_minus) / (2 * c_k) * delta_i
 
-      double comm_factor = (y_plus - y_minus) / (2.0 * c_k);
+      double c_k_safe = std::max(c_k, 1e-12);
+      double comm_factor = (y_plus - y_minus) / (2.0 * c_k_safe);
       std::vector<double> g_k(num_params);
       for (size_t i = 0; i < num_params; ++i) {
         g_k[i] = comm_factor * delta[i]; // * (1/delta[i]) which is delta[i]

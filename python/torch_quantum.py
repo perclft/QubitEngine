@@ -113,9 +113,20 @@ class QuantumFunction(torch.autograd.Function):
             grad_params_all = grad_params_all * grad_output
             grad_inputs_all = grad_inputs_all * grad_output
 
-        # Reduce back to 1D if inputs were 1D
-        grad_params = grad_params_all.sum(dim=0) if params_is_1d else grad_params_all
-        grad_inputs = grad_inputs_all.sum(dim=0) if inputs_is_1d else grad_inputs_all
+        # Reduce back to match original input tensor dimensions
+        if params_is_1d:
+            grad_params = grad_params_all.sum(dim=0)
+        elif grad_params_all.shape != params.shape:
+            grad_params = grad_params_all.sum(dim=0, keepdim=True)
+        else:
+            grad_params = grad_params_all
+
+        if inputs_is_1d:
+            grad_inputs = grad_inputs_all.sum(dim=0)
+        elif grad_inputs_all.shape != inputs.shape:
+            grad_inputs = grad_inputs_all.sum(dim=0, keepdim=True)
+        else:
+            grad_inputs = grad_inputs_all
 
         return grad_params, grad_inputs, None, None, None, None, None
 

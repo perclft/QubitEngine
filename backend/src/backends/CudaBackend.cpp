@@ -124,7 +124,9 @@ CudaBackend::CudaBackend(size_t num_qubits)
   telemetry_stream_ = (void *)tstream;
 
   size_t dim = 1ULL << num_qubits_;
-  pinned_buf_size_ = dim * sizeof(Complex);
+  size_t local_dim = dim / mpi_size_;
+  if (local_dim == 0) local_dim = 1;
+  pinned_buf_size_ = local_dim * sizeof(Complex);
   cudaError_t pin_err =
       cudaMallocHost(&pinned_telemetry_buf_, pinned_buf_size_);
   if (pin_err != cudaSuccess) {
@@ -188,8 +190,12 @@ void CudaBackend::copyStateToDevice(const std::vector<Complex> &host_state) {
   if (local_dim == 0)
     local_dim = 1;
 
-  size_t size = local_dim * sizeof(Complex);
-  cudaError_t err = cudaMemcpy(device_state_, host_state.data() + mpi_rank_ * local_dim, size,
+  size_t size = std::min(host_state.size(), local_dim) * sizeof(Complex);
+  const Complex* src_ptr = host_state.data();
+  if (host_state.size() >= total_dim) {
+    src_ptr += mpi_rank_ * local_dim;
+  }
+  cudaError_t err = cudaMemcpy(device_state_, src_ptr, size,
                                cudaMemcpyHostToDevice);
   if (err != cudaSuccess) {
     throw std::runtime_error("CUDA Error: Failed to copy state to device: " +
@@ -218,8 +224,9 @@ void CudaBackend::applyGateDistributed(std::function<void(void*)> launchKernel) 
                                std::string(cudaGetErrorString(err)));
     }
 
+    ncclDataType_t nccl_dtype = (sizeof(Precision) == 8) ? ncclFloat64 : ncclFloat32;
     ncclResult_t res = ncclAllGather((const void *)device_state_, (void *)gathered_state,
-                                     local_dim * 2, ncclFloat64, nccl_comm_, 0);
+                                     local_dim * 2, nccl_dtype, nccl_comm_, 0);
     if (res != ncclSuccess) {
       cudaFree(gathered_state);
       throw std::runtime_error("NCCL Error: ncclAllGather failed: " +
