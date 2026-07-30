@@ -12,6 +12,9 @@
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
+    "@emnapi/core": "^1.11.3",
+    "@emnapi/runtime": "^1.11.3",
+    "@emnapi/wasi-threads": "^1.2.3",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@react-three/drei": "^10.7.7",
