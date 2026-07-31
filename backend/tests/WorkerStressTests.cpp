@@ -47,7 +47,7 @@ TEST_F(WorkerStressTest, ConcurrentJobProcessing) {
         std::string job_id = "stress-job-" + std::to_string(i);
         redis->set("job:circuitpb:" + job_id, circuit_bin);
         redis->set("job:shots:" + job_id, "10");
-        redis->lpush("queue:jobs", job_id);
+        redis->zadd("queue:jobs", job_id, static_cast<double>(i));
     }
 
     // Wait for completion
@@ -75,7 +75,7 @@ TEST_F(WorkerStressTest, ErrorHandlingDeadLetter) {
 
     // Push a job without circuit payload -> should fail
     std::string job_id = "invalid-job";
-    redis->lpush("queue:jobs", job_id);
+    redis->zadd("queue:jobs", job_id, 1.0);
 
     // Wait for failure
     bool failed = false;

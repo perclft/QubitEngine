@@ -18,6 +18,7 @@ inline MPI_Datatype get_mpi_precision_type() {
 
 #include <cuda_runtime.h>
 #include <iostream>
+#include <limits>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -623,8 +624,12 @@ double CudaBackend::expectationValue(const std::string &pauli_string) const {
   }
 #endif
 
+  if (num_qubits_ > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    throw std::invalid_argument("num_qubits_ exceeds maximum supported value for CUDA kernel");
+  }
+
   // Launch device-side reduction kernel
-  qe::cuda::launchPauliExpectation(eval_state, num_qubits_, d_pauli_ops,
+  qe::cuda::launchPauliExpectation(eval_state, static_cast<int>(num_qubits_), d_pauli_ops,
                                    d_result);
 
   // Copy only 8 bytes back

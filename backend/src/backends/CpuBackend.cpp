@@ -7,6 +7,7 @@
 #endif
 #include <random>
 #include <vector>
+#include <mutex>
 
 #ifdef MPI_ENABLED
 #include <mpi.h>
@@ -43,10 +44,16 @@ CpuBackend::CpuBackend(size_t n, bool force_local) : num_qubits(n) {
 
 #ifdef MPI_ENABLED
   if (!force_local) {
-    int initialized;
+    static std::mutex mpi_init_mutex;
+    int initialized = 0;
     MPI_Initialized(&initialized);
     if (!initialized) {
-      MPI_Init(NULL, NULL);
+      std::lock_guard<std::mutex> lock(mpi_init_mutex);
+      MPI_Initialized(&initialized);
+      if (!initialized) {
+        int provided = 0;
+        MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provided);
+      }
     }
     MPI_Comm_rank(MPI_COMM_WORLD, &local_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
