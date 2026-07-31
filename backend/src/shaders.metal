@@ -538,3 +538,73 @@ kernel void kraus_2q_kernel(device Complex* state [[buffer(0)]],
     state[i10] = res[2];
     state[i11] = res[3];
 }
+
+// 1-Qubit Kraus Channel Kernel
+kernel void apply_kraus_kernel(device Complex* state [[buffer(0)]],
+                               constant uint& stride [[buffer(1)]],
+                               constant Complex* matrix [[buffer(2)]],
+                               constant float& inv_norm [[buffer(3)]],
+                               uint tid [[thread_position_in_grid]])
+{
+    uint group = tid / stride;
+    uint offset = tid % stride;
+    uint i0 = 2 * group * stride + offset;
+    uint i1 = i0 + stride;
+    
+    Complex a = state[i0];
+    Complex b = state[i1];
+    
+    Complex m00 = matrix[0];
+    Complex m01 = matrix[1];
+    Complex m10 = matrix[2];
+    Complex m11 = matrix[3];
+    
+    Complex out0, out1;
+    out0.real = (m00.real * a.real - m00.imag * a.imag + m01.real * b.real - m01.imag * b.imag) * inv_norm;
+    out0.imag = (m00.real * a.imag + m00.imag * a.real + m01.real * b.imag + m01.imag * b.real) * inv_norm;
+    
+    out1.real = (m10.real * a.real - m10.imag * a.imag + m11.real * b.real - m11.imag * b.imag) * inv_norm;
+    out1.imag = (m10.real * a.imag + m10.imag * a.real + m11.real * b.imag + m11.imag * b.real) * inv_norm;
+    
+    state[i0] = out0;
+    state[i1] = out1;
+}
+
+// Compute Norm Squared Reduction Kernel
+kernel void compute_norm_sq_kernel(device const Complex* state [[buffer(0)]],
+                                    device float* partial_sums [[buffer(1)]],
+                                    constant uint& total_threads [[buffer(2)]],
+                                    uint id [[thread_position_in_grid]],
+                                    uint tid [[thread_position_in_threadgroup]],
+                                    uint gid [[threadgroup_position_in_grid]],
+                                    uint threads_per_group [[threads_per_threadgroup]]) {
+    threadgroup float local_sum[1024];
+    float val = 0.0f;
+    if (id < total_threads) {
+        val = state[id].real * state[id].real + state[id].imag * state[id].imag;
+    }
+    local_sum[tid] = val;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    for (uint s = threads_per_group / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            local_sum[tid] += local_sum[tid + s];
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+
+    if (tid == 0) {
+        partial_sums[gid] = local_sum[0];
+    }
+}
+
+// Scale State Vector Kernel
+kernel void scale_state_kernel(device Complex* state [[buffer(0)]],
+                               constant float& factor [[buffer(1)]],
+                               uint id [[thread_position_in_grid]]) {
+    Complex c = state[id];
+    state[id].real = c.real * factor;
+    state[id].imag = c.imag * factor;
+}
+
+

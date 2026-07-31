@@ -104,6 +104,10 @@ private:
   void *swapPipeline_ = nullptr;
   void *czPipeline_ = nullptr;
   void *kraus2qPipeline_ = nullptr;
+  void *computeNormSqPipeline_ = nullptr;
+  void *scaleStatePipeline_ = nullptr;
+
+  void renormalizeStateVector();
 
   size_t getNumQubits() const override { return num_qubits_; }
 };

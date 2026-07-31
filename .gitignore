@@ -1,5 +1,8 @@
 # C++ Build Artifacts
 backend/build/
+backend/build_macos/
+backend/build_asan/
+backend/deps/
 backend/build_mpi/
 backend/build_ci_debug/
 backend/vcpkg_installed/

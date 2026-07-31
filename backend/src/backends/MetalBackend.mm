@@ -91,7 +91,7 @@ void MetalBackend::initializeMetal() {
     // Try to load from "default.metallib" in multiple locs
     NSArray<NSString *> *paths = @[
       @"default.metallib", @"bin/default.metallib", @"../bin/default.metallib",
-      @"backend/build/default.metallib"
+      @"backend/build/default.metallib", @"backend/build_macos/default.metallib"
     ];
     for (NSString *path in paths) {
       NSURL *url = [NSURL fileURLWithPath:path];
@@ -100,6 +100,24 @@ void MetalBackend::initializeMetal() {
         spdlog::info("MetalBackend::initializeMetal - Loaded from {}",
                   [path UTF8String]);
         break;
+      }
+    }
+  }
+  if (!library) {
+    spdlog::info("MetalBackend::initializeMetal - metallib file not found, loading shaders.metal source...");
+    NSArray<NSString *> *srcPaths = @[
+      @"src/shaders.metal", @"backend/src/shaders.metal", @"../src/shaders.metal", @"../backend/src/shaders.metal"
+    ];
+    for (NSString *srcPath in srcPaths) {
+      if ([[NSFileManager defaultManager] fileExistsAtPath:srcPath]) {
+        NSString *srcContent = [NSString stringWithContentsOfFile:srcPath encoding:NSUTF8StringEncoding error:&error];
+        if (srcContent) {
+          library = [device newLibraryWithSource:srcContent options:nil error:&error];
+          if (library) {
+            spdlog::info("MetalBackend::initializeMetal - Compiled library from source: {}", [srcPath UTF8String]);
+            break;
+          }
+        }
       }
     }
   }
@@ -157,6 +175,8 @@ void MetalBackend::buildPipelines(void *libPtr) {
   swapPipeline_ = createPipe(@"swap_kernel");
   czPipeline_ = createPipe(@"cz_kernel");
   kraus2qPipeline_ = createPipe(@"kraus_2q_kernel");
+  computeNormSqPipeline_ = createPipe(@"compute_norm_sq_kernel");
+  scaleStatePipeline_ = createPipe(@"scale_state_kernel");
 }
 
 // --- Memory Management ---
@@ -452,33 +472,149 @@ void MetalBackend::applyDepolarizingNoise(Precision p) {
   }
 }
 
+void MetalBackend::renormalizeStateVector() {
+  size_t dim = 1ULL << num_qubits_;
+  size_t totalThreads = dim;
+  size_t maxThreads = 256;
+  size_t numGroups = (totalThreads + maxThreads - 1) / maxThreads;
+
+  id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
+  id<MTLBuffer> partialSumsBuf = [device newBufferWithLength:numGroups * sizeof(float)
+                                                     options:MTLResourceStorageModeShared];
+  id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)commandQueue_;
+  id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
+  id<MTLComputeCommandEncoder> enc = [cmdBuf computeCommandEncoder];
+  id<MTLComputePipelineState> pso = (__bridge id<MTLComputePipelineState>)computeNormSqPipeline_;
+
+  if (!pso) return;
+
+  uint32_t tot_threads = static_cast<uint32_t>(totalThreads);
+  [enc setComputePipelineState:pso];
+  [enc setBuffer:(__bridge id<MTLBuffer>)gpuBuffer_ offset:0 atIndex:0];
+  [enc setBuffer:partialSumsBuf offset:0 atIndex:1];
+  [enc setBytes:&tot_threads length:sizeof(uint32_t) atIndex:2];
+  [enc dispatchThreads:MTLSizeMake(totalThreads, 1, 1)
+      threadsPerThreadgroup:MTLSizeMake(maxThreads, 1, 1)];
+  [enc endEncoding];
+  [cmdBuf commit];
+  [cmdBuf waitUntilCompleted];
+
+  float *sums = (float *)[partialSumsBuf contents];
+  float norm_sq = 0.0f;
+  for (size_t i = 0; i < numGroups; ++i) {
+    norm_sq += sums[i];
+  }
+
+  float norm = std::sqrt(norm_sq);
+  if (norm > 1e-12f) {
+    float scale = 1.0f / norm;
+    id<MTLCommandBuffer> scaleCmdBuf = [queue commandBuffer];
+    id<MTLComputeCommandEncoder> scaleEnc = [scaleCmdBuf computeCommandEncoder];
+    id<MTLComputePipelineState> scalePso = (__bridge id<MTLComputePipelineState>)scaleStatePipeline_;
+
+    if (scalePso) {
+      [scaleEnc setComputePipelineState:scalePso];
+      [scaleEnc setBuffer:(__bridge id<MTLBuffer>)gpuBuffer_ offset:0 atIndex:0];
+      [scaleEnc setBytes:&scale length:sizeof(float) atIndex:1];
+      [scaleEnc dispatchThreads:MTLSizeMake(totalThreads, 1, 1)
+          threadsPerThreadgroup:MTLSizeMake(maxThreads, 1, 1)];
+      [scaleEnc endEncoding];
+      [scaleCmdBuf commit];
+
+      if (lastCommandBuffer_) CFRelease(lastCommandBuffer_);
+      lastCommandBuffer_ = (void *)CFBridgingRetain(scaleCmdBuf);
+    }
+  }
+}
+
+static bool isScaledUnitary1Q(const std::array<Complex, 4>& m, float prob) {
+  float d0 = std::norm(m[0]) + std::norm(m[2]);
+  float d1 = std::norm(m[1]) + std::norm(m[3]);
+  Complex off = m[0] * std::conj(m[1]) + m[2] * std::conj(m[3]);
+  return (std::abs(d0 - prob) < 1e-4f && std::abs(d1 - prob) < 1e-4f && std::abs(off) < 1e-4f);
+}
+
+static bool isScaledUnitary2Q(const std::array<Complex, 16>& m, float prob) {
+  for (int c = 0; c < 4; ++c) {
+    float col_norm = 0.0f;
+    for (int r = 0; r < 4; ++r) {
+      col_norm += static_cast<float>(std::norm(m[r * 4 + c]));
+    }
+    if (std::abs(col_norm - prob) > 1e-4f) return false;
+  }
+  return true;
+}
+
 void MetalBackend::applyNoiseChannel1Q(const NoiseChannel1Q& channel, size_t target) {
   if (channel.operators.empty()) return;
 
-  float total_p = 0.0f;
+  bool all_scaled_unitary = true;
   for (const auto& op : channel.operators) {
-      total_p += static_cast<float>(op.probability);
-  }
-
-  static thread_local std::mt19937 gen(std::random_device{}());
-  std::uniform_real_distribution<float> dis(0.0, total_p);
-  float r = dis(gen);
-
-  const KrausOperator1Q* selected = &channel.operators.back();
-  float cumulative = 0.0f;
-  for (size_t i = 0; i < channel.operators.size(); ++i) {
-    cumulative += static_cast<float>(channel.operators[i].probability);
-    if (r <= cumulative) {
-      selected = &channel.operators[i];
+    if (!isScaledUnitary1Q(op.matrix, static_cast<float>(op.probability))) {
+      all_scaled_unitary = false;
       break;
     }
   }
 
-  if (selected->probability < 1e-20) return;
+  std::vector<float> probabilities;
+  probabilities.reserve(channel.operators.size());
+  float total_p = 0.0f;
 
-  float inv_norm = 1.0f / std::sqrt(static_cast<float>(selected->probability));
-  
-   uint32_t stride = 1 << target;
+  if (all_scaled_unitary) {
+    for (const auto& op : channel.operators) {
+      float p = static_cast<float>(op.probability);
+      probabilities.push_back(p);
+      total_p += p;
+    }
+  } else {
+    // Compute 1Q RDM to get state-dependent trajectory jump probabilities: P(i) = Tr(K_i† K_i ρ)
+    auto sv = getStateVector();
+    size_t stride = 1ULL << target;
+    Complex r00(0, 0), r01(0, 0), r11(0, 0);
+    for (size_t i = 0; i < sv.size(); i += 2 * stride) {
+      for (size_t j = i; j < i + stride; ++j) {
+        Complex c0 = sv[j];
+        Complex c1 = sv[j + stride];
+        r00 += c0 * std::conj(c0);
+        r11 += c1 * std::conj(c1);
+        r01 += c0 * std::conj(c1);
+      }
+    }
+    std::array<Complex, 4> rdm = {r00, r01, std::conj(r01), r11};
+
+    for (const auto& op : channel.operators) {
+      const auto& M = op.matrix_dag_self;
+      Complex tr = M[0] * rdm[0] + M[1] * rdm[2] + M[2] * rdm[1] + M[3] * rdm[3];
+      float p = std::abs(static_cast<float>(tr.real()));
+      probabilities.push_back(p);
+      total_p += p;
+    }
+  }
+
+  if (total_p < 1e-20f) return;
+
+  static thread_local std::mt19937 gen(std::random_device{}());
+  std::uniform_real_distribution<float> dis(0.0f, total_p);
+  float r = dis(gen);
+
+  const KrausOperator1Q* selected = &channel.operators.back();
+  float selected_prob = probabilities.back();
+  float cumulative = 0.0f;
+  for (size_t i = 0; i < channel.operators.size(); ++i) {
+    cumulative += probabilities[i];
+    if (r <= cumulative) {
+      selected = &channel.operators[i];
+      selected_prob = probabilities[i];
+      break;
+    }
+  }
+
+  if (selected_prob < 1e-20f) return;
+
+  bool selected_is_unitary = isScaledUnitary1Q(selected->matrix, static_cast<float>(selected->probability));
+  float inv_norm = (all_scaled_unitary && selected_is_unitary) ? (1.0f / std::sqrt(static_cast<float>(selected->probability))) : 1.0f;
+
+  uint32_t stride = 1 << target;
   std::vector<MetalComplex> m(4);
   for (int i = 0; i < 4; ++i) {
       m[i].real = static_cast<float>(selected->matrix[i].real());
@@ -489,34 +625,85 @@ void MetalBackend::applyNoiseChannel1Q(const NoiseChannel1Q& channel, size_t tar
   dispatchWithBuffers(kraus1qPipeline_, dim / 2,
                       {{0, gpuBuffer_}},
                       {{1, &stride, sizeof(uint32_t)}, {2, m.data(), 4*sizeof(MetalComplex)}, {3, &inv_norm, sizeof(float)}});
+
+  if (!all_scaled_unitary) {
+    renormalizeStateVector();
+  }
 }
 
 void MetalBackend::applyNoiseChannel2Q(const NoiseChannel2Q& channel, size_t q1, size_t q2) {
   if (channel.operators.empty()) return;
 
-  // 1. Stochastic operator selection (same as 1Q pattern)
-  float total_p = 0.0f;
+  bool all_scaled_unitary = true;
   for (const auto& op : channel.operators) {
-      total_p += static_cast<float>(op.probability);
-  }
-
-  static thread_local std::mt19937 gen(std::random_device{}());
-  std::uniform_real_distribution<float> dis(0.0, total_p);
-  float r = dis(gen);
-
-  const KrausOperator2Q* selected = &channel.operators.back();
-  float cumulative = 0.0f;
-  for (size_t i = 0; i < channel.operators.size(); ++i) {
-    cumulative += static_cast<float>(channel.operators[i].probability);
-    if (r <= cumulative) {
-      selected = &channel.operators[i];
+    if (!isScaledUnitary2Q(op.matrix, static_cast<float>(op.probability))) {
+      all_scaled_unitary = false;
       break;
     }
   }
 
-  if (selected->probability < 1e-20) return;
+  std::vector<float> probabilities;
+  probabilities.reserve(channel.operators.size());
+  float total_p = 0.0f;
 
-  float inv_norm = 1.0f / std::sqrt(static_cast<float>(selected->probability));
+  if (all_scaled_unitary) {
+    for (const auto& op : channel.operators) {
+      float p = static_cast<float>(op.probability);
+      probabilities.push_back(p);
+      total_p += p;
+    }
+  } else {
+    // Compute 2Q RDM to get state-dependent trajectory jump probabilities: P(i) = Tr(K_i† K_i ρ)
+    auto sv = getStateVector();
+    size_t stride1 = 1ULL << q1;
+    size_t stride2 = 1ULL << q2;
+    std::array<Complex, 16> rdm{};
+    rdm.fill(Complex(0, 0));
+
+    for (size_t j = 0; j < sv.size(); ++j) {
+      if (!((j & stride1) || (j & stride2))) {
+        size_t idx[4] = {j, j | stride2, j | stride1, j | stride1 | stride2};
+        Complex amps[4] = {sv[idx[0]], sv[idx[1]], sv[idx[2]], sv[idx[3]]};
+        for (int r = 0; r < 4; ++r) {
+          for (int c = 0; c < 4; ++c) {
+            rdm[r * 4 + c] += amps[r] * std::conj(amps[c]);
+          }
+        }
+      }
+    }
+
+    for (const auto& op : channel.operators) {
+      const auto& M = op.matrix_dag_self;
+      Complex tr(0, 0);
+      for (int k = 0; k < 16; ++k) tr += M[k] * rdm[k];
+      float p = std::abs(static_cast<float>(tr.real()));
+      probabilities.push_back(p);
+      total_p += p;
+    }
+  }
+
+  if (total_p < 1e-20f) return;
+
+  static thread_local std::mt19937 gen(std::random_device{}());
+  std::uniform_real_distribution<float> dis(0.0f, total_p);
+  float r = dis(gen);
+
+  const KrausOperator2Q* selected = &channel.operators.back();
+  float selected_prob = probabilities.back();
+  float cumulative = 0.0f;
+  for (size_t i = 0; i < channel.operators.size(); ++i) {
+    cumulative += probabilities[i];
+    if (r <= cumulative) {
+      selected = &channel.operators[i];
+      selected_prob = probabilities[i];
+      break;
+    }
+  }
+
+  if (selected_prob < 1e-20f) return;
+
+  bool selected_is_unitary = isScaledUnitary2Q(selected->matrix, static_cast<float>(selected->probability));
+  float inv_norm = (all_scaled_unitary && selected_is_unitary) ? (1.0f / std::sqrt(static_cast<float>(selected->probability))) : 1.0f;
 
   // 2. Convert 4×4 Kraus matrix to Metal float format
   std::vector<MetalComplex> m(16);
@@ -533,6 +720,10 @@ void MetalBackend::applyNoiseChannel2Q(const NoiseChannel2Q& channel, size_t q1,
   dispatchWithBuffers(kraus2qPipeline_, dim / 4,
                       {{0, gpuBuffer_}},
                       {{1, &s_low, sizeof(uint32_t)}, {2, &s_high, sizeof(uint32_t)}, {3, m.data(), 16*sizeof(MetalComplex)}, {4, &inv_norm, sizeof(float)}});
+
+  if (!all_scaled_unitary) {
+    renormalizeStateVector();
+  }
 }
 
 int MetalBackend::measure(size_t target) {
