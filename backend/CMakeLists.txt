@@ -135,17 +135,13 @@ endif()
 option(ENABLE_CUDA "Enable CUDA GPU Acceleration" OFF)
 
 if(ENABLE_CUDA)
-    include(CheckLanguage)
-    check_language(CUDA)
-    if(CMAKE_CUDA_COMPILER)
-        enable_language(CUDA)
-        set(CMAKE_CUDA_ARCHITECTURES "70;75;80;86;89;90")
-        find_package(CUDAToolkit REQUIRED)
-        add_compile_definitions(ENABLE_CUDA)
-        message(STATUS "CUDA Detected. GPU Acceleration Enabled.")
-    else()
-        message(STATUS "CUDA Not Found. GPU Acceleration Disabled.")
-    endif()
+    set(ENV{CUDA_PATH_V13_3} "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.3/")
+    set(ENV{CudaToolkitDir} "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.3/")
+    set(ENV{CUDA_PATH} "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.3/")
+    find_package(CUDAToolkit REQUIRED)
+    enable_language(CUDA)
+    add_compile_definitions(ENABLE_CUDA)
+    message(STATUS "CUDA Detected. GPU Acceleration Enabled.")
 endif()
 
 # --- Metal (MacOS) ---
@@ -286,9 +282,9 @@ target_link_libraries(qubit_engine_proto
 )
 target_include_directories(qubit_engine_proto PUBLIC ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 target_compile_options(qubit_engine_proto PUBLIC
-    $<$<CXX_COMPILER_ID:MSVC>:/FIqubit_engine_proto_export.h>
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-include>
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:qubit_engine_proto_export.h>
+    $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<COMPILE_LANGUAGE:CXX>>:/FIqubit_engine_proto_export.h>
+    $<$<AND:$<NOT:$<CXX_COMPILER_ID:MSVC>>,$<COMPILE_LANGUAGE:CXX>>:-include>
+    $<$<AND:$<NOT:$<CXX_COMPILER_ID:MSVC>>,$<COMPILE_LANGUAGE:CXX>>:qubit_engine_proto_export.h>
 )
 set_target_properties(qubit_engine_proto PROPERTIES POSITION_INDEPENDENT_CODE ON WINDOWS_EXPORT_ALL_SYMBOLS ON)
 

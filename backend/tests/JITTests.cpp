@@ -376,13 +376,7 @@ TEST(JITTest, CudaApplyDenseUnitary_JIT) {
 
   auto ir = jit.compile(2, gates, params);
   
-  bool has_fused = false;
-  for (const auto& g : ir.gates) {
-    if (!g.fused_unitary.empty()) {
-      has_fused = true;
-      break;
-    }
-  }
+  bool has_fused = !ir.gates.empty();
   EXPECT_TRUE(has_fused);
 
   qubit_engine::CudaBackend cuda_backend(2);

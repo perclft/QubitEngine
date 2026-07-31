@@ -11,6 +11,10 @@
 #include <mpi.h>
 #endif
 
+#ifdef ENABLE_CUDA
+#include <cuda_runtime.h>
+#endif
+
 using Complex = qubit_engine::Complex;
 using P = qubit_engine::Precision;
 
