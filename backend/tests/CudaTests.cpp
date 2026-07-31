@@ -1,7 +1,9 @@
 #include "../src/Types.hpp"
+#include <atomic>
 #include <cmath>
 #include <complex>
 #include <gtest/gtest.h>
+#include <thread>
 #include <vector>
 
 
@@ -95,14 +97,104 @@ TEST_F(CudaBackendTest, ExpectationValue) {
 }
 
 TEST_F(CudaBackendTest, GetStateVectorAsyncStreamRaceCheck) {
-  // Simulate gate operations on the default stream
-  backend->applyHadamard(0);
-  backend->applyHadamard(1);
+  // NOTE: compute-sanitizer --tool racecheck detects shared memory races
+  // WITHIN a kernel, NOT device global memory ordering violations ACROSS
+  // streams.  The cudaEventRecord/cudaStreamWaitEvent fix prevents
+  // cross-stream RAW hazards on device_state_.  We detect this race via
+  // data-corruption: compare the async readback against the sync readback.
+  // Without the fix, the async path can copy a partially-written state,
+  // producing a mismatch.
 
-  // Call the async telemetry readback (exercises cudaEventRecord & stream sync)
-  auto state = backend->getStateVectorAsync();
-  EXPECT_EQ(state.size(), 4);
-  EXPECT_NEAR(state[0].real(), 0.5, 1e-5);
+  // 1. Use 20-qubit backend (1M amplitudes = 16 MB state)
+  delete backend;
+  backend = new CudaBackend(20);
+  const size_t dim = 1ULL << 20;
+
+  int mismatch_count = 0;
+
+  // 2. Repeatedly: dispatch a batch of gates, then compare async vs sync
+  for (int round = 0; round < 20; ++round) {
+    // Dispatch gates on the default compute stream
+    for (size_t q = 0; q < 20; ++q) {
+      backend->applyHadamard(q);
+      if (q + 1 < 20) {
+        backend->applyCNOT(q, q + 1);
+      }
+    }
+
+    // Immediately read back via the async telemetry path
+    auto async_state = backend->getStateVectorAsync();
+    // Read back via the sync path (guaranteed correct)
+    auto sync_state = backend->getStateVector();
+
+    ASSERT_EQ(async_state.size(), dim);
+    ASSERT_EQ(sync_state.size(), dim);
+
+    // Compare element-by-element
+    for (size_t i = 0; i < dim; ++i) {
+      if (std::abs(async_state[i] - sync_state[i]) > 1e-6) {
+        ++mismatch_count;
+        break; // one mismatch per round is enough
+      }
+    }
+  }
+
+  // With the fix in place, async and sync should always agree
+  EXPECT_EQ(mismatch_count, 0)
+      << "Async readback disagreed with sync readback in " << mismatch_count
+      << "/20 rounds — indicates cross-stream race (missing event sync)";
+}
+
+TEST_F(CudaBackendTest, GetStateVectorAsyncConcurrentStress) {
+  // Stress variant: a reader thread hammers getStateVectorAsync() while
+  // the main thread dispatches gates. We check the NORM INVARIANT: a
+  // valid quantum state must satisfy sum(|a_i|^2) == 1.0. A torn read
+  // from a cross-stream race would return a partially-written vector
+  // whose norm deviates from 1.0.
+
+  delete backend;
+  backend = new CudaBackend(18); // 18 qubits = 256K amplitudes
+  const size_t dim = 1ULL << 18;
+
+  std::atomic<bool> stop_reading{false};
+  std::atomic<int> read_count{0};
+  std::atomic<int> norm_violation_count{0};
+
+  std::thread reader([this, &stop_reading, &read_count, &norm_violation_count, dim]() {
+    while (!stop_reading.load(std::memory_order_relaxed)) {
+      auto state = backend->getStateVectorAsync();
+      if (state.size() == dim) {
+        double norm_sq = 0.0;
+        for (size_t i = 0; i < dim; ++i) {
+          norm_sq += std::norm(state[i]); // |a_i|^2
+        }
+        // A valid quantum state has norm == 1.0; a torn read will deviate
+        if (std::abs(norm_sq - 1.0) > 1e-3) {
+          norm_violation_count.fetch_add(1, std::memory_order_relaxed);
+        }
+      }
+      read_count.fetch_add(1, std::memory_order_relaxed);
+    }
+  });
+
+  // Main thread: heavy gate workload
+  for (int iter = 0; iter < 10; ++iter) {
+    for (size_t q = 0; q < 18; ++q) {
+      backend->applyHadamard(q);
+      if (q + 1 < 18) {
+        backend->applyCNOT(q, q + 1);
+      }
+    }
+  }
+
+  stop_reading.store(true, std::memory_order_relaxed);
+  reader.join();
+
+  EXPECT_GT(read_count.load(), 0) << "Reader thread never ran";
+  EXPECT_EQ(norm_violation_count.load(), 0)
+      << "Async readback returned non-unit-norm state "
+      << norm_violation_count.load()
+      << " times — indicates torn read from cross-stream race";
 }
 
 #endif // ENABLE_CUDA
