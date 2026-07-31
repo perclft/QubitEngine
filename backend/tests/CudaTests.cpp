@@ -94,4 +94,15 @@ TEST_F(CudaBackendTest, ExpectationValue) {
   EXPECT_NEAR(val, 0.0, 1e-5);
 }
 
+TEST_F(CudaBackendTest, GetStateVectorAsyncStreamRaceCheck) {
+  // Simulate gate operations on the default stream
+  backend->applyHadamard(0);
+  backend->applyHadamard(1);
+
+  // Call the async telemetry readback (exercises cudaEventRecord & stream sync)
+  auto state = backend->getStateVectorAsync();
+  EXPECT_EQ(state.size(), 4);
+  EXPECT_NEAR(state[0].real(), 0.5, 1e-5);
+}
+
 #endif // ENABLE_CUDA
