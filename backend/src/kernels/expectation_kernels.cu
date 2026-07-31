@@ -2,6 +2,24 @@
 #include <cuComplex.h>
 #include <cuda_runtime.h>
 
+// Portable double-precision atomicAdd for architectures < sm_60
+#if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ < 600
+__device__ static double atomicAdd_double(double* address, double val) {
+  unsigned long long int* address_as_ull = (unsigned long long int*)address;
+  unsigned long long int old = *address_as_ull, assumed;
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed,
+                    __double_as_longlong(val + __longlong_as_double(assumed)));
+  } while (assumed != old);
+  return __longlong_as_double(old);
+}
+#else
+__device__ static inline double atomicAdd_double(double* address, double val) {
+  return atomicAdd(address, val);
+}
+#endif
+
 // ---------------------------------------------------------------------------
 // Device-Side Pauli Expectation Value Reduction
 //
@@ -85,7 +103,7 @@ __global__ void kPauliExpectation(const cuDoubleComplex *state,
 
   // Thread 0 of each block atomically adds to global result
   if (tid == 0) {
-    atomicAdd(result, sdata[0]);
+    atomicAdd_double(result, sdata[0]);
   }
 }
 

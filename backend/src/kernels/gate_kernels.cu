@@ -11,6 +11,25 @@
     } \
   } while (0)
 
+// Portable double-precision atomicAdd for architectures < sm_60
+// Native atomicAdd(double*, double) requires __CUDA_ARCH__ >= 600
+#if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ < 600
+__device__ static double atomicAdd_double(double* address, double val) {
+  unsigned long long int* address_as_ull = (unsigned long long int*)address;
+  unsigned long long int old = *address_as_ull, assumed;
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed,
+                    __double_as_longlong(val + __longlong_as_double(assumed)));
+  } while (assumed != old);
+  return __longlong_as_double(old);
+}
+#else
+__device__ static inline double atomicAdd_double(double* address, double val) {
+  return atomicAdd(address, val);
+}
+#endif
+
 // Helper for complex numbers
 __device__ cuDoubleComplex add(cuDoubleComplex a, cuDoubleComplex b) {
   return make_cuDoubleComplex(cuCreal(a) + cuCreal(b), cuCimag(a) + cuCimag(b));
@@ -560,7 +579,7 @@ __global__ void kAdjointInnerProduct(const cuDoubleComplex* dpsi, const cuDouble
     cuDoubleComplex dp = dpsi[idx];
     cuDoubleComplex lam = lambda[idx];
     double re = cuCreal(lam) * cuCreal(dp) + cuCimag(lam) * cuCimag(dp); // Re(conj(lam) * dp)
-    atomicAdd(grad_out, 2.0 * re);
+    atomicAdd_double(grad_out, 2.0 * re);
   }
 }
 
