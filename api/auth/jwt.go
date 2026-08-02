@@ -44,7 +44,8 @@ func ValidateToken(tokenString string) (string, error) {
 		return "skip-auth-user", nil
 	}
 
-	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+	var claims jwt.RegisteredClaims
+	token, err := jwt.ParseWithClaims(tokenString, &claims, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
@@ -55,19 +56,16 @@ func ValidateToken(tokenString string) (string, error) {
 		return "", err
 	}
 
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		iss, err := claims.GetIssuer()
-		if err != nil || iss != "qubit-engine" {
+	if token.Valid {
+		if claims.Issuer != "qubit-engine" {
 			return "", fmt.Errorf("invalid issuer")
 		}
 		
-		aud, err := claims.GetAudience()
-		if err != nil || len(aud) == 0 || aud[0] != "qubit-engine-api" {
+		if len(claims.Audience) == 0 || claims.Audience[0] != "qubit-engine-api" {
 			return "", fmt.Errorf("invalid audience")
 		}
 
-		sub, _ := claims.GetSubject()
-		return sub, nil
+		return claims.Subject, nil
 	}
 
 	return "", fmt.Errorf("invalid token claims")

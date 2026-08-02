@@ -42,10 +42,6 @@ var (
 		Name: "qubitengine_queue_depth",
 		Help: "The current depth of the Redis jobs queue",
 	})
-	streamLagMetric = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "qubitengine_stream_lag_seconds",
-		Help: "Approximated processing lag over streams",
-	})
 )
 
 func initTracer() (*sdktrace.TracerProvider, error) {

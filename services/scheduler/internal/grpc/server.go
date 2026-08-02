@@ -168,7 +168,7 @@ func (s *SchedulerServer) ConnectEngine(ctx context.Context) error {
 		targetAddr = "dns:///" + targetAddr
 	}
 
-	conn, err := google_grpc.Dial(targetAddr,
+	conn, err := google_grpc.NewClient(targetAddr,
 		google_grpc.WithTransportCredentials(creds),
 		google_grpc.WithPerRPCCredentials(tokenAuth{token: s.engineToken}),
 		google_grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
@@ -461,14 +461,7 @@ func (s *SchedulerServer) updateJobState(ctx context.Context, jobID string, stat
 	}
 }
 
-func (s *SchedulerServer) saveJob(ctx context.Context, job *models.Job) {
-	jobBytes, err := json.Marshal(job)
-	if err != nil {
-		slog.Error("Failed to marshal job for saving", "job_id", job.ID, "error", err)
-		return
-	}
-	s.rdb.Set(ctx, "job:"+job.ID, jobBytes, 24*time.Hour)
-}
+
 
 func (s *SchedulerServer) ListJobs(ctx context.Context, req *pb.ListJobsRequest) (*pb.JobList, error) {
 	// 1. Determine pagination bounds

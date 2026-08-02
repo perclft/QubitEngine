@@ -124,3 +124,9 @@ TEST(MPSBackendTest, AdjacentTwoQubitGatesExecuteWithoutCrash) {
         mps.applySWAP(0, 1);
     });
 }
+
+TEST(MPSBackendTest, IdenticalControlAndTargetThrows) {
+    MPSBackend mps(2);
+    EXPECT_THROW(mps.applyCNOT(0, 0), std::invalid_argument);
+}
+

@@ -53,6 +53,9 @@ void MPSBackend::applySingleQubitGate(size_t target,
 
 void MPSBackend::applyTwoQubitGate(size_t q1, size_t q2,
                                    const std::vector<Complex> &matrix) {
+  if (q1 == q2) {
+    throw std::invalid_argument("Control and target qubits cannot be the same");
+  }
   if (std::abs((int)q1 - (int)q2) != 1) {
     static const std::vector<Complex> SWAP_MAT = {
         1, 0, 0, 0,

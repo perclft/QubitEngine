@@ -45,15 +45,14 @@ func main() {
 	
 	// The cluster might take a few seconds to boot up entirely.
 	for i := 0; i < 15; i++ {
-		conn, err = grpc.Dial("localhost:50053", 
+		conn, err = grpc.NewClient("localhost:50053", 
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithPerRPCCredentials(tokenAuth{token: token}),
-			grpc.WithBlock(),
 		)
 		if err == nil {
 			break
 		}
-		log.Printf("Waiting for Scheduler gRPC on port 50051... (%d/15)\n", i+1)
+		log.Printf("Waiting for Scheduler gRPC on port 50053... (%d/15)\n", i+1)
 		time.Sleep(2 * time.Second)
 	}
 	

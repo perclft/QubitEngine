@@ -117,7 +117,7 @@ class Circuit:
                     else:
                         dispatch_gate(qreg, inst, qubits, params)
                 
-                bits = format(outcome, f'0{self.num_qubits}b')[::-1] # Qiskit-style endianness
+                bits = format(outcome, f'0{self.num_qubits}b') # Qiskit-style endianness (qubit 0 is rightmost / LSB)
                 counts[bits] = counts.get(bits, 0) + 1
         else:
             # Single shot for statevector

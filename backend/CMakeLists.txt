@@ -475,6 +475,7 @@ add_executable(tests
     tests/JITPropertyTests.cpp
     tests/QECTests.cpp
     tests/NoiseAwareTranspilerTests.cpp
+    tests/SharedMemoryTests.cpp
 )
 
 # Service tests need ServiceImpl sources

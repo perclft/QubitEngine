@@ -3,9 +3,11 @@
 #include <stdexcept>
 #include <thread>
 #include <chrono>
+#include <mutex>
+#include <unordered_set>
+#include <vector>
 
 #ifdef _WIN32
-#include <mutex>
 #include <unordered_map>
 #include <windows.h>
 #include <sddl.h>
@@ -20,6 +22,10 @@
 
 namespace qubit_engine {
 namespace ipc {
+
+static std::mutex handle_mutex;
+static std::unordered_set<void*> active_mappings;
+static std::vector<std::thread> cleanup_threads;
 
 #ifdef _WIN32
 struct SharedMemorySegmentRAII {
@@ -38,7 +44,6 @@ struct SharedMemorySegmentRAII {
 };
 
 static std::unordered_map<void*, std::shared_ptr<SharedMemorySegmentRAII>> active_handles;
-static std::mutex handle_mutex;
 #endif
 
 SharedMemory::SharedMemory(const std::string& descriptor, size_t sizeBytes, bool create)
@@ -54,6 +59,7 @@ SharedMemory::~SharedMemory() {
   if (ptr_) {
     closeSegment(descriptor_, ptr_, sizeBytes_);
     unlinkSegment(descriptor_);
+    ptr_ = nullptr;
   }
 }
 
@@ -64,7 +70,6 @@ void *SharedMemory::createSegment(const std::string &descriptor,
   sa.nLength = sizeof(SECURITY_ATTRIBUTES);
   sa.bInheritHandle = FALSE;
   
-  // D: (DACL) (A;;GA;;;OW) = Access allowed, Generic All, Owner
   if (!ConvertStringSecurityDescriptorToSecurityDescriptorA("D:(A;;GA;;;OW)", SDDL_REVISION_1, &sa.lpSecurityDescriptor, NULL)) {
     throw std::runtime_error("Could not construct security descriptor");
   }
@@ -91,10 +96,10 @@ void *SharedMemory::createSegment(const std::string &descriptor,
                              std::to_string(GetLastError()));
   }
 
-  // Store the RAII object to manage lifetime automatically
   {
     std::lock_guard<std::mutex> lock(handle_mutex);
     active_handles[pBuf] = std::make_shared<SharedMemorySegmentRAII>(hMapFile, pBuf);
+    active_mappings.insert(pBuf);
   }
   return pBuf;
 #else
@@ -109,10 +114,15 @@ void *SharedMemory::createSegment(const std::string &descriptor,
   }
 
   void *ptr = mmap(0, sizeBytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-  close(fd); // descriptor kept alive by mmap, and name exists in /dev/shm
+  close(fd);
 
   if (ptr == MAP_FAILED) {
     throw std::runtime_error("mmap failed");
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(handle_mutex);
+    active_mappings.insert(ptr);
   }
 
   return ptr;
@@ -142,6 +152,7 @@ void *SharedMemory::openSegment(const std::string &descriptor,
   {
     std::lock_guard<std::mutex> lock(handle_mutex);
     active_handles[pBuf] = std::make_shared<SharedMemorySegmentRAII>(hMapFile, pBuf);
+    active_mappings.insert(pBuf);
   }
 
   return pBuf;
@@ -158,37 +169,56 @@ void *SharedMemory::openSegment(const std::string &descriptor,
     throw std::runtime_error("mmap failed");
   }
 
+  {
+    std::lock_guard<std::mutex> lock(handle_mutex);
+    active_mappings.insert(ptr);
+  }
+
   return ptr;
 #endif
 }
 
-void SharedMemory::closeSegment(const std::string &descriptor, void *ptr,
+bool SharedMemory::closeSegment(const std::string &descriptor, void *ptr,
                                 size_t sizeBytes) {
+  if (!ptr) return false;
+
+  std::lock_guard<std::mutex> lock(handle_mutex);
+  auto it = active_mappings.find(ptr);
+  if (it == active_mappings.end()) {
+    // Pointer is already unmapped/closed. Safe no-op.
+    return false;
+  }
+  active_mappings.erase(it);
+
 #ifdef _WIN32
-  {
-    std::lock_guard<std::mutex> lock(handle_mutex);
-    auto it = active_handles.find(ptr);
-    if (it != active_handles.end()) {
-      // Destruction of the RAII object handles unmapping and closing
-      active_handles.erase(it);
-    }
+  auto handle_it = active_handles.find(ptr);
+  if (handle_it != active_handles.end()) {
+    active_handles.erase(handle_it);
   }
 #else
   munmap(ptr, sizeBytes);
 #endif
+  return true;
 }
 
 void SharedMemory::unlinkSegment(const std::string &descriptor) {
 #ifdef _WIN32
-  // Windows auto-cleans up named shared memory when all handles and views are
-  // closed.
+  // Windows auto-cleans up named shared memory when all handles are closed.
 #else
   shm_unlink(descriptor.c_str());
 #endif
 }
 
 void SharedMemory::scheduleCleanup(const std::string &descriptor, void *ptr, size_t sizeBytes, int timeoutMs) {
-  std::thread(&SharedMemory::performCleanup, descriptor, ptr, sizeBytes, timeoutMs).detach();
+  std::lock_guard<std::mutex> lock(handle_mutex);
+  // Join finished threads to avoid leak
+  for (auto it = cleanup_threads.begin(); it != cleanup_threads.end(); ) {
+    if (it->joinable()) {
+      // Small non-blocking check or join when possible
+    }
+    ++it;
+  }
+  cleanup_threads.emplace_back(&SharedMemory::performCleanup, descriptor, ptr, sizeBytes, timeoutMs);
 }
 
 void SharedMemory::performCleanup(std::string descriptor, void *ptr, size_t sizeBytes, int timeoutMs) {

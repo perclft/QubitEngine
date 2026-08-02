@@ -84,7 +84,7 @@ const getRegistryClient = async () => {
 const getMetadata = async () => {
   const meta = new grpc.Metadata();
   const cookieStore = await cookies();
-  const token = cookieStore.get('auth_token')?.value || process.env.QUBIT_ENGINE_AUTH_TOKEN || "default-secret-token";
+  const token = process.env.QUBIT_ENGINE_AUTH_TOKEN || cookieStore.get('auth_token')?.value || "default-secret-token";
   meta.add('authorization', `Bearer ${token}`);
   return meta;
 };

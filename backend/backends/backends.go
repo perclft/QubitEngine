@@ -255,45 +255,6 @@ func (b *RigettiBackend) Provider() string  { return "Rigetti" }
 func (b *RigettiBackend) MaxQubits() int    { return 80 }
 func (b *RigettiBackend) IsSimulator() bool { return false }
 
-func (b *RigettiBackend) circuitToQuil(circuit *Circuit) string {
-	quil := ""
-	for _, gate := range circuit.Gates {
-		gateName := b.gateNameToQuil(gate.Name)
-		if len(gate.Params) > 0 {
-			quil += fmt.Sprintf("%s(", gateName)
-			for i, p := range gate.Params {
-				if i > 0 { quil += ", " }
-				quil += fmt.Sprintf("%f", p)
-			}
-			quil += ") "
-		} else {
-			quil += gateName + " "
-		}
-		for _, q := range gate.Qubits {
-			quil += fmt.Sprintf("%d ", q)
-		}
-		quil += "\n"
-	}
-	
-	for i := 0; i < circuit.NumQubits; i++ {
-		quil += fmt.Sprintf("MEASURE %d ro[%d]\n", i, i)
-	}
-	
-	return quil
-}
-
-func (b *RigettiBackend) gateNameToQuil(name string) string {
-	mapping := map[string]string{
-		"H": "H", "X": "X", "Y": "Y", "Z": "Z",
-		"CNOT": "CNOT", "CZ": "CZ", "SWAP": "SWAP",
-		"RX": "RX", "RY": "RY", "RZ": "RZ",
-	}
-	if mapped, ok := mapping[name]; ok {
-		return mapped
-	}
-	return name
-}
-
 func (b *RigettiBackend) Submit(ctx context.Context, circuit *Circuit) (string, error) {
 	return "rigetti-job-" + fmt.Sprint(time.Now().UnixNano()), nil
 }
@@ -341,38 +302,6 @@ func (b *IonQBackend) Name() string      { return b.target }
 func (b *IonQBackend) Provider() string  { return "IonQ" }
 func (b *IonQBackend) MaxQubits() int    { return 32 }
 func (b *IonQBackend) IsSimulator() bool { return b.target == "simulator" }
-
-func (b *IonQBackend) circuitToIonQ(circuit *Circuit) map[string]any {
-	gates := make([]map[string]any, 0, len(circuit.Gates))
-	
-	for _, gate := range circuit.Gates {
-		g := map[string]any{
-			"gate":    b.gateNameToIonQ(gate.Name),
-			"targets": gate.Qubits,
-		}
-		if len(gate.Params) > 0 {
-			g["rotation"] = gate.Params[0]
-		}
-		gates = append(gates, g)
-	}
-	
-	return map[string]any{
-		"qubits": circuit.NumQubits,
-		"circuit": gates,
-	}
-}
-
-func (b *IonQBackend) gateNameToIonQ(name string) string {
-	mapping := map[string]string{
-		"H": "h", "X": "x", "Y": "y", "Z": "z",
-		"CNOT": "cnot", "CZ": "zz", "SWAP": "swap",
-		"RX": "rx", "RY": "ry", "RZ": "rz",
-	}
-	if mapped, ok := mapping[name]; ok {
-		return mapped
-	}
-	return name
-}
 
 func (b *IonQBackend) Submit(ctx context.Context, circuit *Circuit) (string, error) {
 	return "ionq-job-" + fmt.Sprint(time.Now().UnixNano()), nil

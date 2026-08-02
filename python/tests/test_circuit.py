@@ -55,3 +55,14 @@ def test_noise_models():
     
     # Normally without noise, "1" is 100%. With noise, "0" should appear sometimes.
     assert "0" in counts or "1" in counts
+
+def test_asymmetric_bit_ordering():
+    # Qubit 1 is set to 1, Qubit 0 is set to 0
+    # In Qiskit endianness ("q1 q0"), qubit 0 is LSB (rightmost), qubit 1 is MSB (leftmost)
+    # The output string MUST be "10", not "01"
+    circuit = qe.Circuit(2)
+    circuit.x(1)
+    circuit.measure_all()
+    result = circuit.run(shots=100, backend="cpu")
+    assert result.counts == {"10": 100}
+

@@ -186,7 +186,7 @@ func TestFullStackIntegration(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// 5. Connect and Test
-	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", schedulerPort),
+	conn, err := grpc.NewClient(fmt.Sprintf("127.0.0.1:%d", schedulerPort),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithPerRPCCredentials(tokenAuth{token: testToken}),
 	)

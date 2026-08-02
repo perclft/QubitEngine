@@ -27,7 +27,7 @@ func ConnectToEngine(address string) (*grpc.ClientConn, pb.QuantumComputeClient,
 		creds = grpc.WithTransportCredentials(insecure.NewCredentials())
 	}
 
-	conn, err := grpc.Dial(address, creds)
+	conn, err := grpc.NewClient(address, creds)
 	if err != nil {
 		log.Printf("⚠️ Failed to connect to engine at %s: %v", address, err)
 		return nil, nil, fmt.Errorf("failed to connect to engine: %w", err)

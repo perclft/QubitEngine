@@ -264,6 +264,18 @@ kubectl apply -f deploy/k8s/namespace.yaml
 kubectl apply -f deploy/k8s/
 ```
 
+## ⚠️ Known Limitations & Architectural Roadmap
+
+The following status accurately reflects verified capabilities vs. planned roadmap items:
+
+- **Hardware Acceleration Coverage**: Explicit AVX2 (`__m256d`) and ARM NEON (`float64x2_t`) vector intrinsics are implemented in `applyHadamard` ([CpuBackend.cpp](file:///c:/Users/percl/projects/QubitEngine/backend/src/backends/CpuBackend.cpp)). Other gate kernels rely on scalar loops combined with OpenMP thread parallelization and compiler auto-vectorization.
+- **Multi-GPU Distributed Memory Scaling**: `CudaBackend::applyGateDistributed` currently uses `ncclAllGather` to replicate the full state vector across all GPUs during gate execution. Each GPU must possess sufficient VRAM for the full $2^N$ state vector. A point-to-point (P2P) boundary exchange architecture is planned for future memory-scalable multi-GPU execution.
+- **Shared-Memory IPC**: POSIX/Windows shared memory mapping utilities (`ipc::SharedMemory`) exist in C++ with RAII handle tracking, but RPC paths between Go services and the C++ engine use standard gRPC serialization over network interfaces.
+- **Cloud Backend Submissions**: `RigettiBackend` and `IonQBackend` in the Go backend package currently return mock job IDs. Cloud payload translation (Quil / IonQ JSON) is planned for direct QPU API integration.
+- **Autoscaling Metrics**: Core Redis queue depth metrics are active; additional stream processing lag gauges (`streamLagMetric`) are planned for future mesh metrics integration.
+- **gRPC API Connection Standard**: All Go microservices, integration tests, and client connection helpers are fully migrated to `grpc.NewClient` (gRPC 1.0.4+).
+
 ## 📄 License
 
 This project is licensed under the MIT License.
+

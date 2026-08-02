@@ -132,7 +132,7 @@ func TestSchedulerIntegration(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// 5. Connect to Scheduler
-	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", schedulerPort),
+	conn, err := grpc.NewClient(fmt.Sprintf("localhost:%d", schedulerPort),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithPerRPCCredentials(tokenAuth{token: testAuthToken}),
 	)
@@ -254,7 +254,7 @@ func TestRateLimiting(t *testing.T) {
 	defer cmdRun.Process.Kill()
 	time.Sleep(2 * time.Second)
 
-	conn, _ := grpc.Dial(fmt.Sprintf("localhost:%d", schedulerPort),
+	conn, _ := grpc.NewClient(fmt.Sprintf("localhost:%d", schedulerPort),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithPerRPCCredentials(tokenAuth{token: testAuthToken}),
 	)
