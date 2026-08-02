@@ -185,11 +185,12 @@ pub async fn run_circuit(server_addr: String, circuit_path: String, tx: mpsc::Se
         }
 
         // Drain and perform exactly K string allocations (deferred formatting)
+        let num_qubits = circuit.qubits as usize;
         let mut probs: Vec<(String, u64)> = heap
             .drain()
             .map(|Reverse((bits, index))| {
                 (
-                    format!("|{}>", index),
+                    format_basis_state(index, num_qubits),
                     (f64::from_bits(bits) * 100.0) as u64,
                 )
             })
@@ -334,3 +335,20 @@ pub async fn get_topology(server_addr: String, tx: mpsc::Sender<AppEvent>) {
         }
     }
 }
+
+pub fn format_basis_state(index: usize, num_qubits: usize) -> String {
+    format!("|{:0width$b}>", index, width = num_qubits)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_basis_state() {
+        assert_eq!(format_basis_state(3, 3), "|011>");
+        assert_eq!(format_basis_state(0, 2), "|00>");
+        assert_eq!(format_basis_state(7, 3), "|111>");
+    }
+}
+

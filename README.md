@@ -274,6 +274,8 @@ The following status accurately reflects verified capabilities vs. planned roadm
 - **Cloud Backend Submissions**: `RigettiBackend` and `IonQBackend` in the Go backend package currently return mock job IDs. Cloud payload translation (Quil / IonQ JSON) is planned for direct QPU API integration.
 - **Autoscaling Metrics**: Core Redis queue depth metrics are active; additional stream processing lag gauges (`streamLagMetric`) are planned for future mesh metrics integration.
 - **gRPC API Connection Standard**: All Go microservices, integration tests, and client connection helpers are fully migrated to `grpc.NewClient` (gRPC 1.0.4+).
+- **Cache Microservice Resilience**: `services/cache` updates hit counts asynchronously in Redis with fallback logging to prevent read requests from failing on transient storage write errors.
+- **TUI State Representation**: `cli-rs` streams basis state probabilities as binary strings (`|0...0>`) matched to the target circuit qubit width.
 
 ## 📄 License
 
