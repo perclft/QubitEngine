@@ -25,7 +25,6 @@ namespace ipc {
 
 static std::mutex handle_mutex;
 static std::unordered_set<void*> active_mappings;
-static std::vector<std::thread> cleanup_threads;
 
 #ifdef _WIN32
 struct SharedMemorySegmentRAII {
@@ -210,15 +209,8 @@ void SharedMemory::unlinkSegment(const std::string &descriptor) {
 }
 
 void SharedMemory::scheduleCleanup(const std::string &descriptor, void *ptr, size_t sizeBytes, int timeoutMs) {
-  std::lock_guard<std::mutex> lock(handle_mutex);
-  // Join finished threads to avoid leak
-  for (auto it = cleanup_threads.begin(); it != cleanup_threads.end(); ) {
-    if (it->joinable()) {
-      // Small non-blocking check or join when possible
-    }
-    ++it;
-  }
-  cleanup_threads.emplace_back(&SharedMemory::performCleanup, descriptor, ptr, sizeBytes, timeoutMs);
+  std::thread t(&SharedMemory::performCleanup, descriptor, ptr, sizeBytes, timeoutMs);
+  t.detach();
 }
 
 void SharedMemory::performCleanup(std::string descriptor, void *ptr, size_t sizeBytes, int timeoutMs) {
