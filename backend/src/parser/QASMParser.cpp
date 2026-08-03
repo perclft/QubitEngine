@@ -434,6 +434,7 @@ std::shared_ptr<ASTReset> QASMParser::parseReset() {
 }
 
 std::shared_ptr<ASTBlock> QASMParser::parseBlock() {
+    RecursionGuard guard(recursion_depth_);
     auto block = std::make_shared<ASTBlock>();
     consume(Token::PUNCTUATION, "{", "Expected '{'");
     while (!isAtEnd() && !(peek().type == Token::PUNCTUATION && peek().value == "}")) {
@@ -445,6 +446,7 @@ std::shared_ptr<ASTBlock> QASMParser::parseBlock() {
 }
 
 std::shared_ptr<ASTIfStmt> QASMParser::parseIfStmt() {
+    RecursionGuard guard(recursion_depth_);
     auto if_stmt = std::make_shared<ASTIfStmt>();
     consume(Token::PUNCTUATION, "(", "Expected '('");
     if_stmt->condition_var = advance().value;
@@ -479,6 +481,7 @@ std::shared_ptr<ASTIfStmt> QASMParser::parseIfStmt() {
 }
 
 std::shared_ptr<ASTGateDefinition> QASMParser::parseGateDefinition() {
+    RecursionGuard guard(recursion_depth_);
     auto def = std::make_shared<ASTGateDefinition>();
     def->name = advance().value;
     if (match(Token::PUNCTUATION, "(")) {
