@@ -248,3 +248,67 @@ func TestDeleteCircuit(t *testing.T) {
 	}
 }
 
+func TestForkCircuit_RollbackOnSecondStepFailure(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	server := NewRegistryServer(db)
+	ctx := context.WithValue(context.Background(), ownerIDKey, "test-user-id")
+	sourceID := "source-circuit-123"
+
+	mockCircuit := api.CircuitRequest{
+		NumQubits: 2,
+		Operations: []*api.GateOperation{
+			{Type: api.GateOperation_PAULI_X, TargetQubit: 0},
+		},
+	}
+	circuitJSON, _ := json.Marshal(mockCircuit)
+
+	// 1. Mock LoadCircuit (SELECT + UPDATE run_count)
+	mock.ExpectQuery("SELECT circuit_json, is_public, owner_id FROM circuits WHERE id = \\$1").
+		WithArgs(sourceID).
+		WillReturnRows(sqlmock.NewRows([]string{"circuit_json", "is_public", "owner_id"}).AddRow(string(circuitJSON), true, "test-user-id"))
+
+	mock.ExpectExec("UPDATE circuits SET run_count = run_count \\+ 1 WHERE id = \\$1").
+		WithArgs(sourceID).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	// 2. Mock Begin Transaction
+	mock.ExpectBegin()
+
+	// 3. Mock Step 1: INSERT new circuit (Succeeds)
+	mock.ExpectExec("INSERT INTO circuits").
+		WithArgs(sqlmock.AnyArg(), "Forked Name", regexp.QuoteMeta("Forked from "+sourceID), "test-user-id", "general", "null", 2, 1, sqlmock.AnyArg(), true, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	// 4. Mock Step 2: UPDATE fork_count (FAILS deliberately!)
+	mock.ExpectExec("UPDATE circuits SET fork_count = fork_count \\+ 1 WHERE id = \\$1").
+		WithArgs(sourceID).
+		WillReturnError(sql.ErrConnDone) // Simulating DB connection / query failure
+
+	// 5. Mock Rollback (Transaction MUST roll back!)
+	mock.ExpectRollback()
+
+	req := &pb.ForkCircuitRequest{
+		SourceCircuitId: sourceID,
+		NewName:         "Forked Name",
+	}
+
+	meta, err := server.ForkCircuit(ctx, req)
+
+	// Assertions
+	if err == nil {
+		t.Fatalf("expected error from failed second step, got success meta: %v", meta)
+	}
+	if meta != nil {
+		t.Errorf("expected nil metadata on transaction failure, got: %v", meta)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations (rollback was not executed as expected): %s", err)
+	}
+}
+

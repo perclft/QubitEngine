@@ -117,7 +117,21 @@ std::shared_ptr<ASTProgram> QASMParser::parse() {
     return program;
 }
 
+struct RecursionGuard {
+    size_t& depth;
+    RecursionGuard(size_t& d) : depth(d) {
+        depth++;
+        if (depth > 100) {
+            throw std::runtime_error("QASM Parse Error: maximum nesting depth exceeded (100)");
+        }
+    }
+    ~RecursionGuard() {
+        if (depth > 0) depth--;
+    }
+};
+
 std::shared_ptr<ASTNode> QASMParser::parseStatement() {
+    RecursionGuard guard(recursion_depth_);
     if (match(Token::KEYWORD, "include")) {
         while (!isAtEnd() && (peek().type != Token::PUNCTUATION || peek().value != ";")) {
             advance();
@@ -193,14 +207,22 @@ std::shared_ptr<ASTQRegDecl> QASMParser::parseQReg() {
     if (peek().type == Token::PUNCTUATION && peek().value == "[") {
         // qubit[size] name;
         consume(Token::PUNCTUATION, "[", "Expected '['");
-        decl->size = std::stoi(advance().value);
+        int sz = std::stoi(advance().value);
+        if (sz <= 0 || sz > 10000) {
+            throw std::runtime_error("QASM Parse Error: qubit register size out of bounds (1..10000)");
+        }
+        decl->size = sz;
         consume(Token::PUNCTUATION, "]", "Expected ']'");
         decl->name = advance().value;
     } else {
         // qreg name[size];
         decl->name = advance().value;
         consume(Token::PUNCTUATION, "[", "Expected '['");
-        decl->size = std::stoi(advance().value);
+        int sz = std::stoi(advance().value);
+        if (sz <= 0 || sz > 10000) {
+            throw std::runtime_error("QASM Parse Error: qubit register size out of bounds (1..10000)");
+        }
+        decl->size = sz;
         consume(Token::PUNCTUATION, "]", "Expected ']'");
     }
     consume(Token::PUNCTUATION, ";", "Expected ';'");
@@ -212,14 +234,22 @@ std::shared_ptr<ASTCRegDecl> QASMParser::parseCReg() {
     if (peek().type == Token::PUNCTUATION && peek().value == "[") {
         // bit[size] name;
         consume(Token::PUNCTUATION, "[", "Expected '['");
-        decl->size = std::stoi(advance().value);
+        int sz = std::stoi(advance().value);
+        if (sz <= 0 || sz > 10000) {
+            throw std::runtime_error("QASM Parse Error: classical register size out of bounds (1..10000)");
+        }
+        decl->size = sz;
         consume(Token::PUNCTUATION, "]", "Expected ']'");
         decl->name = advance().value;
     } else {
         // creg name[size];
         decl->name = advance().value;
         consume(Token::PUNCTUATION, "[", "Expected '['");
-        decl->size = std::stoi(advance().value);
+        int sz = std::stoi(advance().value);
+        if (sz <= 0 || sz > 10000) {
+            throw std::runtime_error("QASM Parse Error: classical register size out of bounds (1..10000)");
+        }
+        decl->size = sz;
         consume(Token::PUNCTUATION, "]", "Expected ']'");
     }
     consume(Token::PUNCTUATION, ";", "Expected ';'");
@@ -303,6 +333,10 @@ private:
 };
 
 std::shared_ptr<ASTGateCall> QASMParser::parseGateCall() {
+    gate_count_++;
+    if (gate_count_ > 1000000) {
+        throw std::runtime_error("QASM Parse Error: maximum gate count exceeded (1,000,000)");
+    }
     auto call = std::make_shared<ASTGateCall>();
     call->gate_name = advance().value;
     

@@ -100,7 +100,15 @@ func InitDB(db *sql.DB) error {
 }
 
 // SaveCircuit saves a new circuit to the registry
+type dbExecer interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+}
+
 func (s *RegistryServer) SaveCircuit(ctx context.Context, req *pb.SaveCircuitRequest) (*pb.CircuitMetadata, error) {
+	return s.saveCircuitExec(ctx, s.db, req)
+}
+
+func (s *RegistryServer) saveCircuitExec(ctx context.Context, exec dbExecer, req *pb.SaveCircuitRequest) (*pb.CircuitMetadata, error) {
 	ownerID, ok := ctx.Value(ownerIDKey).(string)
 	if !ok || ownerID == "" {
 		return nil, status.Error(codes.Unauthenticated, "missing user identity")
@@ -117,7 +125,7 @@ func (s *RegistryServer) SaveCircuit(ctx context.Context, req *pb.SaveCircuitReq
 
 	tagsJSON, _ := json.Marshal(req.Tags)
 
-	_, err = s.db.ExecContext(ctx, `
+	_, err = exec.ExecContext(ctx, `
 		INSERT INTO circuits (id, name, description, owner_id, domain, tags, num_qubits, num_operations, circuit_json, is_public, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`,
@@ -269,8 +277,6 @@ func (s *RegistryServer) ListCircuits(ctx context.Context, req *pb.ListCircuitsR
 		PageSize:   int32(pageSize),
 	}, nil
 }
-
-// ForkCircuit creates a copy of an existing circuit
 func (s *RegistryServer) ForkCircuit(ctx context.Context, req *pb.ForkCircuitRequest) (*pb.CircuitMetadata, error) {
 	// Load original
 	original, err := s.LoadCircuit(ctx, &pb.LoadCircuitRequest{CircuitId: req.SourceCircuitId, Version: 0})
@@ -278,8 +284,14 @@ func (s *RegistryServer) ForkCircuit(ctx context.Context, req *pb.ForkCircuitReq
 		return nil, err
 	}
 
-	// Save as new
-	newMeta, err := s.SaveCircuit(ctx, &pb.SaveCircuitRequest{
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback()
+
+	// Save as new within transaction
+	newMeta, err := s.saveCircuitExec(ctx, tx, &pb.SaveCircuitRequest{
 		Name:        req.NewName,
 		Description: fmt.Sprintf("Forked from %s", req.SourceCircuitId),
 		Circuit:     original,
@@ -290,10 +302,24 @@ func (s *RegistryServer) ForkCircuit(ctx context.Context, req *pb.ForkCircuitReq
 		return nil, err
 	}
 
-	// Increment fork count on original
-	s.db.ExecContext(ctx, `UPDATE circuits SET fork_count = fork_count + 1 WHERE id = $1`, req.SourceCircuitId)
+	// Increment fork count on original within transaction
+	if err := s.updateForkCountTx(ctx, tx, req.SourceCircuitId); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to commit transaction: %v", err)
+	}
 
 	return newMeta, nil
+}
+
+func (s *RegistryServer) updateForkCountTx(ctx context.Context, exec dbExecer, sourceID string) error {
+	_, err := exec.ExecContext(ctx, `UPDATE circuits SET fork_count = fork_count + 1 WHERE id = $1`, sourceID)
+	if err != nil {
+		return status.Errorf(codes.Internal, "failed to update fork count: %v", err)
+	}
+	return nil
 }
 
 // DeleteCircuit removes a circuit from the registry

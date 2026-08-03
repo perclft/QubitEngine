@@ -30,6 +30,8 @@ public:
 private:
     std::vector<Token> tokens_;
     size_t current_ = 0;
+    size_t recursion_depth_ = 0;
+    size_t gate_count_ = 0;
 
     void tokenize(const std::string& source);
     Token advance();

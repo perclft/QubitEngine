@@ -37,6 +37,16 @@ TEST(QASMParserTest, ParseQubitDeclaration) {
   EXPECT_EQ(circuit.qubit_map["q[3]"], 3);
 }
 
+TEST(QASMParserTest, OversizedQubitDeclarationThrows) {
+  QASMParser parser;
+  std::string code = R"(
+    OPENQASM 3.0;
+    qubit[2000000000] q;
+  )";
+
+  EXPECT_THROW(parser.parse(code), std::runtime_error);
+}
+
 TEST(QASMParserTest, ParseBasicGates) {
   QASMParser parser;
   std::string code = R"(

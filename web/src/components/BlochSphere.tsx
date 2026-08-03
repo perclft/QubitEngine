@@ -38,9 +38,28 @@ const BlochVector = ({ theta = 0, phi = 0, animating = false }: BlochSphereProps
     }
   });
 
+  const arrowHelper = useMemo(() => new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 1.2, 0x8b5cf6, 0.2, 0.1), []);
+
+  React.useEffect(() => {
+    return () => {
+      arrowHelper.line.geometry.dispose();
+      if (Array.isArray(arrowHelper.line.material)) {
+        arrowHelper.line.material.forEach((m) => m.dispose());
+      } else {
+        arrowHelper.line.material.dispose();
+      }
+      arrowHelper.cone.geometry.dispose();
+      if (Array.isArray(arrowHelper.cone.material)) {
+        arrowHelper.cone.material.forEach((m) => m.dispose());
+      } else {
+        arrowHelper.cone.material.dispose();
+      }
+    };
+  }, [arrowHelper]);
+
   return (
     <primitive
-      object={useMemo(() => new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 1.2, 0x8b5cf6, 0.2, 0.1), [])}
+      object={arrowHelper}
       ref={arrowRef}
     />
   );

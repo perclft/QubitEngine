@@ -66,3 +66,33 @@ def test_asymmetric_bit_ordering():
     result = circuit.run(shots=100, backend="cpu")
     assert result.counts == {"10": 100}
 
+def test_concurrent_gil_release():
+    import threading
+    import time
+    from qubit_engine import core
+
+    sc = core.SurfaceCode(5)
+    
+    thread2_counter = [0]
+    is_running = [True]
+
+    def background_worker():
+        while is_running[0]:
+            thread2_counter[0] += 1
+
+    t2 = threading.Thread(target=background_worker)
+    t2.start()
+
+    # Thread 1: Calls long C++ simulation with GIL released
+    start_time = time.time()
+    result = sc.simulate(5000, 0.01)
+    elapsed = time.time() - start_time
+
+    is_running[0] = False
+    t2.join()
+
+    # Confirm (a) no crash/corruption and (b) Thread 2 made progress while Thread 1 ran in C++
+    assert isinstance(result, bool)
+    assert thread2_counter[0] > 1000, f"Thread 2 counter = {thread2_counter[0]}, expected > 1000 proving GIL was released"
+
+

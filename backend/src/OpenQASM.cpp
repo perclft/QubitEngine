@@ -20,6 +20,9 @@ QASMCircuit QASMParser::parse(const std::string &qasm_code) {
 
   auto process_stmt = [&](const std::shared_ptr<qubit_engine::parser::ASTNode>& stmt, const std::string& cond_var, int cond_val, auto& self) -> void {
       if (auto qreg = std::dynamic_pointer_cast<qubit_engine::parser::ASTQRegDecl>(stmt)) {
+          if (qreg->size <= 0 || qreg->size > 10000) {
+              throw std::runtime_error("OpenQASM error: qreg size exceeds max allowed limit (10000)");
+          }
           for (int i = 0; i < qreg->size; ++i) {
               circuit.qubit_map[qreg->name + "[" + std::to_string(i) + "]"] = circuit.num_qubits++;
           }

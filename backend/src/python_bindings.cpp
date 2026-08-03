@@ -252,8 +252,11 @@ PYBIND11_MODULE(core, m) {
 
         // Calculate Energy
         double energy = 0.0;
-        for (const auto &term : hamiltonian) {
-          energy += term.coefficient * qreg.expectationValue(term.pauli_string);
+        {
+          py::gil_scoped_release release;
+          for (const auto &term : hamiltonian) {
+            energy += term.coefficient * qreg.expectationValue(term.pauli_string);
+          }
         }
         return energy;
       },
@@ -556,7 +559,8 @@ PYBIND11_MODULE(core, m) {
 
   py::class_<qubit_engine::SurfaceCode>(m, "SurfaceCode")
       .def(py::init<int, qubit_engine::DecoderType>(), py::arg("distance"), py::arg("decoder_type") = qubit_engine::DecoderType::MWPM)
-      .def("simulate", &qubit_engine::SurfaceCode::simulate, 
+      .def("simulate", &qubit_engine::SurfaceCode::simulate,
+           py::call_guard<py::gil_scoped_release>(),
            py::arg("num_rounds"), py::arg("noise_probability"),
            "Simulate surface code for num_rounds with given physical depolarizing noise_probability. Returns True if logical state was preserved.")
       .def("extract_syndromes_tensor", [](qubit_engine::SurfaceCode& sc, double p) {
@@ -583,7 +587,8 @@ PYBIND11_MODULE(core, m) {
 
   py::class_<qubit_engine::ColorCode>(m, "ColorCode")
       .def(py::init<int, qubit_engine::DecoderType>(), py::arg("distance"), py::arg("decoder_type") = qubit_engine::DecoderType::MWPM)
-      .def("simulate", &qubit_engine::ColorCode::simulate, 
+      .def("simulate", &qubit_engine::ColorCode::simulate,
+           py::call_guard<py::gil_scoped_release>(),
            py::arg("num_rounds"), py::arg("noise_probability"),
            "Simulate color code.")
       .def("extract_syndromes_tensor", [](qubit_engine::ColorCode& cc, double p) {

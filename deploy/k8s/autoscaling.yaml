@@ -2,7 +2,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: quantum-engine-hpa
-  namespace: quantumcloud
+  namespace: quantum-system
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -67,7 +67,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: quantum-scheduler-hpa
-  namespace: quantumcloud
+  namespace: quantum-system
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -107,12 +107,12 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: quantum-registry-hpa
-  namespace: quantumcloud
+  namespace: quantum-system
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: quantum-registry
+    name: circuit-registry
   minReplicas: 2
   maxReplicas: 5
   metrics:
