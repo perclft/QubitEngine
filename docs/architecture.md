@@ -41,18 +41,18 @@ QubitEngine is a multi-language quantum simulation platform with five major laye
 
 ## Backend Selection
 
-`QuantumRegister` acts as a proxy that creates the appropriate backend at construction time. The selection logic in `QuantumRegister.cpp` follows this priority chain:
+`QuantumRegister` acts as a proxy that creates the appropriate backend at construction time. The selection logic in `BackendFactory.cpp` follows this priority chain:
 
-1. **Cloud** — Remote execution offloading
-2. **MPS (Tensor Network)** — Simulates > 50 qubits for weakly entangled logic using SVD Truncation
-3. **CUDA** — Multi-GPU Tensor Sharding & Async Streams via NCCL
-4. **CPU** — Default fallback with AVX2/NEON + OpenMP
+1. **Cloud** — Remote execution offloading stub (`CloudBackend`).
+2. **MPS (Tensor Network)** — Simulates 30+ qubits (and up to 50+ qubits for weakly entangled 1D circuits) using SVD truncation with configurable bond dimension (default $\chi=64$).
+3. **CUDA** — GPU acceleration. Multi-GPU execution via `CudaBackend::applyGateDistributed` replicates the full $2^N$ state vector across GPUs via `ncclAllGather` (each GPU must possess sufficient VRAM for the full state vector).
+4. **CPU** — Default fallback with explicit AVX2 (`__m256d`) and ARM NEON (`float64x2_t`) vector intrinsics for `applyHadamard`, combined with OpenMP thread parallelization and scalar loops for remaining gates.
 
 The `force_local` constructor parameter bypasses distributed (MPI) execution, useful for gradient calculations where each parameter evaluation needs an independent register.
 
 ## JIT Compiler Optimization Tiers
 
-The `QuantumJIT` compiler operates on `CircuitIR` (intermediate representation) and implements an LRU hashing layer to cache topological identical circuit passes entirely. It also operates on an independent thread, fusing arrays concurrently alongside active GPU hardware executions.
+The `QuantumJIT` compiler operates synchronously on `CircuitIR` (intermediate representation) during compilation and implements an in-memory LRU hashing layer (`ir_cache_map_` protected by `cache_mutex_`) to cache topologically identical circuit optimization passes.
 
 It features five optimization levels:
 
@@ -117,7 +117,7 @@ Defined in `api/proto/quantum.proto`:
 | `VisualizeCircuit` | Server Stream | Execute circuit, stream state after each step |
 | `RunVQE` | Server Stream | Run VQE optimization, stream energy per iteration |
 
-> **Note**: `StateResponse` objects support `shm_descriptor` string mappings, allowing Go sidecars and Python processes to map the raw zero-copy `2^N` Floats natively from OS paging memory rather than serializing arrays over protobuf sockets.
+> **Note**: POSIX/Windows shared memory mapping utilities (`ipc::SharedMemory`) exist in C++ with RAII handle tracking, but RPC paths between Go services and the C++ engine use standard gRPC serialization over network interfaces.
 
 Defined in `api/proto/scheduler.proto`:
 
@@ -131,8 +131,8 @@ Defined in `api/proto/scheduler.proto`:
 
 ## Hardware & Distributed Scaling
 
-- **Predictive Autoscaling Mesh**: The Go `Scheduler` mounts a `:2112/metrics` endpoint exposing `queue:jobs` depth mappings directly into Prometheus. The K8s auto-scaler uses this to dynamically scale backend deployments globally ahead of congestion.
-- **Python Zero-Copy Buffers**: The `core.get_state_vector()` and `get_probabilities()` C++ endpoints bind utilizing `pybind11::buffer_info`, anchoring C++ RAM allocation lifecycles actively inside NumPy preventing memory duplications.
+- **Autoscaling & Metrics Integration**: The Go `Scheduler` service mounts a `:2112/metrics` endpoint exposing `quantum_job_queue_depth` metrics directly into Prometheus, allowing Kubernetes HorizontalPodAutoscalers (HPA) to scale backend deployments based on active queue workload.
+- **Python Zero-Copy Buffers**: The `core.get_state_vector()` and `get_probabilities()` C++ endpoints bind utilizing `pybind11::capsule` memory management, passing C++ vector data directly to NumPy array capsules to prevent unnecessary array copying.
 
 ## Differentiator Methods
 
@@ -147,3 +147,11 @@ Defined in `api/proto/scheduler.proto`:
 - **Helm Chart** (`deploy/helm/`): Kubernetes deployment with configurable replicas, resource limits, and service discovery
 - **Kubernetes Manifests** (`deploy/k8s/`): Raw manifests for namespace, services, deployments, and PVCs
 - **Envoy** (`deploy/docker/envoy.yaml`): gRPC-Web transcoding for browser clients
+
+## 🔮 Planned / Roadmap Items
+
+The following features represent architectural roadmap targets for future releases:
+
+1. **Memory-Sharded Multi-GPU Execution**: Replacing `ncclAllGather` full-state replication with a point-to-point (P2P) boundary exchange model to shard large state vectors across GPU VRAM.
+2. **Zero-Copy gRPC Shared Memory Integration**: Wiring C++ `ipc::SharedMemory` descriptors into active Go gRPC sidecar RPC payloads.
+3. **QPU Cloud Backend Payload Serialization**: Translating circuit IR into native Quil (Rigetti) and IonQ JSON payloads for active hardware execution.
