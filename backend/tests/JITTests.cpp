@@ -8,6 +8,7 @@
 #include "../src/QuantumRegister.hpp"
 #include <Eigen/Dense>
 #include <array>
+#include <thread>
 #include <gtest/gtest.h>
 
 using namespace qubit_engine::jit;
