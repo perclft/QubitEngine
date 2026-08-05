@@ -369,7 +369,7 @@ grpc::Status CircuitService::VisualizeCircuit(
     if (request->noise_probability() > 0.0) {
       qreg.applyDepolarizingNoise(request->noise_probability());
     }
-    serializeState(qreg, &response, request->measurement_strategy(), false, authorized);
+    serializeState(qreg, &response, request->measurement_strategy(), request->use_shm(), authorized);
     if (!writer->Write(response)) {
       return grpc::Status::CANCELLED;
     }
