@@ -48,6 +48,8 @@ QubitEngine is a multi-language quantum simulation platform with five major laye
 3. **CUDA** — GPU acceleration. Multi-GPU execution via `CudaBackend::applyGateDistributed` replicates the full $2^N$ state vector across GPUs via `ncclAllGather` (each GPU must possess sufficient VRAM for the full state vector).
 4. **CPU** — Default fallback with explicit AVX2 (`__m256d`) and ARM NEON (`float64x2_t`) vector intrinsics for `applyHadamard`, combined with OpenMP thread parallelization and scalar loops for remaining gates.
 
+> **Note on Metal (Apple Silicon)**: `MetalBackend` is not part of the automatic `BackendFactory::create` selection chain. It requires explicit instantiation / dependency injection via `QuantumRegister(n, std::move(metal_backend))`.
+
 The `force_local` constructor parameter bypasses distributed (MPI) execution, useful for gradient calculations where each parameter evaluation needs an independent register.
 
 ## JIT Compiler Optimization Tiers
@@ -134,7 +136,7 @@ Defined in `api/proto/scheduler.proto`:
 ## Hardware & Distributed Scaling
 
 - **Autoscaling & Metrics Integration**: The Go `Scheduler` service mounts a `:2112/metrics` endpoint exposing `quantum_job_queue_depth` metrics directly into Prometheus, allowing Kubernetes HorizontalPodAutoscalers (HPA) to scale backend deployments based on active queue workload.
-- **Python Zero-Copy Buffers**: The `core.get_state_vector()` and `get_probabilities()` C++ endpoints bind utilizing `pybind11::capsule` memory management, passing C++ vector data directly to NumPy array capsules to prevent unnecessary array copying.
+- **Python Capsule Buffer Handoff**: The `core.get_state_vector()` and `get_probabilities()` C++ endpoints bind using `pybind11::capsule` memory management. While `QuantumRegister::getStateVector()` returns by value from the backend, moving the vector onto the heap and wrapping it in a `py::capsule` avoids duplicate copies during the Python C++ boundary handoff to NumPy.
 
 ## Differentiator Methods
 
