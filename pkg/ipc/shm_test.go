@@ -62,7 +62,7 @@ func TestProbeSharedMemoryAccess(t *testing.T) {
 }
 
 func TestReadAndAcknowledgeStateVector_BitIdentical(t *testing.T) {
-	qubitCounts := []uint32{10, 14, 18}
+	qubitCounts := []uint32{10, 18, 22, 25}
 
 	for _, numQubits := range qubitCounts {
 		elementCount := 1 << numQubits
