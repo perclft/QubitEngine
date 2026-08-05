@@ -321,6 +321,10 @@ std::vector<Complex> QuantumRegister::getStateVector() const {
   return backend->getStateVector();
 }
 
+std::string QuantumRegister::getBackendName() const {
+  return backend ? backend->name() : "None";
+}
+
 // --- Tape Management ---
 
 void QuantumRegister::enableRecording(bool enable) {

@@ -49,6 +49,7 @@ public:
 
   // --- Hardware Properties ---
   size_t getNumQubits() const override { return num_qubits_; }
+  std::string name() const override { return "Cloud"; }
 
 private:
   size_t num_qubits_;

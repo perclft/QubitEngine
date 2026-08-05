@@ -51,6 +51,8 @@ public:
   int getRank() const override { return local_rank; }
   int getSize() const override { return world_size; }
 
+  std::string name() const override { return "CPU"; }
+
 private:
   size_t num_qubits;
   std::vector<Complex, HugePageAllocator<Complex>> state;

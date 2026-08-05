@@ -71,6 +71,7 @@ public:
   std::vector<Complex> getStateVector() const override;
   
   size_t getNumQubits() const override { return static_cast<size_t>(num_qubits); }
+  std::string name() const override { return "MPS"; }
 };
 
 } // namespace qubit_engine

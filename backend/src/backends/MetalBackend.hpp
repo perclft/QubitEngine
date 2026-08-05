@@ -55,6 +55,7 @@ public:
   int getRank() const override { return 0; }
   int getSize() const override { return 1; }
   std::vector<Complex> getStateVector() const override;
+  std::string name() const override { return "Metal"; }
 
 private:
   void initializeMetal();

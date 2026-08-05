@@ -107,6 +107,8 @@ public:
   void applyRegisteredGate(const RecordedGate &gate);
   void applyRegisteredGateInverse(const RecordedGate &gate);
 
+  std::string getBackendName() const;
+
 private:
   void validateQubit(size_t q) const;
   void applyPostGateNoise1Q(size_t target);

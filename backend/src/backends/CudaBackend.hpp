@@ -57,6 +57,7 @@ public:
   // --- State Access ---
   std::vector<Complex> getStateVector() const override;
   void* getDeviceState() const { return device_state_; }
+  std::string name() const override { return "CUDA"; }
   // --- Distributed Helpers ---
   int getRank() const override { return mpi_rank_; }
   int getSize() const override { return mpi_size_; }

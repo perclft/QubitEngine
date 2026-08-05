@@ -143,6 +143,7 @@ public:
 
   // --- Hardware Properties ---
   virtual size_t getNumQubits() const { return 0; }
+  [[nodiscard]] virtual std::string name() const = 0;
 };
 
 } // namespace qubit_engine

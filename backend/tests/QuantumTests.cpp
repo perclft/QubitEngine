@@ -129,3 +129,14 @@ TEST(QuantumTest, AdjointGradientTest) {
   EXPECT_EQ(grads.size(), 1);
   EXPECT_NEAR(grads[0], -1.0, 1e-5);
 }
+
+TEST(QuantumTest, DefaultBackendSelectionName) {
+  QuantumRegister q(2);
+#ifdef ENABLE_METAL
+  EXPECT_EQ(q.getBackendName(), "Metal");
+#elif defined(ENABLE_CUDA)
+  EXPECT_EQ(q.getBackendName(), "CUDA");
+#else
+  EXPECT_EQ(q.getBackendName(), "CPU");
+#endif
+}
