@@ -361,6 +361,45 @@ TEST(JITTest, IdentityCancellation_O4) {
   EXPECT_EQ(ir.gates.size(), 0);
 }
 
+TEST(JITTest, ConcurrentCacheContentionOnSharedInstance) {
+  auto jit = std::make_shared<QuantumJIT>(QuantumJIT::O2);
+  jit->set_max_cache_size(20); // Small cache size to force eviction under contention
+
+  constexpr int NUM_THREADS = 10;
+  constexpr int ITERS_PER_THREAD = 100;
+  std::vector<std::thread> threads;
+  std::atomic<bool> success{true};
+
+  for (int t = 0; t < NUM_THREADS; ++t) {
+    threads.emplace_back([jit, t, &success]() {
+      try {
+        for (int i = 0; i < ITERS_PER_THREAD; ++i) {
+          // Mix of repeating patterns (cache hit) and unique parameters (cache eviction)
+          double angle = (i % 5 == 0) ? 0.5 : (t * 0.1 + i * 0.01);
+          std::vector<std::pair<std::string, std::vector<int>>> gates = {
+              {"H", {0}},
+              {"RX", {0}},
+              {"CX", {0, 1}}
+          };
+          std::vector<double> params = {angle};
+          auto ir = jit->compile(2, gates, params);
+          if (ir.gates.empty()) {
+            success = false;
+          }
+        }
+      } catch (...) {
+        success = false;
+      }
+    });
+  }
+
+  for (auto& th : threads) {
+    th.join();
+  }
+
+  EXPECT_TRUE(success.load());
+}
+
 #ifdef ENABLE_CUDA
 #include "../src/backends/CudaBackend.hpp"
 
