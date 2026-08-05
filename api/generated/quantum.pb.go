@@ -137,6 +137,8 @@ const (
 	GateOperation_SWAP               GateOperation_GateType = 12
 	GateOperation_CZ                 GateOperation_GateType = 13
 	GateOperation_DEPOLARIZING_NOISE GateOperation_GateType = 14
+	GateOperation_AMPLITUDE_DAMPING  GateOperation_GateType = 15
+	GateOperation_PHASE_DAMPING      GateOperation_GateType = 16
 )
 
 // Enum value maps for GateOperation_GateType.
@@ -157,6 +159,8 @@ var (
 		12: "SWAP",
 		13: "CZ",
 		14: "DEPOLARIZING_NOISE",
+		15: "AMPLITUDE_DAMPING",
+		16: "PHASE_DAMPING",
 	}
 	GateOperation_GateType_value = map[string]int32{
 		"HADAMARD":           0,
@@ -174,6 +178,8 @@ var (
 		"SWAP":               12,
 		"CZ":                 13,
 		"DEPOLARIZING_NOISE": 14,
+		"AMPLITUDE_DAMPING":  15,
+		"PHASE_DAMPING":      16,
 	}
 )
 
@@ -207,8 +213,10 @@ func (GateOperation_GateType) EnumDescriptor() ([]byte, []int) {
 type VQERequest_Molecule int32
 
 const (
-	VQERequest_H2  VQERequest_Molecule = 0 // Hydrogen molecule
-	VQERequest_LiH VQERequest_Molecule = 1 // Lithium Hydride
+	VQERequest_H2   VQERequest_Molecule = 0 // Hydrogen molecule
+	VQERequest_LiH  VQERequest_Molecule = 1 // Lithium Hydride
+	VQERequest_BEH2 VQERequest_Molecule = 2 // Beryllium Hydride
+	VQERequest_H2O  VQERequest_Molecule = 3 // Water
 )
 
 // Enum value maps for VQERequest_Molecule.
@@ -216,10 +224,14 @@ var (
 	VQERequest_Molecule_name = map[int32]string{
 		0: "H2",
 		1: "LiH",
+		2: "BEH2",
+		3: "H2O",
 	}
 	VQERequest_Molecule_value = map[string]int32{
-		"H2":  0,
-		"LiH": 1,
+		"H2":   0,
+		"LiH":  1,
+		"BEH2": 2,
+		"H2O":  3,
 	}
 )
 
@@ -247,7 +259,7 @@ func (x VQERequest_Molecule) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use VQERequest_Molecule.Descriptor instead.
 func (VQERequest_Molecule) EnumDescriptor() ([]byte, []int) {
-	return file_api_proto_quantum_proto_rawDescGZIP(), []int{7, 0}
+	return file_api_proto_quantum_proto_rawDescGZIP(), []int{10, 0}
 }
 
 type VQERequest_OptimizerType int32
@@ -293,7 +305,7 @@ func (x VQERequest_OptimizerType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use VQERequest_OptimizerType.Descriptor instead.
 func (VQERequest_OptimizerType) EnumDescriptor() ([]byte, []int) {
-	return file_api_proto_quantum_proto_rawDescGZIP(), []int{7, 1}
+	return file_api_proto_quantum_proto_rawDescGZIP(), []int{10, 1}
 }
 
 type CircuitRequest struct {
@@ -305,8 +317,11 @@ type CircuitRequest struct {
 	ExecutionBackend    CircuitRequest_ExecutionBackend    `protobuf:"varint,4,opt,name=execution_backend,json=executionBackend,proto3,enum=qubit_engine.CircuitRequest_ExecutionBackend" json:"execution_backend,omitempty"`
 	MeasurementStrategy CircuitRequest_MeasurementStrategy `protobuf:"varint,5,opt,name=measurement_strategy,json=measurementStrategy,proto3,enum=qubit_engine.CircuitRequest_MeasurementStrategy" json:"measurement_strategy,omitempty"`
 	UseShm              bool                               `protobuf:"varint,6,opt,name=use_shm,json=useShm,proto3" json:"use_shm,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	Version             string                             `protobuf:"bytes,7,opt,name=version,proto3" json:"version,omitempty"`
+	// Structured noise model configuration (overrides simple noise_probability if set)
+	NoiseConfig   *NoiseConfig `protobuf:"bytes,8,opt,name=noise_config,json=noiseConfig,proto3" json:"noise_config,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CircuitRequest) Reset() {
@@ -381,6 +396,20 @@ func (x *CircuitRequest) GetUseShm() bool {
 	return false
 }
 
+func (x *CircuitRequest) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *CircuitRequest) GetNoiseConfig() *NoiseConfig {
+	if x != nil {
+		return x.NoiseConfig
+	}
+	return nil
+}
+
 type GateOperation struct {
 	state        protoimpl.MessageState `protogen:"open.v1"`
 	Type         GateOperation_GateType `protobuf:"varint,1,opt,name=type,proto3,enum=qubit_engine.GateOperation_GateType" json:"type,omitempty"`
@@ -396,8 +425,10 @@ type GateOperation struct {
 	SecondTargetQubit uint32 `protobuf:"varint,7,opt,name=second_target_qubit,json=secondTargetQubit,proto3" json:"second_target_qubit,omitempty"`
 	// For DEPOLARIZING_NOISE (error probability 0.0 - 1.0)
 	NoiseProbability float64 `protobuf:"fixed64,8,opt,name=noise_probability,json=noiseProbability,proto3" json:"noise_probability,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// For AMPLITUDE_DAMPING / PHASE_DAMPING (gamma parameter 0.0 - 1.0)
+	NoiseGamma    float64 `protobuf:"fixed64,9,opt,name=noise_gamma,json=noiseGamma,proto3" json:"noise_gamma,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GateOperation) Reset() {
@@ -486,6 +517,131 @@ func (x *GateOperation) GetNoiseProbability() float64 {
 	return 0
 }
 
+func (x *GateOperation) GetNoiseGamma() float64 {
+	if x != nil {
+		return x.NoiseGamma
+	}
+	return 0
+}
+
+// Structured noise model configuration for realistic simulations
+type NoiseConfig struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Depolarizing_1Q  float64                `protobuf:"fixed64,1,opt,name=depolarizing_1q,json=depolarizing1q,proto3" json:"depolarizing_1q,omitempty"`        // Single-qubit depolarizing probability
+	Depolarizing_2Q  float64                `protobuf:"fixed64,2,opt,name=depolarizing_2q,json=depolarizing2q,proto3" json:"depolarizing_2q,omitempty"`        // Two-qubit depolarizing probability
+	AmplitudeDamping float64                `protobuf:"fixed64,3,opt,name=amplitude_damping,json=amplitudeDamping,proto3" json:"amplitude_damping,omitempty"`  // T1 amplitude damping gamma
+	PhaseDamping     float64                `protobuf:"fixed64,4,opt,name=phase_damping,json=phaseDamping,proto3" json:"phase_damping,omitempty"`              // T2 phase damping gamma
+	ReadoutP0Given_1 float64                `protobuf:"fixed64,5,opt,name=readout_p0_given_1,json=readoutP0Given1,proto3" json:"readout_p0_given_1,omitempty"` // Readout error: P(measure 0 | true state 1)
+	ReadoutP1Given_0 float64                `protobuf:"fixed64,6,opt,name=readout_p1_given_0,json=readoutP1Given0,proto3" json:"readout_p1_given_0,omitempty"` // Readout error: P(measure 1 | true state 0)
+	// Advanced Noise Models
+	T1             float64           `protobuf:"fixed64,7,opt,name=t1,proto3" json:"t1,omitempty"`                                                                                                                           // Longitudinal relaxation time
+	T2             float64           `protobuf:"fixed64,8,opt,name=t2,proto3" json:"t2,omitempty"`                                                                                                                           // Transverse relaxation time
+	GateTime       float64           `protobuf:"fixed64,9,opt,name=gate_time,json=gateTime,proto3" json:"gate_time,omitempty"`                                                                                               // Physical gate duration
+	CoherentErrors map[int32]float64 `protobuf:"bytes,10,rep,name=coherent_errors,json=coherentErrors,proto3" json:"coherent_errors,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"` // GateType -> epsilon bias
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *NoiseConfig) Reset() {
+	*x = NoiseConfig{}
+	mi := &file_api_proto_quantum_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NoiseConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NoiseConfig) ProtoMessage() {}
+
+func (x *NoiseConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_quantum_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NoiseConfig.ProtoReflect.Descriptor instead.
+func (*NoiseConfig) Descriptor() ([]byte, []int) {
+	return file_api_proto_quantum_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *NoiseConfig) GetDepolarizing_1Q() float64 {
+	if x != nil {
+		return x.Depolarizing_1Q
+	}
+	return 0
+}
+
+func (x *NoiseConfig) GetDepolarizing_2Q() float64 {
+	if x != nil {
+		return x.Depolarizing_2Q
+	}
+	return 0
+}
+
+func (x *NoiseConfig) GetAmplitudeDamping() float64 {
+	if x != nil {
+		return x.AmplitudeDamping
+	}
+	return 0
+}
+
+func (x *NoiseConfig) GetPhaseDamping() float64 {
+	if x != nil {
+		return x.PhaseDamping
+	}
+	return 0
+}
+
+func (x *NoiseConfig) GetReadoutP0Given_1() float64 {
+	if x != nil {
+		return x.ReadoutP0Given_1
+	}
+	return 0
+}
+
+func (x *NoiseConfig) GetReadoutP1Given_0() float64 {
+	if x != nil {
+		return x.ReadoutP1Given_0
+	}
+	return 0
+}
+
+func (x *NoiseConfig) GetT1() float64 {
+	if x != nil {
+		return x.T1
+	}
+	return 0
+}
+
+func (x *NoiseConfig) GetT2() float64 {
+	if x != nil {
+		return x.T2
+	}
+	return 0
+}
+
+func (x *NoiseConfig) GetGateTime() float64 {
+	if x != nil {
+		return x.GateTime
+	}
+	return 0
+}
+
+func (x *NoiseConfig) GetCoherentErrors() map[int32]float64 {
+	if x != nil {
+		return x.CoherentErrors
+	}
+	return nil
+}
+
 type GateStreamInit struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	NumQubits int32                  `protobuf:"varint,1,opt,name=num_qubits,json=numQubits,proto3" json:"num_qubits,omitempty"`
@@ -497,7 +653,7 @@ type GateStreamInit struct {
 
 func (x *GateStreamInit) Reset() {
 	*x = GateStreamInit{}
-	mi := &file_api_proto_quantum_proto_msgTypes[2]
+	mi := &file_api_proto_quantum_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -509,7 +665,7 @@ func (x *GateStreamInit) String() string {
 func (*GateStreamInit) ProtoMessage() {}
 
 func (x *GateStreamInit) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_quantum_proto_msgTypes[2]
+	mi := &file_api_proto_quantum_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -522,7 +678,7 @@ func (x *GateStreamInit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GateStreamInit.ProtoReflect.Descriptor instead.
 func (*GateStreamInit) Descriptor() ([]byte, []int) {
-	return file_api_proto_quantum_proto_rawDescGZIP(), []int{2}
+	return file_api_proto_quantum_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GateStreamInit) GetNumQubits() int32 {
@@ -552,7 +708,7 @@ type GateStreamRequest struct {
 
 func (x *GateStreamRequest) Reset() {
 	*x = GateStreamRequest{}
-	mi := &file_api_proto_quantum_proto_msgTypes[3]
+	mi := &file_api_proto_quantum_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -564,7 +720,7 @@ func (x *GateStreamRequest) String() string {
 func (*GateStreamRequest) ProtoMessage() {}
 
 func (x *GateStreamRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_quantum_proto_msgTypes[3]
+	mi := &file_api_proto_quantum_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -577,7 +733,7 @@ func (x *GateStreamRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GateStreamRequest.ProtoReflect.Descriptor instead.
 func (*GateStreamRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_quantum_proto_rawDescGZIP(), []int{3}
+	return file_api_proto_quantum_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *GateStreamRequest) GetMsg() isGateStreamRequest_Msg {
@@ -640,7 +796,7 @@ type StateResponse struct {
 
 func (x *StateResponse) Reset() {
 	*x = StateResponse{}
-	mi := &file_api_proto_quantum_proto_msgTypes[4]
+	mi := &file_api_proto_quantum_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -652,7 +808,7 @@ func (x *StateResponse) String() string {
 func (*StateResponse) ProtoMessage() {}
 
 func (x *StateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_quantum_proto_msgTypes[4]
+	mi := &file_api_proto_quantum_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -665,7 +821,7 @@ func (x *StateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StateResponse.ProtoReflect.Descriptor instead.
 func (*StateResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_quantum_proto_rawDescGZIP(), []int{4}
+	return file_api_proto_quantum_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *StateResponse) GetStateVector() []*StateResponse_ComplexNumber {
@@ -710,6 +866,102 @@ func (x *StateResponse) GetShmDescriptor() string {
 	return ""
 }
 
+type ShmAckRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AckToken      string                 `protobuf:"bytes,1,opt,name=ack_token,json=ackToken,proto3" json:"ack_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ShmAckRequest) Reset() {
+	*x = ShmAckRequest{}
+	mi := &file_api_proto_quantum_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShmAckRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShmAckRequest) ProtoMessage() {}
+
+func (x *ShmAckRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_quantum_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShmAckRequest.ProtoReflect.Descriptor instead.
+func (*ShmAckRequest) Descriptor() ([]byte, []int) {
+	return file_api_proto_quantum_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ShmAckRequest) GetAckToken() string {
+	if x != nil {
+		return x.AckToken
+	}
+	return ""
+}
+
+type ShmAckResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ShmAckResponse) Reset() {
+	*x = ShmAckResponse{}
+	mi := &file_api_proto_quantum_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShmAckResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShmAckResponse) ProtoMessage() {}
+
+func (x *ShmAckResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_quantum_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShmAckResponse.ProtoReflect.Descriptor instead.
+func (*ShmAckResponse) Descriptor() ([]byte, []int) {
+	return file_api_proto_quantum_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ShmAckResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *ShmAckResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
 type Measurement struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	QubitIndex    uint32                 `protobuf:"varint,1,opt,name=qubit_index,json=qubitIndex,proto3" json:"qubit_index,omitempty"`
@@ -721,7 +973,7 @@ type Measurement struct {
 
 func (x *Measurement) Reset() {
 	*x = Measurement{}
-	mi := &file_api_proto_quantum_proto_msgTypes[5]
+	mi := &file_api_proto_quantum_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -733,7 +985,7 @@ func (x *Measurement) String() string {
 func (*Measurement) ProtoMessage() {}
 
 func (x *Measurement) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_quantum_proto_msgTypes[5]
+	mi := &file_api_proto_quantum_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -746,7 +998,7 @@ func (x *Measurement) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Measurement.ProtoReflect.Descriptor instead.
 func (*Measurement) Descriptor() ([]byte, []int) {
-	return file_api_proto_quantum_proto_rawDescGZIP(), []int{5}
+	return file_api_proto_quantum_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Measurement) GetQubitIndex() uint32 {
@@ -780,7 +1032,7 @@ type PauliTerm struct {
 
 func (x *PauliTerm) Reset() {
 	*x = PauliTerm{}
-	mi := &file_api_proto_quantum_proto_msgTypes[6]
+	mi := &file_api_proto_quantum_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -792,7 +1044,7 @@ func (x *PauliTerm) String() string {
 func (*PauliTerm) ProtoMessage() {}
 
 func (x *PauliTerm) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_quantum_proto_msgTypes[6]
+	mi := &file_api_proto_quantum_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -805,7 +1057,7 @@ func (x *PauliTerm) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PauliTerm.ProtoReflect.Descriptor instead.
 func (*PauliTerm) Descriptor() ([]byte, []int) {
-	return file_api_proto_quantum_proto_rawDescGZIP(), []int{6}
+	return file_api_proto_quantum_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *PauliTerm) GetPauliString() string {
@@ -836,7 +1088,7 @@ type VQERequest struct {
 
 func (x *VQERequest) Reset() {
 	*x = VQERequest{}
-	mi := &file_api_proto_quantum_proto_msgTypes[7]
+	mi := &file_api_proto_quantum_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -848,7 +1100,7 @@ func (x *VQERequest) String() string {
 func (*VQERequest) ProtoMessage() {}
 
 func (x *VQERequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_quantum_proto_msgTypes[7]
+	mi := &file_api_proto_quantum_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -861,7 +1113,7 @@ func (x *VQERequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VQERequest.ProtoReflect.Descriptor instead.
 func (*VQERequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_quantum_proto_rawDescGZIP(), []int{7}
+	return file_api_proto_quantum_proto_rawDescGZIP(), []int{10}
 }
 
 // Deprecated: Marked as deprecated in api/proto/quantum.proto.
@@ -912,7 +1164,7 @@ type VQEResponse struct {
 
 func (x *VQEResponse) Reset() {
 	*x = VQEResponse{}
-	mi := &file_api_proto_quantum_proto_msgTypes[8]
+	mi := &file_api_proto_quantum_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -924,7 +1176,7 @@ func (x *VQEResponse) String() string {
 func (*VQEResponse) ProtoMessage() {}
 
 func (x *VQEResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_quantum_proto_msgTypes[8]
+	mi := &file_api_proto_quantum_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -937,7 +1189,7 @@ func (x *VQEResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VQEResponse.ProtoReflect.Descriptor instead.
 func (*VQEResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_quantum_proto_rawDescGZIP(), []int{8}
+	return file_api_proto_quantum_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *VQEResponse) GetIteration() int32 {
@@ -976,7 +1228,7 @@ type HardwareTopologyRequest struct {
 
 func (x *HardwareTopologyRequest) Reset() {
 	*x = HardwareTopologyRequest{}
-	mi := &file_api_proto_quantum_proto_msgTypes[9]
+	mi := &file_api_proto_quantum_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -988,7 +1240,7 @@ func (x *HardwareTopologyRequest) String() string {
 func (*HardwareTopologyRequest) ProtoMessage() {}
 
 func (x *HardwareTopologyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_quantum_proto_msgTypes[9]
+	mi := &file_api_proto_quantum_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1001,7 +1253,7 @@ func (x *HardwareTopologyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HardwareTopologyRequest.ProtoReflect.Descriptor instead.
 func (*HardwareTopologyRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_quantum_proto_rawDescGZIP(), []int{9}
+	return file_api_proto_quantum_proto_rawDescGZIP(), []int{12}
 }
 
 type QubitNode struct {
@@ -1015,7 +1267,7 @@ type QubitNode struct {
 
 func (x *QubitNode) Reset() {
 	*x = QubitNode{}
-	mi := &file_api_proto_quantum_proto_msgTypes[10]
+	mi := &file_api_proto_quantum_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1027,7 +1279,7 @@ func (x *QubitNode) String() string {
 func (*QubitNode) ProtoMessage() {}
 
 func (x *QubitNode) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_quantum_proto_msgTypes[10]
+	mi := &file_api_proto_quantum_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1040,7 +1292,7 @@ func (x *QubitNode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QubitNode.ProtoReflect.Descriptor instead.
 func (*QubitNode) Descriptor() ([]byte, []int) {
-	return file_api_proto_quantum_proto_rawDescGZIP(), []int{10}
+	return file_api_proto_quantum_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *QubitNode) GetId() int32 {
@@ -1074,7 +1326,7 @@ type CouplerEdge struct {
 
 func (x *CouplerEdge) Reset() {
 	*x = CouplerEdge{}
-	mi := &file_api_proto_quantum_proto_msgTypes[11]
+	mi := &file_api_proto_quantum_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1086,7 +1338,7 @@ func (x *CouplerEdge) String() string {
 func (*CouplerEdge) ProtoMessage() {}
 
 func (x *CouplerEdge) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_quantum_proto_msgTypes[11]
+	mi := &file_api_proto_quantum_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1099,7 +1351,7 @@ func (x *CouplerEdge) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CouplerEdge.ProtoReflect.Descriptor instead.
 func (*CouplerEdge) Descriptor() ([]byte, []int) {
-	return file_api_proto_quantum_proto_rawDescGZIP(), []int{11}
+	return file_api_proto_quantum_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *CouplerEdge) GetNode1() int32 {
@@ -1126,7 +1378,7 @@ type HardwareTopologyResponse struct {
 
 func (x *HardwareTopologyResponse) Reset() {
 	*x = HardwareTopologyResponse{}
-	mi := &file_api_proto_quantum_proto_msgTypes[12]
+	mi := &file_api_proto_quantum_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1138,7 +1390,7 @@ func (x *HardwareTopologyResponse) String() string {
 func (*HardwareTopologyResponse) ProtoMessage() {}
 
 func (x *HardwareTopologyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_quantum_proto_msgTypes[12]
+	mi := &file_api_proto_quantum_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1151,7 +1403,7 @@ func (x *HardwareTopologyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HardwareTopologyResponse.ProtoReflect.Descriptor instead.
 func (*HardwareTopologyResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_quantum_proto_rawDescGZIP(), []int{12}
+	return file_api_proto_quantum_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *HardwareTopologyResponse) GetNodes() []*QubitNode {
@@ -1179,7 +1431,7 @@ type StateResponse_ComplexNumber struct {
 
 func (x *StateResponse_ComplexNumber) Reset() {
 	*x = StateResponse_ComplexNumber{}
-	mi := &file_api_proto_quantum_proto_msgTypes[13]
+	mi := &file_api_proto_quantum_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1191,7 +1443,7 @@ func (x *StateResponse_ComplexNumber) String() string {
 func (*StateResponse_ComplexNumber) ProtoMessage() {}
 
 func (x *StateResponse_ComplexNumber) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_quantum_proto_msgTypes[13]
+	mi := &file_api_proto_quantum_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1204,7 +1456,7 @@ func (x *StateResponse_ComplexNumber) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StateResponse_ComplexNumber.ProtoReflect.Descriptor instead.
 func (*StateResponse_ComplexNumber) Descriptor() ([]byte, []int) {
-	return file_api_proto_quantum_proto_rawDescGZIP(), []int{4, 0}
+	return file_api_proto_quantum_proto_rawDescGZIP(), []int{5, 0}
 }
 
 func (x *StateResponse_ComplexNumber) GetReal() float64 {
@@ -1225,7 +1477,7 @@ var File_api_proto_quantum_proto protoreflect.FileDescriptor
 
 const file_api_proto_quantum_proto_rawDesc = "" +
 	"\n" +
-	"\x17api/proto/quantum.proto\x12\fqubit_engine\"\x8a\x04\n" +
+	"\x17api/proto/quantum.proto\x12\fqubit_engine\"\xe2\x04\n" +
 	"\x0eCircuitRequest\x12\x1d\n" +
 	"\n" +
 	"num_qubits\x18\x01 \x01(\x05R\tnumQubits\x12;\n" +
@@ -1235,7 +1487,9 @@ const file_api_proto_quantum_proto_rawDesc = "" +
 	"\x11noise_probability\x18\x03 \x01(\x01R\x10noiseProbability\x12Z\n" +
 	"\x11execution_backend\x18\x04 \x01(\x0e2-.qubit_engine.CircuitRequest.ExecutionBackendR\x10executionBackend\x12c\n" +
 	"\x14measurement_strategy\x18\x05 \x01(\x0e20.qubit_engine.CircuitRequest.MeasurementStrategyR\x13measurementStrategy\x12\x17\n" +
-	"\ause_shm\x18\x06 \x01(\bR\x06useShm\"D\n" +
+	"\ause_shm\x18\x06 \x01(\bR\x06useShm\x12\x18\n" +
+	"\aversion\x18\a \x01(\tR\aversion\x12<\n" +
+	"\fnoise_config\x18\b \x01(\v2\x19.qubit_engine.NoiseConfigR\vnoiseConfig\"D\n" +
 	"\x10ExecutionBackend\x12\r\n" +
 	"\tSIMULATOR\x10\x00\x12\x11\n" +
 	"\rMOCK_HARDWARE\x10\x01\x12\x0e\n" +
@@ -1245,7 +1499,7 @@ const file_api_proto_quantum_proto_rawDesc = "" +
 	"\n" +
 	"FULL_STATE\x10\x00\x12\x10\n" +
 	"\fSPARSE_STATE\x10\x01\x12\x16\n" +
-	"\x12EXPECTATION_VALUES\x10\x02\"\xbf\x04\n" +
+	"\x12EXPECTATION_VALUES\x10\x02\"\x8a\x05\n" +
 	"\rGateOperation\x128\n" +
 	"\x04type\x18\x01 \x01(\x0e2$.qubit_engine.GateOperation.GateTypeR\x04type\x12!\n" +
 	"\ftarget_qubit\x18\x02 \x01(\rR\vtargetQubit\x12#\n" +
@@ -1254,7 +1508,9 @@ const file_api_proto_quantum_proto_rawDesc = "" +
 	"\x05angle\x18\x05 \x01(\x01R\x05angle\x120\n" +
 	"\x14second_control_qubit\x18\x06 \x01(\rR\x12secondControlQubit\x12.\n" +
 	"\x13second_target_qubit\x18\a \x01(\rR\x11secondTargetQubit\x12+\n" +
-	"\x11noise_probability\x18\b \x01(\x01R\x10noiseProbability\"\xd7\x01\n" +
+	"\x11noise_probability\x18\b \x01(\x01R\x10noiseProbability\x12\x1f\n" +
+	"\vnoise_gamma\x18\t \x01(\x01R\n" +
+	"noiseGamma\"\x81\x02\n" +
 	"\bGateType\x12\f\n" +
 	"\bHADAMARD\x10\x00\x12\v\n" +
 	"\aPAULI_X\x10\x01\x12\b\n" +
@@ -1274,7 +1530,24 @@ const file_api_proto_quantum_proto_rawDesc = "" +
 	"ROTATION_X\x10\v\x12\b\n" +
 	"\x04SWAP\x10\f\x12\x06\n" +
 	"\x02CZ\x10\r\x12\x16\n" +
-	"\x12DEPOLARIZING_NOISE\x10\x0e\"H\n" +
+	"\x12DEPOLARIZING_NOISE\x10\x0e\x12\x15\n" +
+	"\x11AMPLITUDE_DAMPING\x10\x0f\x12\x11\n" +
+	"\rPHASE_DAMPING\x10\x10\"\xe3\x03\n" +
+	"\vNoiseConfig\x12'\n" +
+	"\x0fdepolarizing_1q\x18\x01 \x01(\x01R\x0edepolarizing1q\x12'\n" +
+	"\x0fdepolarizing_2q\x18\x02 \x01(\x01R\x0edepolarizing2q\x12+\n" +
+	"\x11amplitude_damping\x18\x03 \x01(\x01R\x10amplitudeDamping\x12#\n" +
+	"\rphase_damping\x18\x04 \x01(\x01R\fphaseDamping\x12+\n" +
+	"\x12readout_p0_given_1\x18\x05 \x01(\x01R\x0freadoutP0Given1\x12+\n" +
+	"\x12readout_p1_given_0\x18\x06 \x01(\x01R\x0freadoutP1Given0\x12\x0e\n" +
+	"\x02t1\x18\a \x01(\x01R\x02t1\x12\x0e\n" +
+	"\x02t2\x18\b \x01(\x01R\x02t2\x12\x1b\n" +
+	"\tgate_time\x18\t \x01(\x01R\bgateTime\x12V\n" +
+	"\x0fcoherent_errors\x18\n" +
+	" \x03(\v2-.qubit_engine.NoiseConfig.CoherentErrorsEntryR\x0ecoherentErrors\x1aA\n" +
+	"\x13CoherentErrorsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\"H\n" +
 	"\x0eGateStreamInit\x12\x1d\n" +
 	"\n" +
 	"num_qubits\x18\x01 \x01(\x05R\tnumQubits\x12\x17\n" +
@@ -1295,7 +1568,12 @@ const file_api_proto_quantum_proto_rawDesc = "" +
 	"\x04imag\x18\x02 \x01(\x01R\x04imag\x1aC\n" +
 	"\x15ClassicalResultsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\"h\n" +
+	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\",\n" +
+	"\rShmAckRequest\x12\x1b\n" +
+	"\tack_token\x18\x01 \x01(\tR\backToken\"D\n" +
+	"\x0eShmAckResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"h\n" +
 	"\vMeasurement\x12\x1f\n" +
 	"\vqubit_index\x18\x01 \x01(\rR\n" +
 	"qubitIndex\x12\x16\n" +
@@ -1303,17 +1581,19 @@ const file_api_proto_quantum_proto_rawDesc = "" +
 	"\vprobability\x18\x03 \x01(\x01R\vprobability\"P\n" +
 	"\tPauliTerm\x12!\n" +
 	"\fpauli_string\x18\x01 \x01(\tR\vpauliString\x12 \n" +
-	"\vcoefficient\x18\x02 \x01(\x01R\vcoefficient\"\xf3\x02\n" +
+	"\vcoefficient\x18\x02 \x01(\x01R\vcoefficient\"\x86\x03\n" +
 	"\n" +
 	"VQERequest\x12A\n" +
 	"\bmolecule\x18\x01 \x01(\x0e2!.qubit_engine.VQERequest.MoleculeB\x02\x18\x01R\bmolecule\x12%\n" +
 	"\x0emax_iterations\x18\x02 \x01(\x05R\rmaxIterations\x12#\n" +
 	"\rlearning_rate\x18\x03 \x01(\x01R\flearningRate\x12M\n" +
 	"\x0eoptimizer_type\x18\x04 \x01(\x0e2&.qubit_engine.VQERequest.OptimizerTypeR\roptimizerType\x129\n" +
-	"\vobservables\x18\x05 \x03(\v2\x17.qubit_engine.PauliTermR\vobservables\"\x1b\n" +
+	"\vobservables\x18\x05 \x03(\v2\x17.qubit_engine.PauliTermR\vobservables\".\n" +
 	"\bMolecule\x12\x06\n" +
 	"\x02H2\x10\x00\x12\a\n" +
-	"\x03LiH\x10\x01\"/\n" +
+	"\x03LiH\x10\x01\x12\b\n" +
+	"\x04BEH2\x10\x02\x12\a\n" +
+	"\x03H2O\x10\x03\"/\n" +
 	"\rOptimizerType\x12\b\n" +
 	"\x04SPSA\x10\x00\x12\x14\n" +
 	"\x10GRADIENT_DESCENT\x10\x01\"\x81\x01\n" +
@@ -1334,14 +1614,15 @@ const file_api_proto_quantum_proto_rawDesc = "" +
 	"\x05node2\x18\x02 \x01(\x05R\x05node2\"z\n" +
 	"\x18HardwareTopologyResponse\x12-\n" +
 	"\x05nodes\x18\x01 \x03(\v2\x17.qubit_engine.QubitNodeR\x05nodes\x12/\n" +
-	"\x05edges\x18\x02 \x03(\v2\x19.qubit_engine.CouplerEdgeR\x05edges2\xac\x03\n" +
+	"\x05edges\x18\x02 \x03(\v2\x19.qubit_engine.CouplerEdgeR\x05edges2\xff\x03\n" +
 	"\x0eQuantumCompute\x12I\n" +
 	"\n" +
 	"RunCircuit\x12\x1c.qubit_engine.CircuitRequest\x1a\x1b.qubit_engine.StateResponse\"\x00\x12Q\n" +
 	"\vStreamGates\x12\x1f.qubit_engine.GateStreamRequest\x1a\x1b.qubit_engine.StateResponse\"\x00(\x010\x01\x12Q\n" +
 	"\x10VisualizeCircuit\x12\x1c.qubit_engine.CircuitRequest\x1a\x1b.qubit_engine.StateResponse\"\x000\x01\x12A\n" +
 	"\x06RunVQE\x12\x18.qubit_engine.VQERequest\x1a\x19.qubit_engine.VQEResponse\"\x000\x01\x12f\n" +
-	"\x13GetHardwareTopology\x12%.qubit_engine.HardwareTopologyRequest\x1a&.qubit_engine.HardwareTopologyResponse\"\x00BL\n" +
+	"\x13GetHardwareTopology\x12%.qubit_engine.HardwareTopologyRequest\x1a&.qubit_engine.HardwareTopologyResponse\"\x00\x12Q\n" +
+	"\x12AcknowledgeShmRead\x12\x1b.qubit_engine.ShmAckRequest\x1a\x1c.qubit_engine.ShmAckResponse\"\x00BL\n" +
 	"\x17com.perclft.qubitengineP\x01Z,github.com/perclft/QubitEngine/api/generated\xf8\x01\x01b\x06proto3"
 
 var (
@@ -1357,7 +1638,7 @@ func file_api_proto_quantum_proto_rawDescGZIP() []byte {
 }
 
 var file_api_proto_quantum_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_api_proto_quantum_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_api_proto_quantum_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_api_proto_quantum_proto_goTypes = []any{
 	(CircuitRequest_ExecutionBackend)(0),    // 0: qubit_engine.CircuitRequest.ExecutionBackend
 	(CircuitRequest_MeasurementStrategy)(0), // 1: qubit_engine.CircuitRequest.MeasurementStrategy
@@ -1366,50 +1647,58 @@ var file_api_proto_quantum_proto_goTypes = []any{
 	(VQERequest_OptimizerType)(0),           // 4: qubit_engine.VQERequest.OptimizerType
 	(*CircuitRequest)(nil),                  // 5: qubit_engine.CircuitRequest
 	(*GateOperation)(nil),                   // 6: qubit_engine.GateOperation
-	(*GateStreamInit)(nil),                  // 7: qubit_engine.GateStreamInit
-	(*GateStreamRequest)(nil),               // 8: qubit_engine.GateStreamRequest
-	(*StateResponse)(nil),                   // 9: qubit_engine.StateResponse
-	(*Measurement)(nil),                     // 10: qubit_engine.Measurement
-	(*PauliTerm)(nil),                       // 11: qubit_engine.PauliTerm
-	(*VQERequest)(nil),                      // 12: qubit_engine.VQERequest
-	(*VQEResponse)(nil),                     // 13: qubit_engine.VQEResponse
-	(*HardwareTopologyRequest)(nil),         // 14: qubit_engine.HardwareTopologyRequest
-	(*QubitNode)(nil),                       // 15: qubit_engine.QubitNode
-	(*CouplerEdge)(nil),                     // 16: qubit_engine.CouplerEdge
-	(*HardwareTopologyResponse)(nil),        // 17: qubit_engine.HardwareTopologyResponse
-	(*StateResponse_ComplexNumber)(nil),     // 18: qubit_engine.StateResponse.ComplexNumber
-	nil,                                     // 19: qubit_engine.StateResponse.ClassicalResultsEntry
+	(*NoiseConfig)(nil),                     // 7: qubit_engine.NoiseConfig
+	(*GateStreamInit)(nil),                  // 8: qubit_engine.GateStreamInit
+	(*GateStreamRequest)(nil),               // 9: qubit_engine.GateStreamRequest
+	(*StateResponse)(nil),                   // 10: qubit_engine.StateResponse
+	(*ShmAckRequest)(nil),                   // 11: qubit_engine.ShmAckRequest
+	(*ShmAckResponse)(nil),                  // 12: qubit_engine.ShmAckResponse
+	(*Measurement)(nil),                     // 13: qubit_engine.Measurement
+	(*PauliTerm)(nil),                       // 14: qubit_engine.PauliTerm
+	(*VQERequest)(nil),                      // 15: qubit_engine.VQERequest
+	(*VQEResponse)(nil),                     // 16: qubit_engine.VQEResponse
+	(*HardwareTopologyRequest)(nil),         // 17: qubit_engine.HardwareTopologyRequest
+	(*QubitNode)(nil),                       // 18: qubit_engine.QubitNode
+	(*CouplerEdge)(nil),                     // 19: qubit_engine.CouplerEdge
+	(*HardwareTopologyResponse)(nil),        // 20: qubit_engine.HardwareTopologyResponse
+	nil,                                     // 21: qubit_engine.NoiseConfig.CoherentErrorsEntry
+	(*StateResponse_ComplexNumber)(nil),     // 22: qubit_engine.StateResponse.ComplexNumber
+	nil,                                     // 23: qubit_engine.StateResponse.ClassicalResultsEntry
 }
 var file_api_proto_quantum_proto_depIdxs = []int32{
 	6,  // 0: qubit_engine.CircuitRequest.operations:type_name -> qubit_engine.GateOperation
 	0,  // 1: qubit_engine.CircuitRequest.execution_backend:type_name -> qubit_engine.CircuitRequest.ExecutionBackend
 	1,  // 2: qubit_engine.CircuitRequest.measurement_strategy:type_name -> qubit_engine.CircuitRequest.MeasurementStrategy
-	2,  // 3: qubit_engine.GateOperation.type:type_name -> qubit_engine.GateOperation.GateType
-	7,  // 4: qubit_engine.GateStreamRequest.init:type_name -> qubit_engine.GateStreamInit
-	6,  // 5: qubit_engine.GateStreamRequest.op:type_name -> qubit_engine.GateOperation
-	18, // 6: qubit_engine.StateResponse.state_vector:type_name -> qubit_engine.StateResponse.ComplexNumber
-	19, // 7: qubit_engine.StateResponse.classical_results:type_name -> qubit_engine.StateResponse.ClassicalResultsEntry
-	10, // 8: qubit_engine.StateResponse.sparse_states:type_name -> qubit_engine.Measurement
-	3,  // 9: qubit_engine.VQERequest.molecule:type_name -> qubit_engine.VQERequest.Molecule
-	4,  // 10: qubit_engine.VQERequest.optimizer_type:type_name -> qubit_engine.VQERequest.OptimizerType
-	11, // 11: qubit_engine.VQERequest.observables:type_name -> qubit_engine.PauliTerm
-	15, // 12: qubit_engine.HardwareTopologyResponse.nodes:type_name -> qubit_engine.QubitNode
-	16, // 13: qubit_engine.HardwareTopologyResponse.edges:type_name -> qubit_engine.CouplerEdge
-	5,  // 14: qubit_engine.QuantumCompute.RunCircuit:input_type -> qubit_engine.CircuitRequest
-	8,  // 15: qubit_engine.QuantumCompute.StreamGates:input_type -> qubit_engine.GateStreamRequest
-	5,  // 16: qubit_engine.QuantumCompute.VisualizeCircuit:input_type -> qubit_engine.CircuitRequest
-	12, // 17: qubit_engine.QuantumCompute.RunVQE:input_type -> qubit_engine.VQERequest
-	14, // 18: qubit_engine.QuantumCompute.GetHardwareTopology:input_type -> qubit_engine.HardwareTopologyRequest
-	9,  // 19: qubit_engine.QuantumCompute.RunCircuit:output_type -> qubit_engine.StateResponse
-	9,  // 20: qubit_engine.QuantumCompute.StreamGates:output_type -> qubit_engine.StateResponse
-	9,  // 21: qubit_engine.QuantumCompute.VisualizeCircuit:output_type -> qubit_engine.StateResponse
-	13, // 22: qubit_engine.QuantumCompute.RunVQE:output_type -> qubit_engine.VQEResponse
-	17, // 23: qubit_engine.QuantumCompute.GetHardwareTopology:output_type -> qubit_engine.HardwareTopologyResponse
-	19, // [19:24] is the sub-list for method output_type
-	14, // [14:19] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	7,  // 3: qubit_engine.CircuitRequest.noise_config:type_name -> qubit_engine.NoiseConfig
+	2,  // 4: qubit_engine.GateOperation.type:type_name -> qubit_engine.GateOperation.GateType
+	21, // 5: qubit_engine.NoiseConfig.coherent_errors:type_name -> qubit_engine.NoiseConfig.CoherentErrorsEntry
+	8,  // 6: qubit_engine.GateStreamRequest.init:type_name -> qubit_engine.GateStreamInit
+	6,  // 7: qubit_engine.GateStreamRequest.op:type_name -> qubit_engine.GateOperation
+	22, // 8: qubit_engine.StateResponse.state_vector:type_name -> qubit_engine.StateResponse.ComplexNumber
+	23, // 9: qubit_engine.StateResponse.classical_results:type_name -> qubit_engine.StateResponse.ClassicalResultsEntry
+	13, // 10: qubit_engine.StateResponse.sparse_states:type_name -> qubit_engine.Measurement
+	3,  // 11: qubit_engine.VQERequest.molecule:type_name -> qubit_engine.VQERequest.Molecule
+	4,  // 12: qubit_engine.VQERequest.optimizer_type:type_name -> qubit_engine.VQERequest.OptimizerType
+	14, // 13: qubit_engine.VQERequest.observables:type_name -> qubit_engine.PauliTerm
+	18, // 14: qubit_engine.HardwareTopologyResponse.nodes:type_name -> qubit_engine.QubitNode
+	19, // 15: qubit_engine.HardwareTopologyResponse.edges:type_name -> qubit_engine.CouplerEdge
+	5,  // 16: qubit_engine.QuantumCompute.RunCircuit:input_type -> qubit_engine.CircuitRequest
+	9,  // 17: qubit_engine.QuantumCompute.StreamGates:input_type -> qubit_engine.GateStreamRequest
+	5,  // 18: qubit_engine.QuantumCompute.VisualizeCircuit:input_type -> qubit_engine.CircuitRequest
+	15, // 19: qubit_engine.QuantumCompute.RunVQE:input_type -> qubit_engine.VQERequest
+	17, // 20: qubit_engine.QuantumCompute.GetHardwareTopology:input_type -> qubit_engine.HardwareTopologyRequest
+	11, // 21: qubit_engine.QuantumCompute.AcknowledgeShmRead:input_type -> qubit_engine.ShmAckRequest
+	10, // 22: qubit_engine.QuantumCompute.RunCircuit:output_type -> qubit_engine.StateResponse
+	10, // 23: qubit_engine.QuantumCompute.StreamGates:output_type -> qubit_engine.StateResponse
+	10, // 24: qubit_engine.QuantumCompute.VisualizeCircuit:output_type -> qubit_engine.StateResponse
+	16, // 25: qubit_engine.QuantumCompute.RunVQE:output_type -> qubit_engine.VQEResponse
+	20, // 26: qubit_engine.QuantumCompute.GetHardwareTopology:output_type -> qubit_engine.HardwareTopologyResponse
+	12, // 27: qubit_engine.QuantumCompute.AcknowledgeShmRead:output_type -> qubit_engine.ShmAckResponse
+	22, // [22:28] is the sub-list for method output_type
+	16, // [16:22] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_quantum_proto_init() }
@@ -1417,7 +1706,7 @@ func file_api_proto_quantum_proto_init() {
 	if File_api_proto_quantum_proto != nil {
 		return
 	}
-	file_api_proto_quantum_proto_msgTypes[3].OneofWrappers = []any{
+	file_api_proto_quantum_proto_msgTypes[4].OneofWrappers = []any{
 		(*GateStreamRequest_Init)(nil),
 		(*GateStreamRequest_Op)(nil),
 	}
@@ -1427,7 +1716,7 @@ func file_api_proto_quantum_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_quantum_proto_rawDesc), len(file_api_proto_quantum_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   15,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

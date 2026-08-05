@@ -223,5 +223,68 @@ void SharedMemory::performCleanup(std::string descriptor, void *ptr, size_t size
   }
 }
 
+ActiveShmRegistry& ActiveShmRegistry::instance() {
+  static ActiveShmRegistry inst;
+  return inst;
+}
+
+std::string ActiveShmRegistry::registerSegment(const std::string& segment_name, void* ptr, size_t size_bytes) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  static std::atomic<uint64_t> token_counter{0};
+  std::string token = "ack_token_" + std::to_string(++token_counter) + "_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+
+  ShmRegistration reg;
+  reg.ack_token = token;
+  reg.segment_name = segment_name;
+  reg.ptr = ptr;
+  reg.size_bytes = size_bytes;
+  reg.cleaned_up = false;
+
+  registry_[token] = reg;
+
+  // Schedule tight 3-second safety cleanup timer
+  std::thread timer_thread([token, segment_name, ptr, size_bytes]() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+    ActiveShmRegistry::instance().acknowledgeAndUnlink(token);
+  });
+  timer_thread.detach();
+
+  return token;
+}
+
+bool ActiveShmRegistry::acknowledgeAndUnlink(const std::string& ack_token) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  auto it = registry_.find(ack_token);
+  if (it == registry_.end()) {
+    return false;
+  }
+
+  if (!it->second.cleaned_up) {
+    it->second.cleaned_up = true;
+    SharedMemory::closeSegment(it->second.segment_name, it->second.ptr, it->second.size_bytes);
+    SharedMemory::unlinkSegment(it->second.segment_name);
+  }
+
+  registry_.erase(it);
+  return true;
+}
+
+size_t ActiveShmRegistry::activeCount() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return registry_.size();
+}
+
+void ActiveShmRegistry::clearAll() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  for (auto& pair : registry_) {
+    if (!pair.second.cleaned_up) {
+      pair.second.cleaned_up = true;
+      SharedMemory::closeSegment(pair.second.segment_name, pair.second.ptr, pair.second.size_bytes);
+      SharedMemory::unlinkSegment(pair.second.segment_name);
+    }
+  }
+  registry_.clear();
+}
+
 } // namespace ipc
 } // namespace qubit_engine

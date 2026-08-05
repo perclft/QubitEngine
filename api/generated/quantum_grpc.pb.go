@@ -24,6 +24,7 @@ const (
 	QuantumCompute_VisualizeCircuit_FullMethodName    = "/qubit_engine.QuantumCompute/VisualizeCircuit"
 	QuantumCompute_RunVQE_FullMethodName              = "/qubit_engine.QuantumCompute/RunVQE"
 	QuantumCompute_GetHardwareTopology_FullMethodName = "/qubit_engine.QuantumCompute/GetHardwareTopology"
+	QuantumCompute_AcknowledgeShmRead_FullMethodName  = "/qubit_engine.QuantumCompute/AcknowledgeShmRead"
 )
 
 // QuantumComputeClient is the client API for QuantumCompute service.
@@ -45,6 +46,8 @@ type QuantumComputeClient interface {
 	RunVQE(ctx context.Context, in *VQERequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[VQEResponse], error)
 	// Fetch Hardware Topology for Visualization
 	GetHardwareTopology(ctx context.Context, in *HardwareTopologyRequest, opts ...grpc.CallOption) (*HardwareTopologyResponse, error)
+	// Acknowledge completion of reading a Shared Memory segment
+	AcknowledgeShmRead(ctx context.Context, in *ShmAckRequest, opts ...grpc.CallOption) (*ShmAckResponse, error)
 }
 
 type quantumComputeClient struct {
@@ -126,6 +129,16 @@ func (c *quantumComputeClient) GetHardwareTopology(ctx context.Context, in *Hard
 	return out, nil
 }
 
+func (c *quantumComputeClient) AcknowledgeShmRead(ctx context.Context, in *ShmAckRequest, opts ...grpc.CallOption) (*ShmAckResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ShmAckResponse)
+	err := c.cc.Invoke(ctx, QuantumCompute_AcknowledgeShmRead_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // QuantumComputeServer is the server API for QuantumCompute service.
 // All implementations must embed UnimplementedQuantumComputeServer
 // for forward compatibility.
@@ -145,6 +158,8 @@ type QuantumComputeServer interface {
 	RunVQE(*VQERequest, grpc.ServerStreamingServer[VQEResponse]) error
 	// Fetch Hardware Topology for Visualization
 	GetHardwareTopology(context.Context, *HardwareTopologyRequest) (*HardwareTopologyResponse, error)
+	// Acknowledge completion of reading a Shared Memory segment
+	AcknowledgeShmRead(context.Context, *ShmAckRequest) (*ShmAckResponse, error)
 	mustEmbedUnimplementedQuantumComputeServer()
 }
 
@@ -169,6 +184,9 @@ func (UnimplementedQuantumComputeServer) RunVQE(*VQERequest, grpc.ServerStreamin
 }
 func (UnimplementedQuantumComputeServer) GetHardwareTopology(context.Context, *HardwareTopologyRequest) (*HardwareTopologyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetHardwareTopology not implemented")
+}
+func (UnimplementedQuantumComputeServer) AcknowledgeShmRead(context.Context, *ShmAckRequest) (*ShmAckResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AcknowledgeShmRead not implemented")
 }
 func (UnimplementedQuantumComputeServer) mustEmbedUnimplementedQuantumComputeServer() {}
 func (UnimplementedQuantumComputeServer) testEmbeddedByValue()                        {}
@@ -256,6 +274,24 @@ func _QuantumCompute_GetHardwareTopology_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _QuantumCompute_AcknowledgeShmRead_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ShmAckRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QuantumComputeServer).AcknowledgeShmRead(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QuantumCompute_AcknowledgeShmRead_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QuantumComputeServer).AcknowledgeShmRead(ctx, req.(*ShmAckRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // QuantumCompute_ServiceDesc is the grpc.ServiceDesc for QuantumCompute service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -270,6 +306,10 @@ var QuantumCompute_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetHardwareTopology",
 			Handler:    _QuantumCompute_GetHardwareTopology_Handler,
+		},
+		{
+			MethodName: "AcknowledgeShmRead",
+			Handler:    _QuantumCompute_AcknowledgeShmRead_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

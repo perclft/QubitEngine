@@ -40,6 +40,11 @@ public:
       const qubit_engine::HardwareTopologyRequest *request,
       qubit_engine::HardwareTopologyResponse *response) override;
 
+  grpc::Status AcknowledgeShmRead(
+      grpc::ServerContext *context,
+      const qubit_engine::ShmAckRequest *request,
+      qubit_engine::ShmAckResponse *response) override;
+
 private:
   std::unique_ptr<qubit_engine::auth::AuthInterceptor> auth_interceptor_;
   std::unique_ptr<qubit_engine::services::CircuitService> circuit_service_;

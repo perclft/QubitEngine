@@ -78,26 +78,51 @@ void CircuitService::serializeState(
   if (strategy == qubit_engine::CircuitRequest::FULL_STATE) {
     bool shm_success = false;
     if (use_shm && authorized) {
-      static std::atomic<uint64_t> counter{0};
-      std::string shm_name = "/qe_shm_" + std::to_string(++counter) + "_";
-      
-      thread_local std::random_device rd;
-      thread_local std::mt19937_64 gen(rd());
-      std::uniform_int_distribution<> dis(0, 9);
-      for (int i = 0; i < 16; ++i) { 
-        shm_name += std::to_string(dis(gen));
+      // 1. Backpressure check: Cap at 3 concurrent unacknowledged SHM segments
+      int backpressure_retries = 0;
+      while (qubit_engine::ipc::ActiveShmRegistry::instance().activeCount() >= 3 && backpressure_retries < 10) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        backpressure_retries++;
       }
 
-      try {
-        auto state_vec = qreg.getStateVector();
-        size_t bytes = state_vec.size() * sizeof(qubit_engine::Complex);
-        void* shm_ptr = qubit_engine::ipc::SharedMemory::createSegment(shm_name, bytes);
-        std::memcpy(shm_ptr, state_vec.data(), bytes);
-        response->set_shm_descriptor(shm_name);
-        qubit_engine::ipc::SharedMemory::scheduleCleanup(shm_name, shm_ptr, bytes, 5000); // 5s deferred cleanup
-        shm_success = true;
-      } catch (const std::exception &e) {
-        spdlog::error("Shared Memory Error in serializeState: {}", e.what());
+      if (qubit_engine::ipc::ActiveShmRegistry::instance().activeCount() < 3) {
+        static std::atomic<uint64_t> counter{0};
+        std::string shm_name = "/qe_shm_" + std::to_string(++counter) + "_";
+        
+        thread_local std::random_device rd;
+        thread_local std::mt19937_64 gen(rd());
+        std::uniform_int_distribution<> dis(0, 9);
+        for (int i = 0; i < 16; ++i) { 
+          shm_name += std::to_string(dis(gen));
+        }
+
+        try {
+          auto state_vec = qreg.getStateVector();
+          size_t bytes = state_vec.size() * sizeof(qubit_engine::Complex);
+          void* shm_ptr = qubit_engine::ipc::SharedMemory::createSegment(shm_name, bytes);
+          std::memcpy(shm_ptr, state_vec.data(), bytes);
+
+          std::string ack_token = qubit_engine::ipc::ActiveShmRegistry::instance().registerSegment(shm_name, shm_ptr, bytes);
+
+          auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+              std::chrono::system_clock::now().time_since_epoch()).count();
+
+          std::string desc_json = "{"
+              "\"segment_name\":\"" + shm_name + "\","
+              "\"size_bytes\":" + std::to_string(bytes) + ","
+              "\"num_qubits\":" + std::to_string(qreg.getNumQubits()) + ","
+              "\"data_type\":\"complex128\","
+              "\"created_at_ms\":" + std::to_string(now_ms) + ","
+              "\"ack_token\":\"" + ack_token + "\""
+              "}";
+
+          response->set_shm_descriptor(desc_json);
+          shm_success = true;
+        } catch (const std::exception &e) {
+          spdlog::error("Shared Memory Error in serializeState: {}", e.what());
+        }
+      } else {
+        spdlog::warn("SHM backpressure limit reached (3 un-acked segments). Falling back to protobuf array.");
       }
     }
 
@@ -129,6 +154,23 @@ void CircuitService::serializeState(
     double exp_val = qreg.expectationValue("Z");
     spdlog::info("Expectation Value (Z): {}", exp_val);
   }
+}
+
+grpc::Status CircuitService::AcknowledgeShmRead(
+    grpc::ServerContext *context, const qubit_engine::ShmAckRequest *request,
+    qubit_engine::ShmAckResponse *response, bool authorized) {
+  if (!authorized) {
+    return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "Invalid or missing authorization token");
+  }
+
+  bool ok = qubit_engine::ipc::ActiveShmRegistry::instance().acknowledgeAndUnlink(request->ack_token());
+  response->set_success(ok);
+  if (ok) {
+    response->set_message("ACK_SUCCESS");
+  } else {
+    response->set_message("ACK_TOKEN_NOT_FOUND_OR_EXPIRED");
+  }
+  return grpc::Status::OK;
 }
 
 grpc::Status CircuitService::RunCircuit(grpc::ServerContext *context,

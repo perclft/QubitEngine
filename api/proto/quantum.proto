@@ -34,6 +34,9 @@ service QuantumCompute {
 
   // Fetch Hardware Topology for Visualization
   rpc GetHardwareTopology (HardwareTopologyRequest) returns (HardwareTopologyResponse) {}
+
+  // Acknowledge completion of reading a Shared Memory segment
+  rpc AcknowledgeShmRead (ShmAckRequest) returns (ShmAckResponse) {}
 }
 
 // ------------------------------------------------------------------
@@ -162,6 +165,15 @@ message StateResponse {
 
   // Shared memory descriptor if Zero-Copy IPC is utilized
   string shm_descriptor = 6;
+}
+
+message ShmAckRequest {
+  string ack_token = 1;
+}
+
+message ShmAckResponse {
+  bool success = 1;
+  string message = 2;
 }
 
 message Measurement {

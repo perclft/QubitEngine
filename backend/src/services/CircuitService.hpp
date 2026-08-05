@@ -32,6 +32,10 @@ public:
       grpc::ServerWriter<qubit_engine::StateResponse> *writer,
       bool authorized = true);
 
+  grpc::Status AcknowledgeShmRead(
+      grpc::ServerContext *context, const qubit_engine::ShmAckRequest *request,
+      qubit_engine::ShmAckResponse *response, bool authorized = true);
+
   static bool hasEnoughMemory(int num_qubits);
 
 private:

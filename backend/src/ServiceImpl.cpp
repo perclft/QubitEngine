@@ -55,3 +55,11 @@ grpc::Status QubitEngineServiceImpl::GetHardwareTopology(
   }
   return topology_service_->GetHardwareTopology(context, request, response);
 }
+
+grpc::Status QubitEngineServiceImpl::AcknowledgeShmRead(
+    grpc::ServerContext *context,
+    const qubit_engine::ShmAckRequest *request,
+    qubit_engine::ShmAckResponse *response) {
+  bool authorized = auth_interceptor_->ValidateAuth(context);
+  return circuit_service_->AcknowledgeShmRead(context, request, response, authorized);
+}

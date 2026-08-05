@@ -13,6 +13,8 @@ services:
       - ../../.env
     depends_on:
       - postgres
+    volumes:
+      - shm_share:/dev/shm
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 50051 || exit 1"]
       interval: 10s
@@ -46,6 +48,8 @@ services:
     env_file:
       - ../../.env
     command: ["-db-host", "postgres"]
+    volumes:
+      - shm_share:/dev/shm
     networks:
       - qubit-net
     depends_on:
@@ -75,6 +79,8 @@ services:
     env_file:
       - ../../.env
     command: ["-redis-addr", "redis:6379", "-engine-addr", "engine:50051"]
+    volumes:
+      - shm_share:/dev/shm
     networks:
       - qubit-net
     depends_on:
@@ -87,7 +93,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-
+    
   # 6. Result Cache Service
   cache:
     build:
@@ -169,3 +175,4 @@ networks:
 
 volumes:
   postgres_data:
+  shm_share:
