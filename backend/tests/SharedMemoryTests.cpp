@@ -131,7 +131,7 @@ TEST(SharedMemoryTest, EndToEndLatencyBenchmark) {
   std::cout << "Qubits |   Elements   | Payload (MB) | Protobuf Mean +- Std (ms) | SHM+Ack Mean +- Std (ms) | Speedup\n";
   std::cout << "--------------------------------------------------------------------------------------------------\n";
 
-  const std::vector<int> qubit_counts = {10, 12, 14, 16, 18, 20, 22, 24, 25};
+  const std::vector<int> qubit_counts = {10, 11, 12, 14, 16, 18, 20, 22, 24, 25};
   const int NUM_RUNS = 10;
 
   for (int n : qubit_counts) {
