@@ -45,10 +45,8 @@ QubitEngine is a multi-language quantum simulation platform with five major laye
 
 1. **Cloud** — Remote execution offloading stub (`CloudBackend`).
 2. **MPS (Tensor Network)** — Simulates 30+ qubits (and up to 50+ qubits for weakly entangled 1D circuits) using SVD truncation with configurable bond dimension (default $\chi=64$).
-3. **CUDA** — GPU acceleration. Multi-GPU execution via `CudaBackend::applyGateDistributed` replicates the full $2^N$ state vector across GPUs via `ncclAllGather` (each GPU must possess sufficient VRAM for the full state vector).
+3. **CUDA / Metal** — Hardware GPU acceleration. Automatically selects `CudaBackend` on NVIDIA platforms (`#ifdef ENABLE_CUDA`) or `MetalBackend` on macOS Apple Silicon (`#ifdef ENABLE_METAL`). Multi-GPU CUDA execution via `CudaBackend::applyGateDistributed` replicates the full $2^N$ state vector across GPUs via `ncclAllGather`.
 4. **CPU** — Default fallback with explicit AVX2 (`__m256d`) and ARM NEON (`float64x2_t`) vector intrinsics for `applyHadamard`, combined with OpenMP thread parallelization and scalar loops for remaining gates.
-
-> **Note on Metal (Apple Silicon)**: `MetalBackend` is not part of the automatic `BackendFactory::create` selection chain. It requires explicit instantiation / dependency injection via `QuantumRegister(n, std::move(metal_backend))`.
 
 The `force_local` constructor parameter bypasses distributed (MPI) execution, useful for gradient calculations where each parameter evaluation needs an independent register.
 

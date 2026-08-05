@@ -4,6 +4,9 @@
 #ifdef ENABLE_CUDA
 #include "backends/CudaBackend.hpp"
 #endif
+#ifdef ENABLE_METAL
+#include "backends/MetalBackend.hpp"
+#endif
 #include "backends/MPSBackend.hpp"
 #include "backends/CloudBackend.hpp"
 #include <spdlog/spdlog.h>
@@ -38,6 +41,19 @@ std::unique_ptr<IQuantumBackend> BackendFactory::create(size_t num_qubits,
       return backend;
     } catch (...) {
       spdlog::error("BackendFactory: CudaBackend failed. Falling back to CPU.");
+    }
+  }
+#endif
+
+  // Priority 3b: Metal GPU (macOS)
+#ifdef ENABLE_METAL
+  if (!use_local) {
+    try {
+      auto backend = std::make_unique<MetalBackend>(num_qubits);
+      spdlog::info("BackendFactory: Using MetalBackend (Apple Silicon GPU)");
+      return backend;
+    } catch (...) {
+      spdlog::error("BackendFactory: MetalBackend failed. Falling back to CPU.");
     }
   }
 #endif
