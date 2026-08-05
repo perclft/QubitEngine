@@ -30,7 +30,7 @@ Key capabilities:
 - **Noise simulation** — Kraus-operator noise model with depolarizing (1Q/2Q), amplitude damping (T1), phase damping (T2), and readout error channels
 - **Distributed Tensor Networks** — Matrix Product State (MPS) backend scaling beyond 32 qubits with SVD truncation
 - **Clifford Stabilizer QEC** — Gottesman-Knill simulation for thousands of qubits in polynomial time
-- **Zero-Copy IPC** — Direct POSIX shared memory mapped state vector transfers mitigating gRPC overhead
+- **Same-Host Shared-Memory IPC** — High-throughput state vector transfer for streaming RPCs (`VisualizeCircuit`, `RunVQE`). Auto-engages above ~11–12 qubits where statistical benchmarks show a consistent 2–6.5x latency improvement over protobuf serialization, with automatic fallback to gRPC protobuf below that threshold or on cross-host/permission failures.
 - **Native differentiability** — Parameter Shift Rule and Adjoint differentiation for variational algorithms (VQE)
 - **JIT circuit optimization** — LRU caching & multi-level gate fusion compiler (O0–O4) utilizing background multi-threading
 - **Predictive Autoscaling Mesh** — Integrated Prometheus metrics querying Redis queue lengths mapping into Kubernetes HPA
@@ -73,12 +73,21 @@ Key capabilities:
 
 ## ⚡ Performance Benchmarks
 
+### Physics Kernel Throughput
 | Backend | Platform | Qubits | Bandwidth |
 | --- | --- | --- | --- |
 | **Metal** | macOS (M3 Air) | 25 | **19.03 GB/s** |
 | **CUDA** | Linux/Windows | 25 | **VRAM Optimized** |
 | **AVX2** | Windows | 25 | **6.64 GB/s** |
 | **MPI (n=2)** | Distributed | 22 | **3.15 GB/s** |
+
+### Same-Host Streaming Transport Latency (Protobuf vs. Shared Memory IPC)
+| Qubits ($N$) | Payload Size | Active Transport Path | Speedup over Protobuf |
+| --- | --- | --- | --- |
+| $N \le 10$ | $\le 16\text{ KB}$ | Standard gRPC Protobuf | $1.0\text{x}$ (Protobuf preferred) |
+| $N = 11 - 12$ | $32\text{ KB} - 64\text{ KB}$ | Shared Memory IPC | **$1.8\text{x} - 2.5\text{x}$** |
+| $N = 14 - 18$ | $250\text{ KB} - 4\text{ MB}$ | Shared Memory IPC | **$2.9\text{x} - 4.8\text{x}$** |
+| $N = 20 - 25$ | $16\text{ MB} - 512\text{ MB}$ | Shared Memory IPC | **$5.2\text{x} - 6.5\text{x}$** |
 
 ## 📁 Project Structure
 
@@ -271,7 +280,7 @@ The following status accurately reflects verified capabilities vs. planned roadm
 - **Hardware Acceleration Coverage**: Explicit AVX2 (`__m256d`) and ARM NEON (`float64x2_t`) vector intrinsics are implemented in `applyHadamard` ([CpuBackend.cpp](file:///c:/Users/percl/projects/QubitEngine/backend/src/backends/CpuBackend.cpp)). Other gate kernels rely on scalar loops combined with OpenMP thread parallelization and compiler auto-vectorization.
 - **Metal Backend Selection**: `MetalBackend` (Apple Silicon GPU) is integrated into `BackendFactory::create` on macOS (`#ifdef ENABLE_METAL`), automatically selecting Apple Silicon GPU acceleration when available ahead of CPU fallback.
 - **Multi-GPU Distributed Memory Scaling**: `CudaBackend::applyGateDistributed` currently uses `ncclAllGather` to replicate the full state vector across all GPUs during gate execution. Each GPU must possess sufficient VRAM for the full $2^N$ state vector. A point-to-point (P2P) boundary exchange architecture is planned for future memory-scalable multi-GPU execution.
-- **Same-Host Shared-Memory IPC**: `QuantumCompute` RPCs (`VisualizeCircuit`, `RunCircuit`, `StreamGates`) utilize an active zero-copy shared memory path (`ipc::SharedMemory` in C++ and `pkg/ipc` in Go). Automatically probes container `/dev/shm` access, mapping state vectors directly with an explicit `AcknowledgeShmRead` handshake ACK, 3-segment backpressure cap, and 3-second safety cleanup timeout, achieving a **5.7x speedup** for $N \ge 12$ qubits with graceful fallback to gRPC protobuf serialization.
+- **Same-Host Shared-Memory IPC**: `QuantumCompute` streaming RPCs (`VisualizeCircuit`, `RunVQE`) utilize an active shared memory path (`ipc::SharedMemory` in C++ and `pkg/ipc` in Go). Auto-engages above $N \ge 11$ qubits where statistical benchmarks show a consistent 2–6.5x latency improvement over protobuf array serialization. Container deployments require a scoped `/dev/shm` tmpfs volume mount (configured in `docker-compose.yaml` / Helm chart); if unconfigured or permission checks fail, the engine automatically falls back to standard gRPC protobuf serialization. On Windows container environments, SHM IPC is scoped to native host or shared volume deployments.
 - **Python Buffer Transfer**: `QuantumRegister::getStateVector()` returns `std::vector<Complex>` by value from the C++ backend. The Python bindings move this vector onto the heap and pass it via `py::capsule` to avoid duplicate copies during the C++-to-Python handoff to NumPy.
 - **Cloud Backend Submissions**: `RigettiBackend` and `IonQBackend` in the Go backend package currently return mock job IDs. Cloud payload translation (Quil / IonQ JSON) is planned for direct QPU API integration.
 - **Autoscaling Metrics**: Core Redis queue depth metrics are active; additional stream processing lag gauges (`streamLagMetric`) are planned for future mesh metrics integration.

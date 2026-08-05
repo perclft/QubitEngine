@@ -119,7 +119,11 @@ Defined in `api/proto/quantum.proto`:
 | `VisualizeCircuit` | Server Stream | Execute circuit, stream state after each step |
 | `RunVQE` | Server Stream | Run VQE optimization, stream energy per iteration |
 
-> **Note on Zero-Copy Shared Memory IPC**: For same-host deployments, `QuantumCompute` RPCs (`VisualizeCircuit`, `RunCircuit`, `StreamGates`) utilize an active zero-copy shared memory path (`ipc::SharedMemory` in C++ and `pkg/ipc` in Go). When same-host capability is verified via an active `/dev/shm` probe, state vectors are mapped directly into shared memory with a JSON metadata descriptor payload and an explicit `AcknowledgeShmRead` handshake ACK. Streaming sessions enforce a backpressure cap of 3 un-acknowledged segments and a 3-second safety cleanup timeout, gracefully falling back to standard protobuf array serialization if backpressure is reached or when operating across hosts. Benchmark data shows SHM zero-copy achieves a **5.7x speedup** over standard protobuf serialization for $N \ge 12$ qubits ($10.8\text{ ms}$ vs $62.1\text{ ms}$ at 20 qubits).
+> **Note on Same-Host Shared-Memory IPC**: For same-host deployments, `QuantumCompute` streaming RPCs (`VisualizeCircuit`, `RunVQE`, `StreamGates`) utilize a high-throughput shared memory optimization (`ipc::SharedMemory` in C++ and `pkg/ipc` in Go). Same-host capability is verified via a canary write+unlink probe on `/dev/shm` (POSIX) or Win32 file mapping probes.
+> - **Protocol & Handshake**: When SHM is active, `StateResponse.shm_descriptor` carries a JSON descriptor payload (`{"token":"...", "shm_name":"...", "size_bytes":..., "num_elements":...}`). The reader maps the segment and sends an `AcknowledgeShmRead` gRPC RPC back to the engine.
+> - **Backpressure & Cap**: Streaming sessions enforce a backpressure cap of at most 3 unacknowledged segments. If the reader lags and 3 un-acked segments are active, `CircuitService::serializeState` waits up to 20ms for an ACK before degrading gracefully to standard protobuf array serialization.
+> - **OS-Kernel Cleanup**: Un-acked segments are protected by a 3-second safety cleanup timer that forces segment unlinking and handles cleanup on reader crashes.
+> - **Auto-Engagement Threshold**: Automatically auto-engages above $N \ge 11$ qubits ($32\text{ KB}$ payload), where statistical multi-run benchmarks demonstrate a consistent 2–6.5x latency reduction over protobuf array serialization ($372\text{ ms}$ vs $2,359\text{ ms}$ at $N=25$).
 
 Defined in `api/proto/scheduler.proto`:
 
@@ -155,5 +159,4 @@ Defined in `api/proto/scheduler.proto`:
 The following features represent architectural roadmap targets for future releases:
 
 1. **Memory-Sharded Multi-GPU Execution**: Replacing `ncclAllGather` full-state replication with a point-to-point (P2P) boundary exchange model to shard large state vectors across GPU VRAM.
-2. **Zero-Copy gRPC Shared Memory Integration**: Wiring C++ `ipc::SharedMemory` descriptors into active Go gRPC sidecar RPC payloads.
-3. **QPU Cloud Backend Payload Serialization**: Translating circuit IR into native Quil (Rigetti) and IonQ JSON payloads for active hardware execution.
+2. **QPU Cloud Backend Payload Serialization**: Translating circuit IR into native Quil (Rigetti) and IonQ JSON payloads for active hardware execution.
