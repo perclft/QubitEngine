@@ -52,7 +52,9 @@ The `force_local` constructor parameter bypasses distributed (MPI) execution, us
 
 ## JIT Compiler Optimization Tiers
 
-The `QuantumJIT` compiler operates synchronously on `CircuitIR` (intermediate representation) during compilation and implements an in-memory LRU hashing layer (`ir_cache_map_` protected by `cache_mutex_`) to cache topologically identical circuit optimization passes.
+The `QuantumJIT` compiler pass (`QuantumJIT::compile`) operates on `CircuitIR` (intermediate representation) and utilizes an in-memory LRU hashing layer (`ir_cache_map_` protected by `cache_mutex_`) to cache topologically identical circuit optimization passes.
+
+In the gRPC service layer (`CircuitService::RunCircuit`), gate operations are processed in 1,000-gate chunks. Compilation of upcoming chunks is dispatched asynchronously to background threads via `std::async(std::launch::async)`, pipelining JIT compilation concurrently ahead of active gate execution.
 
 It features five optimization levels:
 
