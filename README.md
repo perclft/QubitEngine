@@ -84,10 +84,12 @@ Key capabilities:
 ### Same-Host Streaming Transport Latency (Protobuf vs. Shared Memory IPC)
 | Qubits ($N$) | Payload Size | Active Transport Path | Speedup over Protobuf |
 | --- | --- | --- | --- |
-| $N \le 10$ | $\le 16\text{ KB}$ | Standard gRPC Protobuf | $1.0\text{x}$ (Protobuf preferred) |
-| $N = 11 - 12$ | $32\text{ KB} - 64\text{ KB}$ | Shared Memory IPC | **$1.8\text{x} - 2.5\text{x}$** |
+| $N \le 11$ | $\le 32\text{ KB}$ | Standard gRPC Protobuf | $1.0\text{x}$ (Protobuf preferred) |
+| $N = 12$ | $64\text{ KB}$ | Shared Memory IPC | **$1.3\text{x} - 2.3\text{x}$** |
 | $N = 14 - 18$ | $250\text{ KB} - 4\text{ MB}$ | Shared Memory IPC | **$2.9\text{x} - 4.8\text{x}$** |
 | $N = 20 - 25$ | $16\text{ MB} - 512\text{ MB}$ | Shared Memory IPC | **$5.2\text{x} - 6.5\text{x}$** |
+
+*\* Measurements reflect state vector serialization, OS shared-memory mapping, and memory copy layer overhead; they do not include gRPC/HTTP2 wire transport framing.*
 
 ## 📁 Project Structure
 
