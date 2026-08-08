@@ -123,7 +123,7 @@ Defined in `api/proto/quantum.proto`:
 > - **Protocol & Handshake**: When SHM is active, `StateResponse.shm_descriptor` carries a JSON descriptor payload (`{"token":"...", "shm_name":"...", "size_bytes":..., "num_elements":...}`). The reader maps the segment and sends an `AcknowledgeShmRead` gRPC RPC back to the engine.
 > - **Backpressure & Cap**: Streaming sessions enforce a backpressure cap of at most 3 unacknowledged segments. If the reader lags and 3 un-acked segments are active, `CircuitService::serializeState` waits up to 20ms for an ACK before degrading gracefully to standard protobuf array serialization.
 > - **OS-Kernel Cleanup**: Un-acked segments are protected by a 3-second safety cleanup timer that forces segment unlinking and handles cleanup on reader crashes.
-> - **Auto-Engagement Threshold**: Automatically auto-engages above $N \ge 11$ qubits ($32\text{ KB}$ payload), where statistical multi-run benchmarks demonstrate a consistent 2–6.5x latency reduction over protobuf array serialization ($372\text{ ms}$ vs $2,359\text{ ms}$ at $N=25$).
+> - **Auto-Engagement Threshold**: Automatically auto-engages above $N \ge 12$ qubits ($64\text{ KB}$ payload), where statistical multi-run benchmarks demonstrate a consistent latency reduction over protobuf array serialization (1.29x speedup at $N=12$ up to 6.30x at $N=25$). Below $N < 12$ (e.g. $N=11$ at $0.85\text{x}$ in per-step streaming), segment allocation overhead outweighs protobuf serialization gains.
 
 Defined in `api/proto/scheduler.proto`:
 

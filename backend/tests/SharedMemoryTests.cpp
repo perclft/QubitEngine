@@ -212,6 +212,13 @@ TEST(SharedMemoryTest, EndToEndLatencyBenchmark) {
 // VisualizeCircuit calls serializeState(qreg, &response, ..., request->use_shm(), ...)
 // for EVERY gate step. These tests verify that the SHM path produces bit-identical
 // state vectors and exhibits the same crossover behavior as RunCircuit/StreamGates.
+//
+// NOTE / BENCHMARK LIMITATION:
+// These tests exercise the C++ engine's serializeState, SHM segment creation,
+// and ACK/unlink registry directly in a unit/integration test harness. They do NOT
+// execute through a full network gRPC server context with HTTP/2 framing overhead.
+// While this accurately measures state vector serialization and memory transfer,
+// full gRPC wire overhead is not included.
 // ============================================================================
 
 #include <nlohmann/json.hpp>
