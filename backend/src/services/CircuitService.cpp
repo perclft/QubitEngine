@@ -77,7 +77,7 @@ void CircuitService::serializeState(
 
   if (strategy == qubit_engine::CircuitRequest::FULL_STATE) {
     bool shm_success = false;
-    if (use_shm && authorized) {
+    if (use_shm && authorized && qreg.getNumQubits() >= 12) {
       // 1. Backpressure check: Cap at 3 concurrent unacknowledged SHM segments
       int backpressure_retries = 0;
       while (qubit_engine::ipc::ActiveShmRegistry::instance().activeCount() >= 3 && backpressure_retries < 10) {

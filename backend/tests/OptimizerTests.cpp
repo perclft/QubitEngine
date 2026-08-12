@@ -94,12 +94,13 @@ TEST(AdamOptimizerTest, ConvergesOnSimpleCircuit) {
   auto result =
       optimizer.minimize(simple_ansatz, hamiltonian, 1, initial_params);
 
-  ASSERT_EQ(result.size(), 1);
+  ASSERT_EQ(result.parameters.size(), 1);
   // Should converge near π (the energy minimum for cos(θ))
-  // cos(result[0]) should be close to -1.0
-  double final_energy = std::cos(result[0]);
+  // cos(result.parameters[0]) should be close to -1.0
+  double final_energy = std::cos(result.parameters[0]);
   EXPECT_LT(final_energy, -0.8) << "Expected energy < -0.8, got "
-                                << final_energy << " at θ=" << result[0];
+                                << final_energy << " at θ=" << result.parameters[0];
+  EXPECT_LT(result.energy, -0.8) << "Expected result.energy < -0.8, got " << result.energy;
 }
 
 TEST(AdamOptimizerTest, DefaultConfigWorks) {
@@ -111,7 +112,7 @@ TEST(AdamOptimizerTest, DefaultConfigWorks) {
 
   auto result =
       optimizer.minimize(simple_ansatz, hamiltonian, 1, initial_params);
-  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result.parameters.size(), 1);
 }
 
 TEST(AdamOptimizerTest, MultipleParamsConverge) {
@@ -135,7 +136,7 @@ TEST(AdamOptimizerTest, MultipleParamsConverge) {
 
   auto result =
       optimizer.minimize(two_param_ansatz, hamiltonian, 2, initial_params);
-  ASSERT_EQ(result.size(), 2);
+  ASSERT_EQ(result.parameters.size(), 2);
 }
 
 // ===== SPSAOptimizer Tests =====
@@ -155,13 +156,14 @@ TEST(SPSAOptimizerTest, ConvergesOnSimpleCircuit) {
   auto result =
       optimizer.minimize(simple_ansatz, hamiltonian, 1, initial_params);
 
-  ASSERT_EQ(result.size(), 1);
+  ASSERT_EQ(result.parameters.size(), 1);
   // SPSA is stochastic — just verify it moved toward lower energy
   double initial_energy = std::cos(0.5);
-  double final_energy = std::cos(result[0]);
+  double final_energy = std::cos(result.parameters[0]);
   EXPECT_LT(final_energy, initial_energy)
       << "SPSA should reduce energy from " << initial_energy << " to at least "
       << final_energy;
+  EXPECT_LT(result.energy, initial_energy);
 }
 
 TEST(SPSAOptimizerTest, DefaultConfigWorks) {
@@ -172,7 +174,7 @@ TEST(SPSAOptimizerTest, DefaultConfigWorks) {
 
   auto result =
       optimizer.minimize(simple_ansatz, hamiltonian, 1, initial_params);
-  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result.parameters.size(), 1);
 }
 
 TEST(SPSAOptimizerTest, ReturnsCorrectParamCount) {
@@ -193,5 +195,5 @@ TEST(SPSAOptimizerTest, ReturnsCorrectParamCount) {
 
   auto result =
       optimizer.minimize(multi_ansatz, hamiltonian, 1, initial_params);
-  EXPECT_EQ(result.size(), 3);
+  EXPECT_EQ(result.parameters.size(), 3);
 }

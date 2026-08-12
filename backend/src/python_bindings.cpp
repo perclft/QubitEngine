@@ -493,6 +493,13 @@ PYBIND11_MODULE(core, m) {
       },
       "Calculate analytical gradients using Adjoint Method on GPU (Fallback to CPU if CUDA is disabled)");
 
+  // --- OptimizationResult Binding ---
+  using qubit_engine::optimizers::OptimizationResult;
+  py::class_<OptimizationResult>(m, "OptimizationResult")
+      .def_readwrite("parameters", &OptimizationResult::parameters)
+      .def_readwrite("energy", &OptimizationResult::energy)
+      .def_readwrite("iterations", &OptimizationResult::iterations);
+
   // --- AdamOptimizer Binding ---
   using qubit_engine::optimizers::AdamOptimizer;
   py::class_<AdamOptimizer>(m, "AdamOptimizer")
@@ -522,6 +529,11 @@ PYBIND11_MODULE(core, m) {
   using qubit_engine::optimizers::SPSAOptimizer;
   py::class_<SPSAOptimizer>(m, "SPSAOptimizer")
       .def(py::init<>())
+      .def(py::init([](uint32_t seed) {
+        SPSAOptimizer::Config cfg;
+        cfg.seed = seed;
+        return std::make_unique<SPSAOptimizer>(cfg);
+      }), py::arg("seed"))
       .def(
           "minimize",
           [](SPSAOptimizer &optimizer, int num_qubits, py::function ansatz_func,

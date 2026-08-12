@@ -290,6 +290,12 @@ TEST(VisualizeCircuitShmTest, BitIdenticalCorrectness) {
     ASSERT_TRUE(status_shm.ok()) << "SHM RunCircuit failed for N=" << n;
 
     bool shm_engaged = !shm_resp.shm_descriptor().empty();
+    if (n < 12) {
+      EXPECT_FALSE(shm_engaged) << "Requests with N < 12 must be downgraded to protobuf serialization even if use_shm=true";
+    } else {
+      EXPECT_TRUE(shm_engaged) << "Requests with N >= 12 must engage SHM IPC path";
+    }
+
     std::cout << "  N=" << std::setw(2) << n
               << " (" << std::setw(8) << expected_elements << " elements, "
               << std::setw(8) << std::fixed << std::setprecision(3)

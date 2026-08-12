@@ -9,6 +9,12 @@
 namespace qubit_engine {
 namespace optimizers {
 
+struct OptimizationResult {
+  std::vector<double> parameters;
+  double energy = 0.0;
+  int iterations = 0;
+};
+
 class AdamOptimizer {
 public:
   struct Config {
@@ -23,10 +29,10 @@ public:
   explicit AdamOptimizer(Config config) : config_(config) {}
   AdamOptimizer() : config_() {}
 
-  std::vector<double> minimize(AnsatzFunction ansatz,
-                               const std::vector<PauliTerm> &hamiltonian,
-                               int num_qubits,
-                               std::vector<double> initial_params) {
+  OptimizationResult minimize(AnsatzFunction ansatz,
+                             const std::vector<PauliTerm> &hamiltonian,
+                             int num_qubits,
+                             std::vector<double> initial_params) {
     std::vector<double> params = initial_params;
     size_t num_params = params.size();
 
@@ -34,19 +40,22 @@ public:
     std::vector<double> m(num_params, 0.0);
     std::vector<double> v(num_params, 0.0);
 
-    double prev_energy = 1e9; // Large initial value
+    auto evalEnergy = [&](const std::vector<double> &p) -> double {
+      QuantumRegister qreg(num_qubits, true);
+      ansatz(p, qreg);
+      double energy = 0.0;
+      for (const auto &term : hamiltonian) {
+        energy += term.coefficient * qreg.expectationValue(term.pauli_string);
+      }
+      return energy;
+    };
 
+    int iterations_run = 0;
     for (int t = 1; t <= config_.max_iterations; ++t) {
+      iterations_run = t;
       // 1. Calculate Gradients
       std::vector<double> grads = QuantumDifferentiator::calculateGradients(
           num_qubits, params, ansatz, hamiltonian);
-
-      // 2. Adam Update Rule
-      // m_t = beta1 * m_{t-1} + (1 - beta1) * g_t
-      // v_t = beta2 * v_{t-1} + (1 - beta2) * g_t^2
-      // m_hat = m_t / (1 - beta1^t)
-      // v_hat = v_t / (1 - beta2^t)
-      // theta_t = theta_{t-1} - alpha * m_hat / (sqrt(v_hat) + epsilon)
 
       double max_grad = 0.0;
 
@@ -65,14 +74,6 @@ public:
                      (std::sqrt(v_hat) + config_.epsilon);
       }
 
-      // Check convergence (simple gradient norm or energy change)
-      // Re-evaluating energy every step is expensive, but good for debugging /
-      // tolerance check.
-      // Optimally, calculateGradients returns the energy too to save a call.
-      // But QuantumDifferentiator::calculateGradients does 2N evaluations. It
-      // does NOT return the center energy.
-      // Let's optimize: perform check every 10 steps or just rely on gradient
-      // norm.
       if (max_grad < config_.tolerance) {
         spdlog::info("Adam Converged at iteration {}", t);
         break;
@@ -83,7 +84,8 @@ public:
       }
     }
 
-    return params;
+    double final_energy = evalEnergy(params);
+    return OptimizationResult{params, final_energy, iterations_run};
   }
 
 private:

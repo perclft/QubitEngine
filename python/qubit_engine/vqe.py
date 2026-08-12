@@ -7,7 +7,8 @@ def vqe(hamiltonian: List[Tuple[float, str]],
         num_qubits: int,
         optimizer: str = "adam", 
         initial_params: List[float] = None,
-        max_iter: int = 100) -> dict:
+        max_iter: int = 100,
+        seed: int = 0) -> dict:
     """
     Run VQE (Variational Quantum Eigensolver).
     
@@ -17,6 +18,7 @@ def vqe(hamiltonian: List[Tuple[float, str]],
         num_qubits: Number of qubits.
         optimizer: "adam" or "spsa".
         initial_params: Initial parameter values.
+        seed: Random seed for stochastic optimizers (0 = non-deterministic).
         
     Returns:
         dict with minimum energy and optimal parameters.
@@ -29,7 +31,7 @@ def vqe(hamiltonian: List[Tuple[float, str]],
     if optimizer.lower() == "adam":
         opt = AdamOptimizer()
     elif optimizer.lower() == "spsa":
-        opt = SPSAOptimizer()
+        opt = SPSAOptimizer(seed=seed) if seed > 0 else SPSAOptimizer()
     else:
         raise ValueError(f"Unknown optimizer: {optimizer}")
         
@@ -37,7 +39,7 @@ def vqe(hamiltonian: List[Tuple[float, str]],
     result = opt.minimize(num_qubits, ansatz_func, hamiltonian, initial_params)
     
     return {
-        "energy": result.energy if hasattr(result, 'energy') else getattr(result, 'minimum_value', 0),
-        "parameters": result.parameters if hasattr(result, 'parameters') else getattr(result, 'optimal_parameters', []),
-        "history": result.history if hasattr(result, 'history') else []
+        "energy": result.energy,
+        "parameters": result.parameters,
+        "iterations": result.iterations
     }
