@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err)]
+
 use clap::Parser;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -317,6 +319,7 @@ impl Component for RouterComponent {
 }
 
 // Import the generated gRPC bindings
+#[allow(clippy::all, clippy::result_large_err)]
 pub mod api {
     tonic::include_proto!("qubit_engine");
 }
