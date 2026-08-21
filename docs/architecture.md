@@ -80,6 +80,8 @@ When a `NoiseModel` is attached to a `QuantumRegister` via `setNoiseModel()`, no
 2. **After every 2Q gate**: Single-qubit channels are applied to both qubits involved, then all two-qubit channels are applied to the pair
 3. **During measurement**: Readout error (confusion matrix) is applied to flip the classical result with configured probabilities
 
+> **Stabilizer Backend Noise**: On `StabilizerBackend`, general Kraus non-unitary operators are restricted to Clifford/Pauli channels. Single-qubit and two-qubit depolarizing noise channels are stochastically sampled and applied as random Pauli $X, Y, Z$ and $\sigma_a \otimes \sigma_b$ gate insertions directly into the stabilizer tableau, preserving Gottesman-Knill simulation efficiency while accurately modeling physical error rates.
+
 ### Supported Noise Channels
 
 | Channel | Parameters | Kraus Operators | Description |
@@ -118,6 +120,8 @@ Defined in `api/proto/quantum.proto`:
 | `StreamGates` | Bidi Stream | Send gates, receive state vectors |
 | `VisualizeCircuit` | Server Stream | Execute circuit, stream state after each step |
 | `RunVQE` | Server Stream | Run VQE optimization, stream energy per iteration |
+| `GetHardwareTopology` | Unary | Fetch hardware topology (nodes & coupler edges) for visualization |
+| `AcknowledgeShmRead` | Unary | Acknowledge completion of reading a Shared Memory segment |
 
 > **Note on Same-Host Shared-Memory IPC**: For same-host deployments, state-vector-producing RPCs (`RunCircuit`, `StreamGates`, `VisualizeCircuit`) utilize a high-throughput shared memory optimization (`ipc::SharedMemory` in C++ and `pkg/ipc` in Go). Same-host capability is verified via a canary write+unlink probe on `/dev/shm` (POSIX) or Win32 file mapping probes. `RunVQE` is excluded — it streams scalar energy/parameter values per iteration, where protobuf serialization overhead is negligible.
 > - **Protocol & Handshake**: When SHM is active, `StateResponse.shm_descriptor` carries a JSON descriptor payload (`{"token":"...", "shm_name":"...", "size_bytes":..., "num_elements":...}`). The reader maps the segment and sends an `AcknowledgeShmRead` gRPC RPC back to the engine.
@@ -134,6 +138,8 @@ Defined in `api/proto/scheduler.proto`:
 | `CancelJob` | Unary | Cancel queued or running job |
 | `StreamJobResults` | Server Stream | Stream results as engine produces them |
 | `ListJobs` | Unary | List jobs by user with pagination |
+| `GetClusterMetrics` | Unary | Get real-time cluster metrics for visualization |
+| `StreamClusterMetrics` | Server Stream | Stream real-time cluster metrics for visualization |
 
 ## Hardware & Distributed Scaling
 

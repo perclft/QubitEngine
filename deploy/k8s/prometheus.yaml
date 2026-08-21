@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: prometheus-config
-  namespace: quantumcloud
+  namespace: qubit-system
 data:
   prometheus.yml: |
     global:
@@ -29,7 +29,7 @@ data:
           - role: pod
             namespaces:
               names:
-                - quantumcloud
+                - qubit-system
         relabel_configs:
           - source_labels: [__meta_kubernetes_pod_label_app]
             regex: qubit-engine
@@ -45,7 +45,7 @@ data:
           - role: pod
             namespaces:
               names:
-                - quantumcloud
+                - qubit-system
         relabel_configs:
           - source_labels: [__meta_kubernetes_pod_label_app]
             regex: quantum-scheduler
@@ -72,7 +72,7 @@ data:
           - role: pod
             namespaces:
               names:
-                - quantumcloud
+                - qubit-system
         relabel_configs:
           - source_labels: [__meta_kubernetes_pod_label_app]
             regex: quantum-envoy
@@ -86,7 +86,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: prometheus-rules
-  namespace: quantumcloud
+  namespace: qubit-system
 data:
   quantum-alerts.yml: |
     groups:
@@ -120,7 +120,7 @@ data:
               description: "Cache hit rate is {{ $value | humanizePercentage }}"
 
           - alert: PodRestartLoop
-            expr: rate(kube_pod_container_status_restarts_total{namespace="quantumcloud"}[15m]) > 0.5
+            expr: rate(kube_pod_container_status_restarts_total{namespace="qubit-system"}[15m]) > 0.5
             for: 5m
             labels:
               severity: critical
@@ -132,7 +132,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: prometheus
-  namespace: quantumcloud
+  namespace: qubit-system
 spec:
   replicas: 1
   selector:
@@ -183,7 +183,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: prometheus
-  namespace: quantumcloud
+  namespace: qubit-system
 spec:
   selector:
     app: prometheus
@@ -195,7 +195,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: prometheus
-  namespace: quantumcloud
+  namespace: qubit-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -222,4 +222,4 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: prometheus
-    namespace: quantumcloud
+    namespace: qubit-system

@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: jaeger
-  namespace: quantumcloud
+  namespace: qubit-system
   labels:
     app: jaeger
 spec:
@@ -25,7 +25,7 @@ spec:
             - containerPort: 16686
               name: jaeger-ui
             - containerPort: 14268
-              name: jaeger-collector
+              name: collector
             - containerPort: 4317
               name: otlp-grpc
             - containerPort: 4318
@@ -47,7 +47,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: jaeger-collector
-  namespace: quantumcloud
+  namespace: qubit-system
 spec:
   selector:
     app: jaeger
@@ -70,7 +70,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: jaeger-ui
-  namespace: quantumcloud
+  namespace: qubit-system
 spec:
   selector:
     app: jaeger
@@ -84,7 +84,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: otel-collector-config
-  namespace: quantumcloud
+  namespace: qubit-system
 data:
   config.yaml: |
     receivers:
@@ -147,7 +147,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: otel-collector
-  namespace: quantumcloud
+  namespace: qubit-system
 spec:
   replicas: 1
   selector:
@@ -187,7 +187,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: otel-collector
-  namespace: quantumcloud
+  namespace: qubit-system
 spec:
   selector:
     app: otel-collector

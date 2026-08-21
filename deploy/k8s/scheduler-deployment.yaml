@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: quantum-scheduler
-  namespace: quantumcloud
+  namespace: qubit-system
 spec:
   replicas: 2
   selector:
@@ -13,9 +13,21 @@ spec:
       labels:
         app: quantum-scheduler
     spec:
+      initContainers:
+        - name: wait-for-redis
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z -w 2 redis-master 6379; do echo waiting for redis; sleep 1; done']
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
       containers:
         - name: scheduler
           image: ghcr.io/perclft/qubit-scheduler:latest
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 50053
           env:
@@ -24,7 +36,7 @@ spec:
             - name: REDIS_PORT
               value: "6379"
             - name: ENGINE_HOST
-              value: "quantum-engine"
+              value: "qubit-engine"
             - name: ENGINE_PORT
               value: "50051"
           args:
@@ -59,7 +71,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: redis-master
-  namespace: quantumcloud
+  namespace: qubit-system
 spec:
   replicas: 1
   selector:
@@ -100,7 +112,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: redis-master
-  namespace: quantumcloud
+  namespace: qubit-system
 spec:
   selector:
     app: redis
@@ -113,11 +125,10 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: redis-pvc
-  namespace: quantumcloud
+  namespace: qubit-system
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 1Gi
-  storageClassName: standard

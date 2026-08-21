@@ -235,15 +235,83 @@ void StabilizerBackend::applyDepolarizingNoise(Precision probability) {
   }
 }
 
-void StabilizerBackend::applyNoiseChannel1Q(const NoiseChannel1Q&, size_t) {
-  // Kraus channels are not directly applicable to the stabilizer tableau.
-  // Stochastic Pauli noise could be supported in the future by randomly
-  // applying Clifford Pauli gates within the tableau formalism.
+void StabilizerBackend::applyNoiseChannel1Q(const NoiseChannel1Q& channel, size_t target) {
+  if (channel.operators.empty()) return;
+
+  double total_weight = 0.0;
+  for (const auto& op : channel.operators) {
+    total_weight += op.probability;
+  }
+  if (total_weight <= 0.0) return;
+
+  static thread_local std::mt19937 gen(std::random_device{}());
+  std::uniform_real_distribution<double> dis(0.0, total_weight);
+  double r = dis(gen);
+
+  size_t selected_idx = 0;
+  double cumulative = 0.0;
+  for (size_t i = 0; i < channel.operators.size(); ++i) {
+    cumulative += channel.operators[i].probability;
+    if (r <= cumulative) {
+      selected_idx = i;
+      break;
+    }
+  }
+
+  const auto& mat = channel.operators[selected_idx].matrix;
+  double mag00 = std::norm(mat[0]);
+  double mag01 = std::norm(mat[1]);
+  double mag10 = std::norm(mat[2]);
+  double mag11 = std::norm(mat[3]);
+
+  if (mag01 > 1e-12 && mag10 > 1e-12 && mag00 < 1e-12 && mag11 < 1e-12) {
+    if (std::abs(mat[1].imag()) > std::abs(mat[1].real())) {
+      applyY(target);
+    } else {
+      applyX(target);
+    }
+  } else if (mag00 > 1e-12 && mag11 > 1e-12 && mag01 < 1e-12 && mag10 < 1e-12) {
+    if ((mat[0] * std::conj(mat[3])).real() < -1e-12) {
+      applyZ(target);
+    }
+  }
 }
 
-void StabilizerBackend::applyNoiseChannel2Q(const NoiseChannel2Q&, size_t, size_t) {
-  // Same limitation as 1Q — tableau-based noise injection requires
-  // restricting to Pauli channels only.
+void StabilizerBackend::applyNoiseChannel2Q(const NoiseChannel2Q& channel, size_t q1, size_t q2) {
+  if (channel.operators.empty()) return;
+
+  double total_weight = 0.0;
+  for (const auto& op : channel.operators) {
+    total_weight += op.probability;
+  }
+  if (total_weight <= 0.0) return;
+
+  static thread_local std::mt19937 gen(std::random_device{}());
+  std::uniform_real_distribution<double> dis(0.0, total_weight);
+  double r = dis(gen);
+
+  size_t selected_idx = 0;
+  double cumulative = 0.0;
+  for (size_t i = 0; i < channel.operators.size(); ++i) {
+    cumulative += channel.operators[i].probability;
+    if (r <= cumulative) {
+      selected_idx = i;
+      break;
+    }
+  }
+
+  if (channel.operators.size() == 16) {
+    size_t a = selected_idx / 4;
+    size_t b = selected_idx % 4;
+
+    if (a == 1) applyX(q1);
+    else if (a == 2) applyY(q1);
+    else if (a == 3) applyZ(q1);
+
+    if (b == 1) applyX(q2);
+    else if (b == 2) applyY(q2);
+    else if (b == 3) applyZ(q2);
+  }
 }
 
 void StabilizerBackend::applyDenseUnitary(const std::vector<size_t> &targets,

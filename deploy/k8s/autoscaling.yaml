@@ -2,7 +2,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: quantum-engine-hpa
-  namespace: quantum-system
+  namespace: qubit-system
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -67,7 +67,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: quantum-scheduler-hpa
-  namespace: quantum-system
+  namespace: qubit-system
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -107,7 +107,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: quantum-registry-hpa
-  namespace: quantum-system
+  namespace: qubit-system
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -130,7 +130,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: quantum-cache-hpa
-  namespace: quantumcloud
+  namespace: qubit-system
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

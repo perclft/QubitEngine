@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: circuit-registry
-  namespace: quantum-system
+  namespace: qubit-system
   labels:
     app: circuit-registry
 spec:
@@ -19,6 +19,17 @@ spec:
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z -w 2 postgres 5432; do echo waiting for postgres; sleep 1; done']
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
       containers:
         - name: registry
           image: circuit-registry:latest
@@ -72,7 +83,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: circuit-registry
-  namespace: quantum-system
+  namespace: qubit-system
 spec:
   selector:
     app: circuit-registry

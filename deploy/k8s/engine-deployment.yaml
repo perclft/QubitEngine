@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: qubit-engine
-  namespace: quantum-system # Adjust if you use 'default'
+  namespace: qubit-system
   labels:
     app: qubit-engine
 spec:

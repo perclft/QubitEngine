@@ -5,7 +5,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: federation-config
-  namespace: quantumcloud
+  namespace: qubit-system
 data:
   clusters.yaml: |
     federation:
@@ -79,32 +79,32 @@ apiVersion: multicluster.x-k8s.io/v1alpha1
 kind: ServiceExport
 metadata:
   name: quantum-engine
-  namespace: quantumcloud
+  namespace: qubit-system
 ---
 apiVersion: multicluster.x-k8s.io/v1alpha1
 kind: ServiceExport
 metadata:
   name: quantum-registry
-  namespace: quantumcloud
+  namespace: qubit-system
 ---
 apiVersion: multicluster.x-k8s.io/v1alpha1
 kind: ServiceExport
 metadata:
   name: quantum-scheduler
-  namespace: quantumcloud
+  namespace: qubit-system
 ---
 apiVersion: multicluster.x-k8s.io/v1alpha1
 kind: ServiceExport
 metadata:
   name: quantum-cache
-  namespace: quantumcloud
+  namespace: qubit-system
 ---
 # ServiceImport for consuming cross-cluster services
 apiVersion: multicluster.x-k8s.io/v1alpha1
 kind: ServiceImport
 metadata:
   name: quantum-engine
-  namespace: quantumcloud
+  namespace: qubit-system
 spec:
   type: ClusterSetIP
   ports:
@@ -116,7 +116,7 @@ apiVersion: networking.gke.io/v1beta1
 kind: ServiceNetworkEndpointGroup
 metadata:
   name: quantum-global-neg
-  namespace: quantumcloud
+  namespace: qubit-system
   annotations:
     cloud.google.com/neg: '{"exposed_ports": {"50051": {}}}'
 spec:
@@ -127,7 +127,7 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: quantum-engine-pdb
-  namespace: quantumcloud
+  namespace: qubit-system
 spec:
   minAvailable: 2
   selector:
@@ -138,7 +138,7 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: quantum-scheduler-pdb
-  namespace: quantumcloud
+  namespace: qubit-system
 spec:
   minAvailable: 1
   selector:
@@ -149,9 +149,9 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: quantum-registry-pdb
-  namespace: quantumcloud
+  namespace: qubit-system
 spec:
   minAvailable: 1
   selector:
     matchLabels:
-      app: quantum-registry
+      app: circuit-registry

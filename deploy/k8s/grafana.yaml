@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: grafana-dashboards
-  namespace: quantumcloud
+  namespace: qubit-system
   labels:
     grafana_dashboard: "1"
 data:
@@ -68,7 +68,7 @@ data:
           "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
           "id": 4,
           "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}, "pieType": "pie", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "tooltip": {"mode": "single", "sort": "none"}},
-          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum(kube_pod_container_status_running{namespace=\"quantumcloud\"}) by (pod)", "legendFormat": "{{pod}}", "range": true, "refId": "A"}],
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum(kube_pod_container_status_running{namespace=\"qubit-system\"}) by (pod)", "legendFormat": "{{pod}}", "range": true, "refId": "A"}],
           "title": "Running Pods",
           "type": "piechart"
         },
@@ -78,7 +78,7 @@ data:
           "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
           "id": 5,
           "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "none"}},
-          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "container_memory_working_set_bytes{namespace=\"quantumcloud\", container!=\"\"}", "legendFormat": "{{pod}} - {{container}}", "range": true, "refId": "A"}],
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "container_memory_working_set_bytes{namespace=\"qubit-system\", container!=\"\"}", "legendFormat": "{{pod}} - {{container}}", "range": true, "refId": "A"}],
           "title": "Memory Usage",
           "type": "timeseries"
         },
@@ -110,7 +110,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: grafana
-  namespace: quantumcloud
+  namespace: qubit-system
 spec:
   replicas: 1
   selector:
@@ -155,7 +155,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: grafana-dashboard-provisioner
-  namespace: quantumcloud
+  namespace: qubit-system
 data:
   dashboards.yaml: |
     apiVersion: 1
@@ -171,7 +171,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: grafana
-  namespace: quantumcloud
+  namespace: qubit-system
 spec:
   selector:
     app: grafana
