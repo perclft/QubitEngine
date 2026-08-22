@@ -11,6 +11,10 @@
 #include <random>
 #include <cmath>
 
+#include <mach-o/dyld.h>
+#include <dlfcn.h>
+#include <filesystem>
+
 // Metal GPU struct uses float; C++ Complex uses double.
 // We must convert explicitly during upload/download.
 struct MetalComplex {
@@ -81,51 +85,119 @@ void MetalBackend::initializeMetal() {
   commandQueue_ = (void *)CFBridgingRetain(queue);
   spdlog::info("MetalBackend::initializeMetal - CommandQueue Created");
 
-  // Load Library
-  NSError *error = nil;
-  id<MTLLibrary> library =
-      [device newDefaultLibraryWithBundle:[NSBundle mainBundle] error:&error];
-  if (!library) {
-    spdlog::info("MetalBackend::initializeMetal - Main Bundle Library not "
-                 "found, trying file...");
-    // Try to load from "default.metallib" in multiple locs
-    NSArray<NSString *> *paths = @[
-      @"default.metallib", @"bin/default.metallib", @"../bin/default.metallib",
-      @"backend/build/default.metallib", @"backend/build_macos/default.metallib"
-    ];
-    for (NSString *path in paths) {
-      NSURL *url = [NSURL fileURLWithPath:path];
-      library = [device newLibraryWithURL:url error:&error];
-      if (library) {
-        spdlog::info("MetalBackend::initializeMetal - Loaded from {}",
-                  [path UTF8String]);
-        break;
-      }
-    }
+  // 1. Collect candidate search directories
+  NSMutableArray<NSString *> *searchDirs = [NSMutableArray array];
+  
+  if (const char* envPath = std::getenv("QUBIT_SHADERS_PATH")) {
+    [searchDirs addObject:[NSString stringWithUTF8String:envPath]];
   }
+  if (const char* envRoot = std::getenv("QUBIT_ENGINE_ROOT")) {
+    [searchDirs addObject:[NSString stringWithFormat:@"%s", envRoot]];
+    [searchDirs addObject:[NSString stringWithFormat:@"%s/backend/src", envRoot]];
+    [searchDirs addObject:[NSString stringWithFormat:@"%s/bin", envRoot]];
+  }
+
+  // Executable directory & parent directories
+  char exeBuf[1024];
+  uint32_t exeBufSize = sizeof(exeBuf);
+  if (_NSGetExecutablePath(exeBuf, &exeBufSize) == 0) {
+    try {
+      std::filesystem::path exePath = std::filesystem::canonical(exeBuf);
+      std::filesystem::path exeDir = exePath.parent_path();
+      [searchDirs addObject:[NSString stringWithUTF8String:exeDir.string().c_str()]];
+      [searchDirs addObject:[NSString stringWithUTF8String:(exeDir / ".." / "backend" / "src").lexically_normal().string().c_str()]];
+      [searchDirs addObject:[NSString stringWithUTF8String:(exeDir / ".." / "src").lexically_normal().string().c_str()]];
+      [searchDirs addObject:[NSString stringWithUTF8String:(exeDir / "backend" / "src").lexically_normal().string().c_str()]];
+    } catch (...) {}
+  }
+
+  // Dynamic library location (when loaded as python module or dylib)
+  Dl_info dlInfo;
+  static int s_anchorSymbol = 0;
+  if (dladdr((const void*)&s_anchorSymbol, &dlInfo) && dlInfo.dli_fname) {
+    try {
+      std::filesystem::path libPath = std::filesystem::canonical(dlInfo.dli_fname);
+      std::filesystem::path libDir = libPath.parent_path();
+      [searchDirs addObject:[NSString stringWithUTF8String:libDir.string().c_str()]];
+      [searchDirs addObject:[NSString stringWithUTF8String:(libDir / ".." / "backend" / "src").lexically_normal().string().c_str()]];
+      [searchDirs addObject:[NSString stringWithUTF8String:(libDir / ".." / "src").lexically_normal().string().c_str()]];
+      [searchDirs addObject:[NSString stringWithUTF8String:(libDir / "backend" / "src").lexically_normal().string().c_str()]];
+    } catch (...) {}
+  }
+
+  // Working directory relative paths
+  [searchDirs addObject:@"."];
+  [searchDirs addObject:@"backend/src"];
+  [searchDirs addObject:@"src"];
+  [searchDirs addObject:@"../backend/src"];
+  [searchDirs addObject:@"../src"];
+  [searchDirs addObject:@"../../backend/src"];
+  [searchDirs addObject:@"../../../backend/src"];
+
+  // 2. Try loading precompiled default.metallib
+  NSError *error = nil;
+  id<MTLLibrary> library = [device newDefaultLibraryWithBundle:[NSBundle mainBundle] error:&error];
   if (!library) {
-    spdlog::info("MetalBackend::initializeMetal - metallib file not found, loading shaders.metal source...");
-    NSArray<NSString *> *srcPaths = @[
-      @"src/shaders.metal", @"backend/src/shaders.metal", @"../src/shaders.metal", @"../backend/src/shaders.metal"
+    NSArray<NSString *> *metallibNames = @[
+      @"default.metallib", @"bin/default.metallib",
+      @"build/default.metallib", @"build_macos/default.metallib"
     ];
-    for (NSString *srcPath in srcPaths) {
-      if ([[NSFileManager defaultManager] fileExistsAtPath:srcPath]) {
-        NSString *srcContent = [NSString stringWithContentsOfFile:srcPath encoding:NSUTF8StringEncoding error:&error];
-        if (srcContent) {
-          library = [device newLibraryWithSource:srcContent options:nil error:&error];
+    for (NSString *dir in searchDirs) {
+      for (NSString *rel in metallibNames) {
+        NSString *fullPath = [dir stringByAppendingPathComponent:rel];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:fullPath]) {
+          NSURL *url = [NSURL fileURLWithPath:fullPath];
+          library = [device newLibraryWithURL:url error:&error];
           if (library) {
-            spdlog::info("MetalBackend::initializeMetal - Compiled library from source: {}", [srcPath UTF8String]);
+            spdlog::info("MetalBackend::initializeMetal - Loaded precompiled metallib from {}", [fullPath UTF8String]);
             break;
           }
         }
       }
+      if (library) break;
     }
   }
+
+  // 3. Fallback: JIT compile shaders.metal source
+  if (!library) {
+    spdlog::info("MetalBackend::initializeMetal - metallib file not found, loading shaders.metal source...");
+    NSArray<NSString *> *shaderFiles = @[
+      @"shaders.metal", @"gate_kernels.metal",
+      @"src/shaders.metal", @"backend/src/shaders.metal",
+      @"src/kernels/metal/gate_kernels.metal"
+    ];
+    NSMutableArray<NSString *> *checkedPaths = [NSMutableArray array];
+    for (NSString *dir in searchDirs) {
+      for (NSString *file in shaderFiles) {
+        NSString *fullPath = [dir stringByAppendingPathComponent:file];
+        [checkedPaths addObject:fullPath];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:fullPath]) {
+          NSString *srcContent = [NSString stringWithContentsOfFile:fullPath encoding:NSUTF8StringEncoding error:&error];
+          if (srcContent) {
+            library = [device newLibraryWithSource:srcContent options:nil error:&error];
+            if (library) {
+              spdlog::info("MetalBackend::initializeMetal - Compiled library from source: {}", [fullPath UTF8String]);
+              break;
+            }
+          }
+        }
+      }
+      if (library) break;
+    }
+    if (!library) {
+      std::string checkedStr;
+      for (NSString *p in checkedPaths) {
+        checkedStr += "\n  - " + std::string([p UTF8String]);
+      }
+      spdlog::error("MetalBackend::initializeMetal - Failed to find or compile shaders.metal. Searched candidate paths:{}", checkedStr);
+    }
+  }
+
   if (!library) {
     spdlog::error("MetalBackend::initializeMetal - Failed to load library: {}",
-        [[error localizedDescription] UTF8String]);
+        error ? [[error localizedDescription] UTF8String] : "No valid shader file found");
     throw std::runtime_error(std::string("Could not load Metal library: ") +
-                             [[error localizedDescription] UTF8String]);
+                             (error ? [[error localizedDescription] UTF8String] : "No valid shader file found"));
   }
   spdlog::info("MetalBackend::initializeMetal - Library Loaded");
 

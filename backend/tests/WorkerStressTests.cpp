@@ -40,7 +40,7 @@ TEST_F(WorkerStressTest, ConcurrentJobProcessing) {
     op->set_target_qubit(0);
 
     std::string circuit_bin;
-    circuit.SerializeToString(&circuit_bin);
+    ASSERT_TRUE(circuit.SerializeToString(&circuit_bin));
 
     // Push 20 jobs
     for (int i = 0; i < num_jobs; ++i) {

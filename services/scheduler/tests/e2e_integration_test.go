@@ -127,11 +127,13 @@ func TestFullStackIntegration(t *testing.T) {
 	// 3. Start C++ Engine
 	enginePort := getFreePort()
 	cmdEngine := exec.Command(enginePath)
+	cmdEngine.Dir = rootDir
 	cmdEngine.Env = append(os.Environ(),
 		fmt.Sprintf("PORT=%d", enginePort),
 		"REDIS_ADDR=redis://"+mr.Addr(),
 		"QUBIT_ENGINE_JWT_SECRET=e2e_test_secret_key_1234567890",
 		"QUBIT_ENGINE_SKIP_AUTH=0",
+		"QUBIT_STRICT_HARDWARE_ACCEL=1",
 	)
 	cmdEngine.Stdout = os.Stdout
 	cmdEngine.Stderr = os.Stderr
@@ -169,6 +171,8 @@ func TestFullStackIntegration(t *testing.T) {
 		"-port", fmt.Sprintf("%d", schedulerPort),
 		"-redis-addr", mr.Addr(),
 		"-engine-addr", fmt.Sprintf("127.0.0.1:%d", enginePort),
+		"-metrics-port", "0",
+		"-grpc-web-port", "0",
 	)
 	cmdSched.Stdout = os.Stdout
 	cmdSched.Stderr = os.Stderr

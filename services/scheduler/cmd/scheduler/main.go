@@ -67,6 +67,8 @@ func main() {
 	redisAddr := flag.String("redis-addr", "localhost:6379", "Redis address")
 	engineAddr := flag.String("engine-addr", "engine:50051", "Engine gRPC address")
 	port := flag.Int("port", 50053, "gRPC port")
+	metricsPort := flag.Int("metrics-port", 2112, "Prometheus metrics port (<= 0 to disable)")
+	grpcWebPort := flag.Int("grpc-web-port", 8080, "gRPC-Web port (<= 0 to disable)")
 	flag.Parse()
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -108,13 +110,16 @@ func main() {
 	}
 	server.StartWorkers(ctx)
 
-	http.Handle("/metrics", promhttp.Handler())
-	go func() {
-		slog.Info("Starting Prometheus metrics server on :2112/metrics")
-		if err := http.ListenAndServe(":2112", nil); err != nil {
-			slog.Error("Metrics server failed", "error", err)
-		}
-	}()
+	if *metricsPort > 0 {
+		http.Handle("/metrics", promhttp.Handler())
+		go func() {
+			addr := fmt.Sprintf(":%d", *metricsPort)
+			slog.Info("Starting Prometheus metrics server on " + addr + "/metrics")
+			if err := http.ListenAndServe(addr, nil); err != nil && err != http.ErrServerClosed {
+				slog.Error("Metrics server failed", "error", err)
+			}
+		}()
+	}
 
 	go func() {
 		for {
@@ -220,7 +225,7 @@ func main() {
 
 	slog.Info("Quantum Scheduler starting",
 		"port", *port,
-		"grpc-web", ":8080",
+		"grpc-web-port", *grpcWebPort,
 		"redis", *redisAddr,
 		"engine", *engineAddr,
 	)
@@ -238,22 +243,25 @@ func main() {
 		return false
 	}))
 
-	httpServer := &http.Server{
-		Addr: ":8080",
-		Handler: http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-			if wrappedGrpc.IsGrpcWebRequest(req) {
-				wrappedGrpc.ServeHTTP(res, req)
-			} else {
-				http.DefaultServeMux.ServeHTTP(res, req)
-			}
-		}),
-	}
-	
-	go func() {
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("gRPC-Web server failed", "error", err)
+	var httpServer *http.Server
+	if *grpcWebPort > 0 {
+		httpServer = &http.Server{
+			Addr: fmt.Sprintf(":%d", *grpcWebPort),
+			Handler: http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+				if wrappedGrpc.IsGrpcWebRequest(req) {
+					wrappedGrpc.ServeHTTP(res, req)
+				} else {
+					http.DefaultServeMux.ServeHTTP(res, req)
+				}
+			}),
 		}
-	}()
+		
+		go func() {
+			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				slog.Error("gRPC-Web server failed", "error", err)
+			}
+		}()
+	}
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
@@ -272,6 +280,8 @@ func main() {
 	defer cancel()
 
 	grpcServer.GracefulStop()
-	httpServer.Shutdown(shutdownCtx)
+	if httpServer != nil {
+		httpServer.Shutdown(shutdownCtx)
+	}
 	slog.Info("Scheduler shut down gracefully")
 }

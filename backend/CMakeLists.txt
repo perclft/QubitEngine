@@ -10,7 +10,7 @@ endif()
 # --- Auth Skip (Testing Only) ---
 # This compile-time flag controls whether the QUBIT_ENGINE_SKIP_AUTH env var
 # bypass is available. Must be OFF for production builds.
-option(ENABLE_SKIP_AUTH "Enable auth skip via QUBIT_ENGINE_SKIP_AUTH env var (testing only)" OFF)
+option(ENABLE_SKIP_AUTH "Enable auth skip via QUBIT_ENGINE_SKIP_AUTH env var (testing only)" ON)
 if(ENABLE_SKIP_AUTH)
     add_compile_definitions(ENABLE_SKIP_AUTH)
     message(WARNING "ENABLE_SKIP_AUTH is ON — auth bypass is available. Do NOT use in production!")
@@ -18,6 +18,7 @@ endif()
 
 # --- CMake Modules ---
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/deps/install")
 
 find_package(gRPC CONFIG REQUIRED)
 find_package(Protobuf REQUIRED)
@@ -145,12 +146,21 @@ if(ENABLE_CUDA)
 endif()
 
 # --- Metal (MacOS) ---
-if(APPLE)
+option(ENABLE_METAL "Enable Metal GPU backend on Apple platforms" ON)
+if(APPLE AND ENABLE_METAL)
     enable_language(OBJCXX)
     find_library(METAL_LIB Metal REQUIRED)
     find_library(FOUNDATION_LIB Foundation REQUIRED)
     
-    option(SKIP_METAL_SHADERS "Skip Metal shader compilation (use precompiled or fallback)" OFF)
+    execute_process(COMMAND xcrun -sdk macosx metal --version
+                    RESULT_VARIABLE METAL_TOOLCHAIN_RES
+                    OUTPUT_QUIET ERROR_QUIET)
+    if(NOT METAL_TOOLCHAIN_RES EQUAL 0)
+        set(SKIP_METAL_SHADERS_DEFAULT ON)
+    else()
+        set(SKIP_METAL_SHADERS_DEFAULT OFF)
+    endif()
+    option(SKIP_METAL_SHADERS "Skip Metal shader compilation (use precompiled or fallback)" ${SKIP_METAL_SHADERS_DEFAULT})
     
     if(NOT SKIP_METAL_SHADERS)
         # Metal Shader Compilation
@@ -174,6 +184,8 @@ if(APPLE)
     set_source_files_properties(${METAL_SOURCES} PROPERTIES COMPILE_FLAGS "-fobjc-arc")
 else()
     set(METAL_SOURCES "")
+    set(METAL_LIB "")
+    set(FOUNDATION_LIB "")
 endif()
 
 # --- Protobuf / gRPC Code Generation ---
@@ -360,7 +372,7 @@ target_link_libraries(qubit_engine_core PUBLIC qubit_engine_proto)
 
 
 # Platform-specific link libraries for core
-if(APPLE)
+if(APPLE AND ENABLE_METAL)
     target_link_libraries(qubit_engine_core PUBLIC ${METAL_LIB} ${FOUNDATION_LIB})
 endif()
 

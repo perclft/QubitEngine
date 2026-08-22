@@ -9,14 +9,14 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// ProbeSharedMemoryAccess tests active write/mmap/stat capability in /dev/shm.
+// ProbeSharedMemoryAccess tests active write/mmap/stat capability in /dev/shm or POSIX SHM.
 func ProbeSharedMemoryAccess() bool {
 	probeName := "/.qe_shm_probe_access"
-	fd, err := unix.ShmOpen(probeName, unix.O_CREAT|unix.O_RDWR, 0600)
+	fd, err := shmOpen(probeName, unix.O_CREAT|unix.O_RDWR, 0600)
 	if err != nil {
 		return false
 	}
-	defer unix.ShmUnlink(probeName)
+	defer shmUnlink(probeName)
 	defer unix.Close(fd)
 
 	if err := unix.Ftruncate(fd, 4096); err != nil {
@@ -34,14 +34,16 @@ func ProbeSharedMemoryAccess() bool {
 }
 
 func readSegmentBytes(segmentName string, sizeBytes uint64, numQubits uint32) ([]complex128, error) {
-	fd, err := unix.ShmOpen(segmentName, unix.O_RDWR, 0600)
+	name := segmentName
+	if len(name) > 0 && name[0] != '/' {
+		name = "/" + name
+	}
+	fd, err := shmOpen(name, unix.O_RDWR, 0600)
+	if err != nil && len(name) > 1 {
+		fd, err = shmOpen(name[1:], unix.O_RDWR, 0600)
+	}
 	if err != nil {
-		if len(segmentName) > 0 && segmentName[0] == '/' {
-			fd, err = unix.ShmOpen(segmentName[1:], unix.O_RDWR, 0600)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("ShmOpen failed for %s: %w", segmentName, err)
-		}
+		return nil, fmt.Errorf("shmOpen failed for %s: %w", segmentName, err)
 	}
 	defer unix.Close(fd)
 

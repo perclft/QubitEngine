@@ -52,8 +52,18 @@ std::unique_ptr<IQuantumBackend> BackendFactory::create(size_t num_qubits,
       auto backend = std::make_unique<MetalBackend>(num_qubits);
       spdlog::info("BackendFactory: Using MetalBackend (Apple Silicon GPU)");
       return backend;
+    } catch (const std::exception& e) {
+      spdlog::error("BackendFactory: MetalBackend initialization failed: {}. Falling back to CPU.", e.what());
+      const char* strict_accel = std::getenv("QUBIT_STRICT_HARDWARE_ACCEL");
+      if (strict_accel && std::string(strict_accel) == "1") {
+        throw std::runtime_error(std::string("Strict hardware acceleration required (QUBIT_STRICT_HARDWARE_ACCEL=1) but MetalBackend failed: ") + e.what());
+      }
     } catch (...) {
-      spdlog::error("BackendFactory: MetalBackend failed. Falling back to CPU.");
+      spdlog::error("BackendFactory: MetalBackend failed with unknown error. Falling back to CPU.");
+      const char* strict_accel = std::getenv("QUBIT_STRICT_HARDWARE_ACCEL");
+      if (strict_accel && std::string(strict_accel) == "1") {
+        throw std::runtime_error("Strict hardware acceleration required (QUBIT_STRICT_HARDWARE_ACCEL=1) but MetalBackend failed with unknown error");
+      }
     }
   }
 #endif
