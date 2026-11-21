@@ -76,7 +76,7 @@ func TestLoadCircuit(t *testing.T) {
 			{Type: api.GateOperation_PAULI_X, TargetQubit: 0},
 		},
 	}
-	circuitJSON, _ := json.Marshal(mockCircuit)
+	circuitJSON, _ := json.Marshal(&mockCircuit)
 
 	// Mock SELECT
 	rows := sqlmock.NewRows([]string{"circuit_json", "is_public", "owner_id"}).
@@ -265,7 +265,7 @@ func TestForkCircuit_RollbackOnSecondStepFailure(t *testing.T) {
 			{Type: api.GateOperation_PAULI_X, TargetQubit: 0},
 		},
 	}
-	circuitJSON, _ := json.Marshal(mockCircuit)
+	circuitJSON, _ := json.Marshal(&mockCircuit)
 
 	// 1. Mock LoadCircuit (SELECT + UPDATE run_count)
 	mock.ExpectQuery("SELECT circuit_json, is_public, owner_id FROM circuits WHERE id = \\$1").

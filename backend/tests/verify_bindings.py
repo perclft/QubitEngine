@@ -2,8 +2,9 @@
 import sys
 import os
 
-# Ensure the build directory is in the path to find the module
-# Adjust path as necessary
+# Ensure the python and build directories are in the path to find the module
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+sys.path.insert(0, os.path.join(repo_root, "python"))
 build_dir = os.path.join(os.path.dirname(__file__), "../build")
 sys.path.append(build_dir)
 

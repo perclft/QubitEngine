@@ -5,52 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/cmplx"
-	"runtime"
 	"testing"
-	"unsafe"
-
-	"golang.org/x/sys/windows"
 )
-
-func isWindowsOS() bool {
-	return runtime.GOOS == "windows"
-}
-
-func writeTestSegment(segmentName string, sizeBytes uint64, data []complex128) (func(), error) {
-	if isWindowsOS() {
-		uName, err := windows.UTF16PtrFromString(segmentName)
-		if err != nil {
-			return nil, err
-		}
-		hMapFile, err := windows.CreateFileMapping(
-			windows.InvalidHandle,
-			nil,
-			windows.PAGE_READWRITE,
-			uint32(sizeBytes>>32),
-			uint32(sizeBytes&0xFFFFFFFF),
-			uName,
-		)
-		if err != nil {
-			return nil, err
-		}
-		pBuf, err := windows.MapViewOfFile(hMapFile, windows.FILE_MAP_WRITE, 0, 0, uintptr(sizeBytes))
-		if err != nil {
-			windows.CloseHandle(hMapFile)
-			return nil, err
-		}
-
-		dstBytes := unsafe.Slice((*byte)(unsafe.Pointer(pBuf)), int(sizeBytes))
-		srcBytes := unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), len(data)*16)
-		copy(dstBytes, srcBytes)
-
-		cleanup := func() {
-			windows.UnmapViewOfFile(pBuf)
-			windows.CloseHandle(hMapFile)
-		}
-		return cleanup, nil
-	}
-	return func() {}, fmt.Errorf("non-windows test segment helper implemented per OS")
-}
 
 func TestProbeSharedMemoryAccess(t *testing.T) {
 	ok := ProbeSharedMemoryAccess()
@@ -67,7 +23,7 @@ func TestReadAndAcknowledgeStateVector_BitIdentical(t *testing.T) {
 	for _, numQubits := range qubitCounts {
 		elementCount := 1 << numQubits
 		sizeBytes := uint64(elementCount * 16)
-		segmentName := fmt.Sprintf("Local\\qe_shm_test_bit_identical_%d", numQubits)
+		segmentName := fmt.Sprintf("qe_shm_bi_%d", numQubits)
 
 		expected := make([]complex128, elementCount)
 		for i := 0; i < elementCount; i++ {

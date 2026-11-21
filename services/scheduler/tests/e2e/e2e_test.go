@@ -116,6 +116,8 @@ func TestSchedulerIntegration(t *testing.T) {
 		"-port", fmt.Sprintf("%d", schedulerPort),
 		"-redis-addr", mr.Addr(),
 		"-engine-addr", engineAddr,
+		"-metrics-port", "0",
+		"-grpc-web-port", "0",
 	)
 	cmdRun.Stdout = os.Stdout
 	cmdRun.Stderr = os.Stderr
