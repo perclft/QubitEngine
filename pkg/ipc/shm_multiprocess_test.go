@@ -23,39 +23,8 @@ import (
 )
 
 func findBinaries(t *testing.T) (string, string) {
-	_, currentFile, _, _ := runtime.Caller(0)
-	rootDir := filepath.Join(filepath.Dir(currentFile), "..", "..")
-
-	engineCandidates := []string{
-		filepath.Join(rootDir, "bin", "Release", "qubit_engine.exe"),
-		filepath.Join(rootDir, "bin", "qubit_engine.exe"),
-		filepath.Join(rootDir, "bin", "qubit_engine"),
-	}
-
-	var enginePath string
-	for _, cand := range engineCandidates {
-		if _, err := os.Stat(cand); err == nil {
-			enginePath = cand
-			break
-		}
-	}
-	if enginePath == "" {
-		t.Skip("C++ qubit_engine binary not found. Skipping multi-process tests.")
-	}
-
-	readerToolPath := filepath.Join(rootDir, "bin", "shm_reader_tool.exe")
-	if runtime.GOOS != "windows" {
-		readerToolPath = filepath.Join(rootDir, "bin", "shm_reader_tool")
-	}
-	if _, err := os.Stat(readerToolPath); err != nil {
-		// Build it on the fly
-		cmd := exec.Command("go", "build", "-o", readerToolPath, "./cmd/shm_reader_tool")
-		cmd.Dir = rootDir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("Failed to build shm_reader_tool: %v\n%s", err, out)
-		}
-	}
-
+	enginePath := binPath(t, "qubit_engine")
+	readerToolPath := binPath(t, "shm_reader_tool")
 	return enginePath, readerToolPath
 }
 

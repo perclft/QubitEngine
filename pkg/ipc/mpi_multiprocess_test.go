@@ -20,24 +20,7 @@ import (
 )
 
 func findMpiExec(t *testing.T) string {
-	candidates := []string{"mpiexec.exe", "mpirun.exe", "mpiexec", "mpirun"}
-	for _, cand := range candidates {
-		if path, err := exec.LookPath(cand); err == nil {
-			return path
-		}
-	}
-	// Common Windows install paths for MS-MPI
-	commonPaths := []string{
-		`C:\Program Files\Microsoft MPI\Bin\mpiexec.exe`,
-		`C:\Program Files (x86)\Microsoft MPI\Bin\mpiexec.exe`,
-	}
-	for _, p := range commonPaths {
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-	}
-	t.Skip("mpiexec / mpirun not found in PATH. Skipping real MPI multi-process tests.")
-	return ""
+    return mpiExecPath(t)
 }
 
 func startMpiCluster(t *testing.T, mpiExec string, enginePath string, port string, jwtSecret string, extraEnv ...string) (*exec.Cmd, func()) {
