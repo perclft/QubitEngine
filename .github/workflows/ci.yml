@@ -152,14 +152,32 @@ jobs:
         with:
           go-version: '1.24'
 
+      - name: Setup Rust for IPC Tests
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install protoc and OpenMPI launcher
+        run: |
+          sudo apt-get install -y protobuf-compiler openmpi-bin
+
+      - name: Build IPC test binaries
+        run: |
+          mkdir -p bin
+          go build -o bin/shm_reader_tool ./cmd/shm_reader_tool
+          cargo build --manifest-path cli-rs/Cargo.toml
+          echo "--- artifacts ---"
+          ls -l bin
+          ls -l cli-rs/target/debug/cli-rs
+          find . -name qubit_engine -type f -not -path "./vcpkg/*" | head
+
       - name: Run Multi-Process IPC Tests (POSIX SHM & OpenMPI)
         env:
           GOTOOLCHAIN: auto
-          QUBIT_ENGINE_SKIP_AUTH: "1"
+          CI: "true"
+          OMPI_ALLOW_RUN_AS_ROOT: "1"
+          OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: "1"
         run: |
           export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/build/vcpkg_installed/x64-linux/lib:$LD_LIBRARY_PATH
-          go test -v -run "TestMultiProcessMPI" ./pkg/ipc
-          go test -v -run "TestMultiProcessSHM" ./pkg/ipc
+          go test -v -count=1 -timeout 300s ./pkg/ipc
 
   build-mac:
     runs-on: macos-14 # M1 ARM64 runner
