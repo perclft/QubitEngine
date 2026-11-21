@@ -858,8 +858,12 @@ double MetalBackend::expectationValue(const std::string &pauli) const {
 
 #else // Not Apple
 
+#include "Exceptions.hpp"
+
 namespace qubit_engine {
-MetalBackend::MetalBackend(size_t n) {}
+MetalBackend::MetalBackend(size_t n) : num_qubits_(n) {
+  throw FeatureNotSupportedException("MetalBackend is only supported on Apple Silicon (macOS).");
+}
 MetalBackend::~MetalBackend() {}
 void MetalBackend::initializeMetal() {}
 void MetalBackend::applyHadamard(size_t t) {}

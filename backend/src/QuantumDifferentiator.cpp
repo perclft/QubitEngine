@@ -277,6 +277,34 @@ void QuantumDifferentiator::applyGateInverseToState(
     }
     break;
   }
+  case QuantumRegister::RecordedGate::PHASE_S: {
+    size_t target = gate.qubits[0];
+    P angle = static_cast<P>(-M_PI / 2.0);
+    Complex phase0 = std::exp(Complex(0, -angle / P(2)));
+    Complex phase1 = std::exp(Complex(0, angle / P(2)));
+    for (size_t idx = 0; idx < dim / 2; ++idx) {
+      size_t i0 =
+          ((idx >> target) << (target + 1)) | (idx & ((1ULL << target) - 1));
+      size_t i1 = i0 | (1ULL << target);
+      state[i0] *= phase0;
+      state[i1] *= phase1;
+    }
+    break;
+  }
+  case QuantumRegister::RecordedGate::PHASE_T: {
+    size_t target = gate.qubits[0];
+    P angle = static_cast<P>(-M_PI / 4.0);
+    Complex phase0 = std::exp(Complex(0, -angle / P(2)));
+    Complex phase1 = std::exp(Complex(0, angle / P(2)));
+    for (size_t idx = 0; idx < dim / 2; ++idx) {
+      size_t i0 =
+          ((idx >> target) << (target + 1)) | (idx & ((1ULL << target) - 1));
+      size_t i1 = i0 | (1ULL << target);
+      state[i0] *= phase0;
+      state[i1] *= phase1;
+    }
+    break;
+  }
   default:
     break;
   }

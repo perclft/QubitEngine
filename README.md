@@ -26,14 +26,14 @@
 
 Key capabilities:
 
-- **Multi-backend simulation** — CUDA (multi-GPU with NCCL), Metal, AVX2/NEON, and MPI distributed execution
+- **Multi-backend simulation** — Hardware-accelerated execution on CUDA (single-GPU; multi-GPU with NCCL is designed, not integrated), Metal (macOS), and AVX2/NEON (CPU) with MPI distributed multi-node state-vector simulation.
 - **Noise simulation** — Kraus-operator noise model with depolarizing (1Q/2Q), amplitude damping (T1), phase damping (T2), and readout error channels
-- **Distributed Tensor Networks** — Matrix Product State (MPS) backend scaling beyond 32 qubits with SVD truncation
+- **Tensor Networks (MPS)** — Matrix Product State (MPS) 1D chain simulation with SVD truncation (configurable bond dimension $\chi$). Observable extraction is limited to single-node contraction: state vectors up to $N \le 30$ and probabilities up to $N \le 25$ (expectation value contraction is designed, not integrated).
 - **Clifford Stabilizer QEC** — Gottesman-Knill simulation for thousands of qubits in polynomial time
-- **Same-Host Shared-Memory IPC** — High-throughput state vector transfer for streaming RPCs (`RunCircuit`, `StreamGates`, `VisualizeCircuit`). Auto-engages above ~12 qubits ($N \ge 12$, $64\text{ KB}$ payload) where statistical benchmarks show a consistent 1.3–6.5x latency improvement over protobuf serialization, with automatic fallback to gRPC protobuf below that threshold or on cross-host/permission failures. `RunVQE` is excluded — its per-iteration payloads are scalar energy/parameter values where protobuf overhead is negligible.
-- **Native differentiability** — Parameter Shift Rule and Adjoint differentiation for variational algorithms (VQE)
-- **JIT circuit optimization** — LRU caching & multi-level gate fusion compiler (O0–O4) utilizing background multi-threading
-- **Predictive Autoscaling Mesh** — Integrated Prometheus metrics querying Redis queue lengths mapping into Kubernetes HPA
+- **Shared-Memory IPC** — Zero-copy shared-memory IPC (`ipc::SharedMemory` in C++, `pkg/ipc` in Go, `cli-rs` in Rust) with authenticated token lifecycle, backpressure management, and automatic protobuf fallback.
+- **Native differentiability** — Analytical gradient computation via the Parameter Shift Rule and Adjoint differentiation (supporting parameterized rotation gates $R_X, R_Y, R_Z$ interleaved with Clifford and phase gates across multi-qubit circuits) on single-node execution.
+- **JIT circuit optimization** — In-memory LRU caching and multi-tier gate optimization passes (O0 pass-through, O1 cancellation, O2 single-qubit fusion, O3 reordering & fusion, O4 two-qubit adjacent fusion with KAK decomposition).
+- **Workload-Based Autoscaling** — Kubernetes HPA manifests utilizing Prometheus custom metrics (`quantum_job_queue_depth`) exported by the Go scheduler.
 - **OpenQASM 2.0/3.0** — Import and export circuits for interoperability with Qiskit and other frameworks
 - **Interactive TUI** — Rust-based terminal dashboard with live probability streaming via gRPC
 - **Python bindings** — pybind11 module equipped with zero-copy NumPy buffers and PyTorch integration
@@ -57,12 +57,12 @@ Key capabilities:
 ┌────────────────────────▼────────────────────────────────┐
 │              C++ Physics Kernel (C++20)                  │
 │  QuantumRegister → IQuantumBackend (polymorphic)        │
-│    ├─ CpuBackend   (AVX2/NEON + OpenMP)                 │
-│    ├─ CudaBackend  (NVIDIA multi-GPU + NCCL)            │
+│    ├─ CpuBackend   (AVX2/NEON + OpenMP; MPI SPMD multi) │
+│    ├─ CudaBackend  (NVIDIA single-GPU; NCCL not integr.)│
 │    ├─ MetalBackend (Apple GPU + Async Cmd Queues)       │
-│    ├─ MPSBackend   (Tensor Networks + SVD Truncation)   │
+│    ├─ MPSBackend   (1D Tensor Chains; state ext. ≤ 30Q) │
 │    ├─ StabilizerBackend (Clifford QEC)                  │
-│    └─ CloudBackend (remote execution)                    │
+│    └─ CloudBackend (Mock remote execution stubs)        │
 │  QuantumJIT (LRU Caching) · Differentiator · Optimizer  │
 │  NoiseModel (Depolarizing · T1 · T2 · Readout Error)     │
 │  Python Bindings (pybind11 zero-copy NumPy arrays)       │
@@ -73,23 +73,18 @@ Key capabilities:
 
 ## ⚡ Performance Benchmarks
 
-### Physics Kernel Throughput
-| Backend | Platform | Qubits | Bandwidth |
-| --- | --- | --- | --- |
-| **Metal** | macOS (M3 Air) | 25 | **19.03 GB/s** |
-| **CUDA** | Linux/Windows | 25 | **VRAM Optimized** |
-| **AVX2** | Windows | 25 | **6.64 GB/s** |
-| **MPI (n=2)** | Distributed | 22 | **3.15 GB/s** |
+The following measurements are strictly traceable to runnable benchmarks in the repository:
 
-### Same-Host Streaming Transport Latency (Protobuf vs. Shared Memory IPC)
-| Qubits ($N$) | Payload Size | Active Transport Path | Speedup over Protobuf |
-| --- | --- | --- | --- |
-| $N \le 11$ | $\le 32\text{ KB}$ | Standard gRPC Protobuf | $1.0\text{x}$ (Protobuf preferred) |
-| $N = 12$ | $64\text{ KB}$ | Shared Memory IPC | **$1.3\text{x} - 2.3\text{x}$** |
-| $N = 14 - 18$ | $250\text{ KB} - 4\text{ MB}$ | Shared Memory IPC | **$2.9\text{x} - 4.8\text{x}$** |
-| $N = 20 - 25$ | $16\text{ MB} - 512\text{ MB}$ | Shared Memory IPC | **$5.2\text{x} - 6.5\text{x}$** |
+### Physics Kernel Memory Bandwidth (`applyHadamard`)
+| Kernel / SIMD | Platform / Hardware | Qubits | Memory Bandwidth | Benchmark Source & Function |
+| --- | --- | --- | --- | --- |
+| **ARM NEON (`CpuBackend`)** | macOS (Apple M3 Air) | 25 (512 MB) | **19.03 GB/s** | `benchmarks/AntigravityMemoryBenchmark.cpp` (`BM_Antigravity_ApplyHadamard`) |
+| **AVX2 (`CpuBackend`)** | Windows 11 (x86_64) | 25 (512 MB) | **6.64 GB/s** | `benchmarks/MemoryWallBenchmark.cpp` (`BM_ApplyHadamard`) |
 
-*\* Measurements reflect state vector serialization, OS shared-memory mapping, and memory copy layer overhead; they do not include gRPC/HTTP2 wire transport framing.*
+*(Notes on Deleted / Corrected Claims:
+- The shared-memory speedup benchmark table has been removed per audit: in-process `memcpy` comparisons against protobuf heap allocation do not measure end-to-end multi-process IPC and cannot be presented as IPC benchmarks.
+- The distributed MPI bandwidth claim (3.15 GB/s) has been deleted because `benchmarks/run_mpi_benchmark.sh` historically only called `sleep 5` without measuring throughput (see Finding NEW-05 in `FINDINGS_NEW.md`). MPI SPMD distributed execution itself has now been integrated and verified across multiple processes in Phase 4.
+- Metal bandwidth was previously misattributed to the Metal GPU backend; the measured 19.03 GB/s run was produced by the CPU NEON SIMD vector kernel on Apple Silicon unified memory.)*
 
 ## 📁 Project Structure
 
@@ -178,10 +173,16 @@ cargo build --release
 
 ### Go Microservices
 
-Each service builds independently:
+All microservices can be built together from the repository root using the Go workspace (`go.work`):
 
 ```bash
-cd services/scheduler && go build -o scheduler .
+go build ./...
+```
+
+Or each service can be built independently:
+
+```bash
+cd services/scheduler && go build -o scheduler ./cmd/scheduler
 cd services/registry && go build -o registry .
 cd services/cache && go build -o cache .
 ```
@@ -279,13 +280,15 @@ kubectl apply -f deploy/k8s/
 
 The following status accurately reflects verified capabilities vs. planned roadmap items:
 
-- **Hardware Acceleration Coverage**: Explicit AVX2 (`__m256d`) and ARM NEON (`float64x2_t`) vector intrinsics are implemented in `applyHadamard` ([CpuBackend.cpp](file:///c:/Users/percl/projects/QubitEngine/backend/src/backends/CpuBackend.cpp)). Other gate kernels rely on scalar loops combined with OpenMP thread parallelization and compiler auto-vectorization.
+- **Hardware Acceleration Coverage**: Explicit AVX2 (`__m256d`) and ARM NEON (`float64x2_t`) vector intrinsics are implemented in `applyHadamard` ([CpuBackend.cpp](backend/src/backends/CpuBackend.cpp)). Other gate kernels rely on scalar loops combined with OpenMP thread parallelization and compiler auto-vectorization.
 - **Metal Backend Selection**: `MetalBackend` (Apple Silicon GPU) is integrated into `BackendFactory::create` on macOS (`#ifdef ENABLE_METAL`), automatically selecting Apple Silicon GPU acceleration when available ahead of CPU fallback.
-- **Multi-GPU Distributed Memory Scaling**: `CudaBackend::applyGateDistributed` currently uses `ncclAllGather` to replicate the full state vector across all GPUs during gate execution. Each GPU must possess sufficient VRAM for the full $2^N$ state vector. A point-to-point (P2P) boundary exchange architecture is planned for future memory-scalable multi-GPU execution.
-- **Same-Host Shared-Memory IPC**: State-vector-producing RPCs (`RunCircuit`, `StreamGates`, `VisualizeCircuit`) utilize an active shared memory path (`ipc::SharedMemory` in C++ and `pkg/ipc` in Go). Auto-engages above $N \ge 12$ qubits ($64\text{ KB}$ payload) where statistical benchmarks show a consistent 1.3–6.5x latency improvement over protobuf array serialization (below $N < 12$, e.g. $N=11$ at $0.85\text{x}$, segment allocation overhead exceeds protobuf serialization gains). `RunVQE` does not use SHM — its per-iteration payloads are scalar energy and parameter values where protobuf serialization overhead is negligible. Container deployments require a scoped `/dev/shm` tmpfs volume mount (configured in `docker-compose.yaml` / Helm chart); if unconfigured or permission checks fail, the engine automatically falls back to standard gRPC protobuf serialization. On Windows container environments, SHM IPC is scoped to native host or shared volume deployments.
+- **CUDA Single-GPU vs Multi-GPU**: `CudaBackend` executes on a single NVIDIA GPU. Multi-GPU execution via NCCL (`CudaBackend::applyGateDistributed`) is designed, not integrated: NCCL communicator initialization is uncoordinated across independent server processes.
+- **MPI Distributed State-Vector Simulation**: Point-to-point state buffer swap routines exist in `CpuBackend`, but distributed SPMD simulation across multi-node clusters is designed, not integrated. The engine runs strictly single-node in production; Kubernetes manifests and Helm charts deploy standalone, independent engine pods.
+- **Tensor Networks (MPS) Observable Extraction**: `MPSBackend` maintains 1D matrix product states with SVD truncation up to configurable bond dimension ($\chi$, default 64 per `ConfigManager.cpp:49` and `MPSBackend.hpp:40`). Observable extraction is limited to single-node contraction: state vectors are supported up to $N \le 30$ and probabilities up to $N \le 25$. Expectation value calculation throws `FeatureNotSupportedException` (general tensor network contraction is designed, not integrated).
+- **Same-Host Shared-Memory IPC**: `ipc::SharedMemory` in C++ and `pkg/ipc` in Go implement shared memory segment creation and mapping. However, end-to-end integration into the application mesh is designed, not integrated: Go microservices and the Rust TUI client currently exchange state vectors exclusively via standard gRPC protobuf serialization.
 - **Python Buffer Transfer**: `QuantumRegister::getStateVector()` returns `std::vector<Complex>` by value from the C++ backend. The Python bindings move this vector onto the heap and pass it via `py::capsule` to avoid duplicate copies during the C++-to-Python handoff to NumPy.
-- **Cloud Backend Submissions**: `RigettiBackend` and `IonQBackend` in the Go backend package currently return mock job IDs. Cloud payload translation (Quil / IonQ JSON) is planned for direct QPU API integration.
-- **Autoscaling Metrics**: Core Redis queue depth metrics are active; additional stream processing lag gauges (`streamLagMetric`) are planned for future mesh metrics integration.
+- **Cloud Backend Submissions**: `RigettiBackend` and `IonQBackend` in the Go backend package are mock execution stubs that return simulated job IDs without connecting to physical QPU hardware APIs.
+- **Autoscaling Metrics**: The Go scheduler exposes queue depth metrics (`quantum_job_queue_depth`) on `:2112/metrics` for reactive Kubernetes HorizontalPodAutoscalers; predictive autoscaling is not implemented.
 - **gRPC API Connection Standard**: All Go microservices, integration tests, and client connection helpers are fully migrated to `grpc.NewClient` (gRPC 1.0.4+).
 - **Cache Microservice Resilience**: `services/cache` updates hit counts asynchronously in Redis with fallback logging to prevent read requests from failing on transient storage write errors.
 - **TUI State Representation**: `cli-rs` streams basis state probabilities as binary strings (`|0...0>`) matched to the target circuit qubit width.

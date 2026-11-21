@@ -1,5 +1,7 @@
 #define _USE_MATH_DEFINES
 #include "../src/backends/CpuBackend.hpp"
+#include "../src/NoiseModel.hpp"
+#include "../src/Exceptions.hpp"
 #include <cmath>
 #include <gtest/gtest.h>
 
@@ -94,4 +96,33 @@ TEST(CpuBackendTest, ProbabilitiesExtraction) {
   EXPECT_NEAR(probs[1], 0.5, 1e-6);
   EXPECT_NEAR(probs[2], 0.0, 1e-6);
   EXPECT_NEAR(probs[3], 0.0, 1e-6);
+}
+
+// ===== Noise and RDM Stride Bounds Checks =====
+
+TEST(CpuBackendTest, NoiseChannelOutOfRangeQubitThrows) {
+  CpuBackend backend(2);
+  NoiseChannel1Q channel = makeDepolarizingChannel1Q(0.1);
+  EXPECT_THROW(backend.applyNoiseChannel1Q(channel, 2), QubitOutOfRangeException);
+  EXPECT_THROW(backend.applyNoiseChannel1Q(channel, 5), QubitOutOfRangeException);
+}
+
+TEST(CpuBackendTest, ReducedDensityMatrixOutOfRangeThrows) {
+  CpuBackend backend(2);
+  EXPECT_THROW(backend.getReducedDensityMatrix1Q(2), QubitOutOfRangeException);
+  EXPECT_THROW(backend.getReducedDensityMatrix2Q(0, 2), QubitOutOfRangeException);
+  EXPECT_THROW(backend.getReducedDensityMatrix2Q(2, 0), QubitOutOfRangeException);
+}
+
+TEST(CpuBackendTest, NoiseChannelGlobalQubitStrideCheck) {
+  // 4 qubits distributed across 4 ranks: local_dim = 16 / 4 = 4 amplitudes.
+  // Local qubits are 0 (stride 1) and 1 (stride 2). Both are < local_dim (4).
+  // Global/distributed qubits are 2 (stride 4) and 3 (stride 8). Both have stride >= local_dim (4).
+  CpuBackend backend(4, /*rank=*/0, /*size=*/4);
+  NoiseChannel1Q channel = makeDepolarizingChannel1Q(0.1);
+
+  // Qubit 2 is a valid qubit index (2 < 4), but distributed across MPI ranks (stride 4 >= state.size() 4).
+  // Must throw FeatureNotSupportedException rather than reading/writing state[j + 4] out of bounds.
+  EXPECT_THROW(backend.applyNoiseChannel1Q(channel, 2), FeatureNotSupportedException);
+  EXPECT_THROW(backend.getReducedDensityMatrix1Q(2), FeatureNotSupportedException);
 }

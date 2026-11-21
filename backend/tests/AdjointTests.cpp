@@ -200,3 +200,41 @@ TEST(AdjointTest, CrossValidation_MultipleAngles) {
         << "Mismatch at angle=" << angle;
   }
 }
+
+TEST(AdjointTest, PhaseSandT_MatchesFiniteDifference) {
+  // Regression test: CPU calculate_gradients_adjoint with S and T gates
+  // Circuit: Ry(θ) -> S -> T on qubit 0 with H = Z
+  int num_qubits = 1;
+  double theta = 0.6;
+  std::vector<double> params = {theta};
+  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+
+  AnsatzFunction ansatz = [](const std::vector<double> &p, QuantumRegister &q) {
+    q.applyRotationY(0, static_cast<Precision>(p[0]));
+    q.applyPhaseS(0);
+    q.applyPhaseT(0);
+  };
+
+  // Compute central finite difference: (E(θ+ε) - E(θ-ε)) / (2ε)
+  double eps = 1e-6;
+  auto compute_energy = [&](double th) {
+    QuantumRegister q(num_qubits, true);
+    ansatz({th}, q);
+    double e = 0.0;
+    for (const auto &term : hamiltonian) {
+      e += term.coefficient * q.expectationValue(term.pauli_string);
+    }
+    return e;
+  };
+
+  double e_plus = compute_energy(theta + eps);
+  double e_minus = compute_energy(theta - eps);
+  double grad_fd = (e_plus - e_minus) / (2.0 * eps);
+
+  auto grads_adjoint = QuantumDifferentiator::calculateGradientsAdjoint(
+      num_qubits, params, ansatz, hamiltonian);
+
+  ASSERT_EQ(grads_adjoint.size(), 1u);
+  EXPECT_NEAR(grads_adjoint[0], grad_fd, 1e-6);
+}
+

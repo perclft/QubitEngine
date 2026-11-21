@@ -1,11 +1,151 @@
 use crate::api::GateOperation;
 use crate::api::quantum_compute_client::QuantumComputeClient;
+use crate::api::ShmAckRequest;
 use crate::framework::AppEvent;
 use serde::Deserialize;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::fs;
 use tokio::sync::mpsc;
+
+#[derive(Deserialize, Debug)]
+pub struct ShmDescriptor {
+    pub format_version: u32,
+    pub segment_name: String,
+    pub size_bytes: u64,
+    pub num_qubits: u32,
+    pub data_type: String,
+    pub created_at_ms: i64,
+    pub ack_token: String,
+}
+
+#[cfg(windows)]
+pub fn read_shm_amplitudes(segment_name: &str, size_bytes: usize) -> Result<Vec<(f64, f64)>, String> {
+    use std::ffi::CString;
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Memory::{
+        FILE_MAP_READ, MapViewOfFile, OpenFileMappingA, UnmapViewOfFile,
+    };
+
+    let c_name = CString::new(segment_name).map_err(|e| format!("CString error: {}", e))?;
+    let handle = unsafe { OpenFileMappingA(FILE_MAP_READ, 0, c_name.as_ptr() as *const u8) };
+    if handle.is_null() {
+        return Err(format!("OpenFileMappingA failed for {}", segment_name));
+    }
+
+    let ptr = unsafe { MapViewOfFile(handle, FILE_MAP_READ, 0, 0, size_bytes) };
+    if ptr.Value.is_null() {
+        unsafe { CloseHandle(handle) };
+        return Err(format!("MapViewOfFile failed for {}", segment_name));
+    }
+
+    let num_elements = size_bytes / 16;
+    let slice: &[(f64, f64)] = unsafe {
+        std::slice::from_raw_parts(ptr.Value as *const (f64, f64), num_elements)
+    };
+    let data = slice.to_vec();
+
+    unsafe {
+        UnmapViewOfFile(ptr);
+        CloseHandle(handle);
+    }
+    Ok(data)
+}
+
+#[cfg(unix)]
+pub fn read_shm_amplitudes(segment_name: &str, size_bytes: usize) -> Result<Vec<(f64, f64)>, String> {
+    use std::ffi::CString;
+
+    let c_name = CString::new(segment_name).map_err(|e| format!("CString error: {}", e))?;
+    let fd = unsafe { libc::shm_open(c_name.as_ptr(), libc::O_RDONLY, 0o600) };
+    if fd == -1 {
+        return Err(format!("shm_open failed for {}", segment_name));
+    }
+
+    let ptr = unsafe {
+        libc::mmap(
+            std::ptr::null_mut(),
+            size_bytes,
+            libc::PROT_READ,
+            libc::MAP_SHARED,
+            fd,
+            0,
+        )
+    };
+    unsafe { libc::close(fd) };
+
+    if ptr == libc::MAP_FAILED {
+        return Err(format!("mmap failed for {}", segment_name));
+    }
+
+    let num_elements = size_bytes / 16;
+    let slice: &[(f64, f64)] = unsafe {
+        std::slice::from_raw_parts(ptr as *const (f64, f64), num_elements)
+    };
+    let data = slice.to_vec();
+
+    unsafe { libc::munmap(ptr, size_bytes) };
+    Ok(data)
+}
+
+pub fn process_state_response(
+    state_res: &crate::api::StateResponse,
+    heap: &mut BinaryHeap<Reverse<(u64, usize)>>,
+    k: usize,
+    client: &mut QuantumComputeClient<tonic::transport::Channel>,
+    token: &str,
+) {
+    let mut processed_via_shm = false;
+    if !state_res.shm_descriptor.is_empty() {
+        if let Ok(desc) = serde_json::from_str::<ShmDescriptor>(&state_res.shm_descriptor) {
+            let now_ms = chrono::Utc::now().timestamp_millis();
+            let age = (now_ms - desc.created_at_ms).abs();
+            if desc.format_version == 1 && age <= 3000 {
+                if let Ok(amplitudes) = read_shm_amplitudes(&desc.segment_name, desc.size_bytes as usize) {
+                    for (i, (real, imag)) in amplitudes.iter().enumerate() {
+                        let prob = real * real + imag * imag;
+                        if prob < 1e-8 {
+                            continue;
+                        }
+                        heap.push(Reverse((prob.to_bits(), i)));
+                        if heap.len() > k {
+                            heap.pop();
+                        }
+                    }
+                    processed_via_shm = true;
+
+                    if !desc.ack_token.is_empty() {
+                        let mut ack_client = client.clone();
+                        let token_owned = token.to_string();
+                        let ack_req = ShmAckRequest {
+                            ack_token: desc.ack_token,
+                        };
+                        tokio::spawn(async move {
+                            let mut req = tonic::Request::new(ack_req);
+                            if let Ok(meta_value) = format!("Bearer {}", token_owned).parse() {
+                                req.metadata_mut().insert("authorization", meta_value);
+                            }
+                            let _ = ack_client.acknowledge_shm_read(req).await;
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    if !processed_via_shm {
+        for (i, c) in state_res.state_vector.iter().enumerate() {
+            let prob = c.real * c.real + c.imag * c.imag;
+            if prob < 1e-8 {
+                continue;
+            }
+            heap.push(Reverse((prob.to_bits(), i)));
+            if heap.len() > k {
+                heap.pop();
+            }
+        }
+    }
+}
 
 #[derive(Deserialize, Debug)]
 struct CircuitFile {
@@ -130,7 +270,7 @@ pub async fn run_circuit(server_addr: String, circuit_path: String, tx: mpsc::Se
         noise_config: None,
         execution_backend: 0,
         measurement_strategy: 0,
-        use_shm: false,
+        use_shm: circuit.qubits >= 12,
         version: "1.0".to_string(),
     });
 
@@ -172,17 +312,7 @@ pub async fn run_circuit(server_addr: String, circuit_path: String, tx: mpsc::Se
 
         heap.clear(); // O(1) clear, retains allocated capacity
 
-        // Hot loop: strictly stack variables, zero heap allocations
-        for (i, c) in state_res.state_vector.iter().enumerate() {
-            let prob = c.real * c.real + c.imag * c.imag;
-            if prob < 1e-8 {
-                continue;
-            }
-            heap.push(Reverse((prob.to_bits(), i)));
-            if heap.len() > k {
-                heap.pop();
-            }
-        }
+        process_state_response(&state_res, &mut heap, k, &mut client, &token);
 
         // Drain and perform exactly K string allocations (deferred formatting)
         let num_qubits = circuit.qubits as usize;
@@ -334,6 +464,76 @@ pub async fn get_topology(server_addr: String, tx: mpsc::Sender<AppEvent>) {
                 .await;
         }
     }
+}
+
+pub async fn run_circuit_headless(server_addr: String, circuit_path: String) -> Result<Vec<(String, u64)>, Box<dyn std::error::Error>> {
+    let mut client = QuantumComputeClient::connect(server_addr).await?;
+    let data = fs::read_to_string(&circuit_path)?;
+    let circuit: CircuitFile = serde_json::from_str(&data)?;
+
+    let mut ops = Vec::new();
+    for op in circuit.ops {
+        let op_type = match op.gate.to_uppercase().as_str() {
+            "H" => 0,
+            "X" => 1,
+            "CNOT" => 2,
+            "M" => 3,
+            "TOFFOLI" | "CCNOT" => 4,
+            "S" => 5,
+            "T" => 6,
+            "RY" => 7,
+            "RZ" => 8,
+            _ => 1,
+        };
+        ops.push(GateOperation {
+            r#type: op_type,
+            target_qubit: op.target,
+            control_qubit: op.control,
+            second_control_qubit: op.control2,
+            second_target_qubit: 0,
+            angle: op.angle,
+            noise_probability: 0.0,
+            noise_gamma: 0.0,
+            classical_register: op.classical_reg,
+        });
+    }
+
+    let mut req = tonic::Request::new(crate::api::CircuitRequest {
+        num_qubits: circuit.qubits,
+        operations: ops,
+        noise_probability: 0.0,
+        noise_config: None,
+        execution_backend: 0,
+        measurement_strategy: 0,
+        use_shm: circuit.qubits >= 12,
+        version: "1.0".to_string(),
+    });
+
+    let token = std::env::var("QUBIT_ENGINE_AUTH_TOKEN").unwrap_or_else(|_| "default-secret-token".to_string());
+    if let Ok(meta_value) = format!("Bearer {}", token).parse() {
+        req.metadata_mut().insert("authorization", meta_value);
+    }
+
+    let res = client.run_circuit(req).await?;
+    let state_res = res.into_inner();
+
+    let k = 10;
+    let mut heap: BinaryHeap<Reverse<(u64, usize)>> = BinaryHeap::with_capacity(k + 1);
+    process_state_response(&state_res, &mut heap, k, &mut client, &token);
+
+    let num_qubits = circuit.qubits as usize;
+    let mut probs: Vec<(String, u64)> = heap
+        .drain()
+        .map(|Reverse((bits, index))| {
+            (
+                format_basis_state(index, num_qubits),
+                (f64::from_bits(bits) * 100.0) as u64,
+            )
+        })
+        .collect();
+    probs.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
+
+    Ok(probs)
 }
 
 pub fn format_basis_state(index: usize, num_qubits: usize) -> String {

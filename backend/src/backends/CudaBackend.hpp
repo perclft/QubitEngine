@@ -61,6 +61,7 @@ public:
   // --- Distributed Helpers ---
   int getRank() const override { return mpi_rank_; }
   int getSize() const override { return mpi_size_; }
+  size_t getNumQubits() const override { return num_qubits_; }
 
 private:
   size_t num_qubits_;

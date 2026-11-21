@@ -1,0 +1,10 @@
+{
+    "name": "SHM 14-Qubit Test Circuit",
+    "qubits": 14,
+    "ops": [
+        {
+            "gate": "H",
+            "target": 0
+        }
+    ]
+}

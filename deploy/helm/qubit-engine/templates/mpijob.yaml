@@ -1,0 +1,65 @@
+{{- if .Values.mpiJob.enabled }}
+apiVersion: kubeflow.org/v2beta1
+kind: MPIJob
+metadata:
+  name: {{ include "qubit-engine.fullname" . }}-mpijob
+  labels:
+    {{- include "qubit-engine.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend-mpi
+spec:
+  slotsPerWorker: {{ .Values.mpiJob.slotsPerWorker | default 1 }}
+  runPolicy:
+    cleanPodPolicy: Running
+  mpiReplicaSpecs:
+    Launcher:
+      replicas: 1
+      template:
+        metadata:
+          labels:
+            {{- include "qubit-engine.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: backend
+            role: launcher
+        spec:
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+          - name: mpi-launcher
+            image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag | default .Chart.AppVersion }}"
+            imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+            command:
+            - mpirun
+            - --allow-run-as-root
+            - -np
+            - "{{ .Values.mpiJob.totalRanks | default 2 }}"
+            - /usr/local/bin/qubit_engine
+            ports:
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+            resources:
+              {{- toYaml .Values.backend.resources | nindent 14 }}
+    Worker:
+      replicas: {{ .Values.mpiJob.workerReplicas | default 1 }}
+      template:
+        metadata:
+          labels:
+            {{- include "qubit-engine.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: backend-mpi
+            role: worker
+        spec:
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+          - name: mpi-worker
+            image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag | default .Chart.AppVersion }}"
+            imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+            resources:
+              {{- toYaml .Values.backend.resources | nindent 14 }}
+{{- end }}

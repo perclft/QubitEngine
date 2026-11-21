@@ -4,6 +4,13 @@
 using qubit_engine::QuantumRegister;
 #include "Types.hpp"
 #include "../src/Exceptions.hpp"
+#include "../src/backends/CpuBackend.hpp"
+#include "../src/backends/MPSBackend.hpp"
+#include "../src/backends/StabilizerBackend.hpp"
+#include "../src/backends/CloudBackend.hpp"
+#ifdef ENABLE_CUDA
+#include "../src/backends/CudaBackend.hpp"
+#endif
 #include <complex>
 #include <gtest/gtest.h>
 
@@ -15,10 +22,16 @@ TEST(QuantumTest, Initialization) {
   auto state = q.getStateVector();
 
   // Size should be 2^2 = 4
-  EXPECT_EQ(state.size(), 4);
-  // |00> (index 0) should have probability amplitude 1.0
+  ASSERT_EQ(state.size(), 4);
+  // |00> (index 0) should have probability amplitude 1.0 + 0.0i, all other states 0
   EXPECT_EQ(state[0], Complex(1.0, 0.0));
   EXPECT_EQ(state[1], Complex(0.0, 0.0));
+  EXPECT_EQ(state[2], Complex(0.0, 0.0));
+  EXPECT_EQ(state[3], Complex(0.0, 0.0));
+
+  double norm_sq = 0.0;
+  for (const auto& a : state) norm_sq += std::norm(a);
+  EXPECT_NEAR(norm_sq, 1.0, 1e-12);
 }
 
 TEST(QuantumTest, PauliXGate) {
@@ -27,6 +40,7 @@ TEST(QuantumTest, PauliXGate) {
   q.applyX(0);          // Apply X -> |1>
 
   auto state = q.getStateVector();
+  ASSERT_EQ(state.size(), 2);
   EXPECT_EQ(state[0], Complex(0.0, 0.0));
   EXPECT_EQ(state[1], Complex(1.0, 0.0));
 }
@@ -37,10 +51,16 @@ TEST(QuantumTest, HadamardGate) {
   q.applyHadamard(0);   // |+> = (|0> + |1>) / sqrt(2)
 
   auto state = q.getStateVector();
+  ASSERT_EQ(state.size(), 2);
   Precision inv_sqrt_2 = 1.0 / std::sqrt(2.0);
 
   EXPECT_NEAR(state[0].real(), inv_sqrt_2, 1e-6);
+  EXPECT_NEAR(state[0].imag(), 0.0, 1e-6);
   EXPECT_NEAR(state[1].real(), inv_sqrt_2, 1e-6);
+  EXPECT_NEAR(state[1].imag(), 0.0, 1e-6);
+
+  double norm_sq = std::norm(state[0]) + std::norm(state[1]);
+  EXPECT_NEAR(norm_sq, 1.0, 1e-12);
 }
 
 TEST(QuantumTest, BellState) {
@@ -51,13 +71,22 @@ TEST(QuantumTest, BellState) {
   q.applyCNOT(0, 1);  // Entangle
 
   auto state = q.getStateVector();
+  ASSERT_EQ(state.size(), 4);
   Precision inv_sqrt_2 = 1.0 / std::sqrt(2.0);
 
   // Expecting 1/sqrt(2) * (|00> + |11>)
   EXPECT_NEAR(state[0].real(), inv_sqrt_2, 1e-6); // |00>
-  EXPECT_NEAR(std::abs(state[1]), 0.0, 1e-6);     // |01>
-  EXPECT_NEAR(std::abs(state[2]), 0.0, 1e-6);     // |10>
+  EXPECT_NEAR(state[0].imag(), 0.0, 1e-6);
+  EXPECT_NEAR(state[1].real(), 0.0, 1e-6);        // |01>
+  EXPECT_NEAR(state[1].imag(), 0.0, 1e-6);
+  EXPECT_NEAR(state[2].real(), 0.0, 1e-6);        // |10>
+  EXPECT_NEAR(state[2].imag(), 0.0, 1e-6);
   EXPECT_NEAR(state[3].real(), inv_sqrt_2, 1e-6); // |11>
+  EXPECT_NEAR(state[3].imag(), 0.0, 1e-6);
+
+  double norm_sq = 0.0;
+  for (const auto& a : state) norm_sq += std::norm(a);
+  EXPECT_NEAR(norm_sq, 1.0, 1e-12);
 }
 TEST(QuantumTest, ReverseCNOT) {
   // Test Control(1) -> Target(0) (Control > Target)
@@ -72,10 +101,20 @@ TEST(QuantumTest, ReverseCNOT) {
   q.applyCNOT(1, 0);
 
   auto state = q.getStateVector();
+  ASSERT_EQ(state.size(), 4);
 
-  // Index 2 is |10>, Index 3 is |11>
-  EXPECT_NEAR(std::abs(state[2]), 0.0, 1e-6); // Old state empty
-  EXPECT_NEAR(state[3].real(), 1.0, 1e-6);    // New state occupied
+  EXPECT_NEAR(state[0].real(), 0.0, 1e-6);
+  EXPECT_NEAR(state[0].imag(), 0.0, 1e-6);
+  EXPECT_NEAR(state[1].real(), 0.0, 1e-6);
+  EXPECT_NEAR(state[1].imag(), 0.0, 1e-6);
+  EXPECT_NEAR(state[2].real(), 0.0, 1e-6);
+  EXPECT_NEAR(state[2].imag(), 0.0, 1e-6);
+  EXPECT_NEAR(state[3].real(), 1.0, 1e-6);
+  EXPECT_NEAR(state[3].imag(), 0.0, 1e-6);
+
+  double norm_sq = 0.0;
+  for (const auto& a : state) norm_sq += std::norm(a);
+  EXPECT_NEAR(norm_sq, 1.0, 1e-12);
 }
 
 TEST(QuantumTest, LogicValidation) {
@@ -140,3 +179,53 @@ TEST(QuantumTest, DefaultBackendSelectionName) {
   EXPECT_EQ(q.getBackendName(), "CPU");
 #endif
 }
+
+TEST(BackendInvariantTest, GetNumQubitsNonZeroForAllBackends) {
+  size_t n = 4;
+  std::vector<std::pair<std::string, std::unique_ptr<IQuantumBackend>>> backends;
+  backends.emplace_back("CPU", std::make_unique<CpuBackend>(n));
+  backends.emplace_back("MPS", std::make_unique<MPSBackend>(n));
+  backends.emplace_back("Stabilizer", std::make_unique<StabilizerBackend>(n));
+  backends.emplace_back("Cloud", std::make_unique<CloudBackend>(n, "http://localhost:50051"));
+#ifdef ENABLE_CUDA
+  try {
+    backends.emplace_back("CUDA", std::make_unique<CudaBackend>(n));
+  } catch (...) {}
+#endif
+
+  for (const auto &[name, backend] : backends) {
+    EXPECT_EQ(backend->getNumQubits(), n)
+        << "Backend " << name << " failed getNumQubits() invariant";
+  }
+}
+
+TEST(BackendInvariantTest, ProbabilityDistributionSumsToOne) {
+  size_t n = 3;
+  std::vector<std::pair<std::string, std::unique_ptr<IQuantumBackend>>> backends;
+  backends.emplace_back("CPU", std::make_unique<CpuBackend>(n));
+  backends.emplace_back("MPS", std::make_unique<MPSBackend>(n));
+#ifdef ENABLE_CUDA
+  try {
+    backends.emplace_back("CUDA", std::make_unique<CudaBackend>(n));
+  } catch (...) {}
+#endif
+
+  for (auto &[name, backend] : backends) {
+    backend->applyHadamard(0);
+    backend->applyCNOT(0, 1);
+    backend->applyRotationY(1, 0.75);
+    backend->applyHadamard(2);
+
+    auto probs = backend->getProbabilities();
+    ASSERT_EQ(probs.size(), 1ULL << n);
+    double sum = 0.0;
+    for (double p : probs) {
+      EXPECT_GE(p, -1e-12) << "Backend " << name << " produced negative probability";
+      sum += p;
+    }
+    EXPECT_NEAR(sum, 1.0, 1e-6)
+        << "Backend " << name << " distribution does not sum to 1.0";
+  }
+}
+
+

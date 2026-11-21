@@ -47,6 +47,53 @@ TEST(QASMParserTest, OversizedQubitDeclarationThrows) {
   EXPECT_THROW(parser.parse(code), std::runtime_error);
 }
 
+TEST(QASMParserTest, QubitDeclarationStoiOverflowThrowsParseError) {
+  QASMParser parser;
+  std::string code = R"(
+    OPENQASM 3.0;
+    qubit[99999999999999999999] q;
+  )";
+
+  try {
+    parser.parse(code);
+    FAIL() << "Expected std::runtime_error";
+  } catch (const std::runtime_error &e) {
+    std::string msg = e.what();
+    EXPECT_NE(msg.find("QASM Parse Error"), std::string::npos);
+  } catch (...) {
+    FAIL() << "Threw exception other than std::runtime_error";
+  }
+}
+
+TEST(QASMParserTest, ClassicalDeclarationStoiOverflowThrowsParseError) {
+  QASMParser parser;
+  std::string code = R"(
+    OPENQASM 3.0;
+    creg c[99999999999999999999];
+  )";
+
+  try {
+    parser.parse(code);
+    FAIL() << "Expected std::runtime_error";
+  } catch (const std::runtime_error &e) {
+    std::string msg = e.what();
+    EXPECT_NE(msg.find("QASM Parse Error"), std::string::npos);
+  } catch (...) {
+    FAIL() << "Threw exception other than std::runtime_error";
+  }
+}
+
+TEST(QASMParserTest, ParameterStodOverflowThrowsParseError) {
+  QASMParser parser;
+  std::string code = R"(
+    OPENQASM 3.0;
+    qubit[1] q;
+    rz(1e999) q[0];
+  )";
+
+  EXPECT_THROW(parser.parse(code), std::runtime_error);
+}
+
 TEST(QASMParserTest, ParseBasicGates) {
   QASMParser parser;
   std::string code = R"(

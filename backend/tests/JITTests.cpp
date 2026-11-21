@@ -48,21 +48,25 @@ static Eigen::Matrix4cd get_unitary_from_input(const std::vector<std::pair<std::
         qubit_engine::QuantumRegister q(2);
         if (k & 2) q.applyX(1);
         if (k & 1) q.applyX(0);
+        size_t param_idx = 0;
         for (size_t i = 0; i < gates.size(); ++i) {
             const auto &g = gates[i];
-            double p = i < params.size() ? params[i] : 0.0;
+            double p = 0.0;
+            if (g.first == "RX" || g.first == "rx" || g.first == "RY" || g.first == "ry" || g.first == "RZ" || g.first == "rz") {
+                if (param_idx < params.size()) p = params[param_idx++];
+            }
             if (g.first == "H") q.applyHadamard(g.second[0]);
             else if (g.first == "X") q.applyX(g.second[0]);
             else if (g.first == "Y") q.applyY(g.second[0]);
             else if (g.first == "Z") q.applyZ(g.second[0]);
             else if (g.first == "S") q.applyPhaseS(g.second[0]);
             else if (g.first == "T") q.applyPhaseT(g.second[0]);
-            else if (g.first == "RX") q.applyRotationX(g.second[0], p);
-            else if (g.first == "RY") q.applyRotationY(g.second[0], p);
-            else if (g.first == "RZ") q.applyRotationZ(g.second[0], p);
-            else if (g.first == "CNOT" || g.first == "CX") q.applyCNOT(g.second[0], g.second[1]);
-            else if (g.first == "CZ") q.applyCZ(g.second[0], g.second[1]);
-            else if (g.first == "SWAP") q.applySWAP(g.second[0], g.second[1]);
+            else if (g.first == "RX" || g.first == "rx") q.applyRotationX(g.second[0], p);
+            else if (g.first == "RY" || g.first == "ry") q.applyRotationY(g.second[0], p);
+            else if (g.first == "RZ" || g.first == "rz") q.applyRotationZ(g.second[0], p);
+            else if (g.first == "CNOT" || g.first == "CX" || g.first == "cx") q.applyCNOT(g.second[0], g.second[1]);
+            else if (g.first == "CZ" || g.first == "cz") q.applyCZ(g.second[0], g.second[1]);
+            else if (g.first == "SWAP" || g.first == "swap") q.applySWAP(g.second[0], g.second[1]);
         }
         auto state = q.getStateVector();
         for (int row = 0; row < 4; ++row) {
@@ -444,3 +448,50 @@ TEST(JITTest, CudaApplyDenseUnitary_JIT) {
   EXPECT_NEAR(norm, 1.0, 1e-9);
 }
 #endif
+
+TEST(JITTest, ParametersTrackedIndependentlyOfGateIndex) {
+  QuantumJIT jit(QuantumJIT::O0);
+  std::vector<std::pair<std::string, std::vector<int>>> gates = {
+      {"H", {0}},
+      {"RY", {0}},
+      {"X", {0}},
+      {"RZ", {0}}
+  };
+  double theta = 0.7;
+  double phi = 1.2;
+  std::vector<double> params = {theta, phi};
+
+  auto ir = jit.compile(1, gates, params);
+  ASSERT_EQ(ir.gates.size(), 4u);
+
+  // Gate 1 is RY(theta): single_matrix[0] should be cos(theta/2)
+  Complex ry_00 = ir.gates[1].single_matrix[0];
+  EXPECT_NEAR(ry_00.real(), std::cos(theta / 2.0), 1e-6);
+
+  // Gate 3 is RZ(phi): single_matrix[0] should be exp(-i*phi/2), real part is cos(phi/2)
+  Complex rz_00 = ir.gates[3].single_matrix[0];
+  EXPECT_NEAR(rz_00.real(), std::cos(phi / 2.0), 1e-6);
+}
+
+TEST(JITTest, ParameterCountMismatchThrows) {
+  QuantumJIT jit(QuantumJIT::O0);
+  std::vector<std::pair<std::string, std::vector<int>>> gates = {
+      {"H", {0}},
+      {"RY", {0}},
+      {"RZ", {0}}
+  };
+  // 2 rotation gates, but only 1 parameter provided
+  EXPECT_THROW(jit.compile(1, gates, {0.5}), std::invalid_argument);
+  // 2 rotation gates, but 3 parameters provided
+  EXPECT_THROW(jit.compile(1, gates, {0.5, 0.6, 0.7}), std::invalid_argument);
+}
+
+TEST(JITTest, UnrecognizedGateThrows) {
+  QuantumJIT jit(QuantumJIT::O0);
+  std::vector<std::pair<std::string, std::vector<int>>> gates = {
+      {"NON_EXISTENT_GATE", {0}}
+  };
+  EXPECT_THROW(jit.compile(1, gates, {}), std::invalid_argument);
+}
+
+

@@ -37,6 +37,10 @@ struct Args {
     /// Directory containing circuit JSON files
     #[arg(short, long, default_value = "../circuits")]
     circuits_dir: String,
+
+    /// Run single circuit headlessly and exit with top-K states (batch / integration test mode)
+    #[arg(long)]
+    headless_circuit: Option<String>,
 }
 
 pub struct RouterComponent {
@@ -327,6 +331,15 @@ pub mod api {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
+
+    if let Some(circuit_path) = args.headless_circuit {
+        let results = grpc::run_circuit_headless(args.endpoint, circuit_path).await?;
+        println!("[RUST_SHM:SUCCESS] top_k_len={}", results.len());
+        for (basis, prob) in results {
+            println!("  {} -> {}%", basis, prob);
+        }
+        return Ok(());
+    }
 
     // Setup Terminal
     enable_raw_mode()?;

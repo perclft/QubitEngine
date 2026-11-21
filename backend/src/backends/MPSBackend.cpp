@@ -500,51 +500,21 @@ int MPSBackend::measure(size_t target) {
 
 std::vector<double> MPSBackend::getProbabilities() const {
   if (num_qubits > 25) {
-    throw std::runtime_error("Cannot return full 2^N probabilities for > 25 qubits.");
+    throw FeatureNotSupportedException(
+        "MPSBackend cannot return dense 2^N probabilities for > 25 qubits.");
   }
   
   size_t dim = 1ULL << num_qubits;
   std::vector<double> probs(dim, 0.0);
-  
-  std::vector<Complex> state = {1.0};
-  for (int q = 0; q < num_qubits; ++q) {
-    const auto& tensor = nodes[q];
-    int L = tensor.left_dim;
-    int R = tensor.right_dim;
-    std::vector<Complex> new_state(R * (1ULL << (q + 1)), Complex(0,0));
-    
-    for (size_t s = 0; s < (1ULL << q); ++s) {
-      for (int l = 0; l < L; ++l) {
-        Complex v = state[l * (1ULL << q) + s];
-        for (int p = 0; p < 2; ++p) {
-          for (int r = 0; r < R; ++r) {
-            new_state[r * (1ULL << (q + 1)) + s + (p << q)] += v * tensor.data[l * 2 * R + p * R + r];
-          }
-        }
-      }
-    }
-    state = std::move(new_state);
-  }
-  
-  int k = 100;
-  std::vector<std::pair<double, size_t>> prob_pairs;
+  std::vector<Complex> state = getStateVector();
+
   for (size_t i = 0; i < dim; ++i) {
-    double p = std::norm(state[i]);
-    if (p > 1e-10) {
-      prob_pairs.push_back({p, i});
-    }
-  }
-  
-  std::sort(prob_pairs.begin(), prob_pairs.end(), [](const auto& a, const auto& b) {
-    return a.first > b.first;
-  });
-  
-  for (size_t i = 0; i < std::min((size_t)k, prob_pairs.size()); ++i) {
-    probs[prob_pairs[i].second] = prob_pairs[i].first;
+    probs[i] = std::norm(state[i]);
   }
   
   return probs;
 }
+
 void MPSBackend::applyDenseUnitary(const std::vector<size_t> &targets,
                                    const std::vector<Complex> &matrix) {
   throw FeatureNotSupportedException(
@@ -552,7 +522,8 @@ void MPSBackend::applyDenseUnitary(const std::vector<size_t> &targets,
 }
 
 double MPSBackend::expectationValue(const std::string &pauli_string) const {
-  return 0.0;
+  throw FeatureNotSupportedException(
+      "MPSBackend does not support expectationValue calculation.");
 }
 
 std::vector<Complex> MPSBackend::getStateVector() const {

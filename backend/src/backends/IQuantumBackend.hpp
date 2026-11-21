@@ -142,7 +142,7 @@ public:
   virtual int getSize() const { return 1; }
 
   // --- Hardware Properties ---
-  virtual size_t getNumQubits() const { return 0; }
+  [[nodiscard]] virtual size_t getNumQubits() const = 0;
   [[nodiscard]] virtual std::string name() const = 0;
 };
 

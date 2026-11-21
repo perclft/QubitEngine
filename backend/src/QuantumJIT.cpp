@@ -17,6 +17,12 @@ constexpr Matrix2x2 HADAMARD = {INV_SQRT2, INV_SQRT2, INV_SQRT2, -INV_SQRT2};
 constexpr Matrix2x2 S_GATE = {1, 0, 0, Complex(0, 1)};
 constexpr Matrix2x2 T_GATE = {1, 0, 0, Complex(INV_SQRT2, INV_SQRT2)};
 
+static bool is_parameterized_gate(const std::string &name) {
+  return name == "RX" || name == "rx" ||
+         name == "RY" || name == "ry" ||
+         name == "RZ" || name == "rz";
+}
+
 // --- Compile ---
 QuantumJIT::CircuitIR QuantumJIT::compile(
     int num_qubits,
@@ -43,10 +49,22 @@ QuantumJIT::CircuitIR QuantumJIT::compile(
 
   // Phase 1: Build initial gate list
   std::vector<CompiledGate> compiled;
+  size_t param_idx = 0;
   for (size_t i = 0; i < gates.size(); i++) {
-    CompiledGate g = build_gate(gates[i].first, gates[i].second,
-                                i < params.size() ? params[i] : 0.0);
+    double p = 0.0;
+    if (is_parameterized_gate(gates[i].first)) {
+      if (param_idx < params.size()) {
+        p = params[param_idx++];
+      } else {
+        throw std::invalid_argument("QuantumJIT::compile: Fewer parameters provided than required by circuit");
+      }
+    }
+    CompiledGate g = build_gate(gates[i].first, gates[i].second, p);
     compiled.push_back(g);
+  }
+  if (param_idx != params.size()) {
+    throw std::invalid_argument("QuantumJIT::compile: Parameter count mismatch. Expected " +
+                                std::to_string(param_idx) + ", got " + std::to_string(params.size()));
   }
 
   // Phase 2: Apply optimizations based on level
@@ -103,14 +121,15 @@ std::string QuantumJIT::compute_hash(
     const std::vector<double> &params) {
 
   std::string hash = std::to_string(num_qubits) + "|";
+  size_t param_idx = 0;
   for (size_t i = 0; i < gates.size(); ++i) {
     hash += gates[i].first + "_";
     for (int q : gates[i].second) {
       hash += std::to_string(q) + ",";
     }
-    if (i < params.size()) {
+    if (is_parameterized_gate(gates[i].first) && param_idx < params.size()) {
       // Round parameters slightly to catch FP inaccuracies near Pi
-      hash += std::to_string(std::round(params[i] * 1e6) / 1e6);
+      hash += std::to_string(std::round(params[param_idx++] * 1e6) / 1e6);
     }
     hash += ";";
   }
@@ -126,35 +145,41 @@ CompiledGate QuantumJIT::build_gate(const std::string &name,
 
   if (qubits.size() == 1) {
     g.type = CompiledGate::SINGLE_QUBIT;
-    if (name == "H")
+    if (name == "H" || name == "h")
       g.single_matrix = HADAMARD;
-    else if (name == "X")
+    else if (name == "X" || name == "x")
       g.single_matrix = PAULI_X;
-    else if (name == "Y")
+    else if (name == "Y" || name == "y")
       g.single_matrix = PAULI_Y;
-    else if (name == "Z")
+    else if (name == "Z" || name == "z")
       g.single_matrix = PAULI_Z;
-    else if (name == "S")
+    else if (name == "S" || name == "s")
       g.single_matrix = S_GATE;
-    else if (name == "T")
+    else if (name == "T" || name == "t")
       g.single_matrix = T_GATE;
-    else if (name == "RZ")
+    else if (name == "RZ" || name == "rz")
       g.single_matrix = rz_matrix(param);
-    else if (name == "RX")
+    else if (name == "RX" || name == "rx")
       g.single_matrix = rx_matrix(param);
-    else if (name == "RY")
+    else if (name == "RY" || name == "ry")
       g.single_matrix = ry_matrix(param);
-    else
+    else if (name == "I" || name == "i" || name == "IDENTITY" || name == "identity")
       g.single_matrix = IDENTITY;
+    else
+      throw std::invalid_argument("QuantumJIT: Unrecognized single-qubit gate: " + name);
   } else if (qubits.size() == 2) {
     g.type = CompiledGate::TWO_QUBIT;
-    if (name == "CNOT" || name == "CX") {
+    if (name == "CNOT" || name == "cnot" || name == "CX" || name == "cx") {
       g.two_matrix = cnot_matrix();
-    } else if (name == "CZ") {
+    } else if (name == "CZ" || name == "cz") {
       g.two_matrix = cz_matrix();
-    } else if (name == "SWAP") {
+    } else if (name == "SWAP" || name == "swap") {
       g.two_matrix = swap_matrix();
+    } else {
+      throw std::invalid_argument("QuantumJIT: Unrecognized two-qubit gate: " + name);
     }
+  } else {
+    throw std::invalid_argument("QuantumJIT: Unsupported qubit count (" + std::to_string(qubits.size()) + ") for gate: " + name);
   }
 
   return g;

@@ -18,6 +18,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/perclft/QubitEngine/api/auth"
 	api "github.com/perclft/QubitEngine/api/generated"
+	"github.com/perclft/QubitEngine/pkg/ipc"
 	pb "github.com/perclft/QubitEngine/services/cache/generated"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -61,6 +62,9 @@ func NewCacheServer(rdb *redis.Client, defaultTTL time.Duration) *CacheServer {
 func (s *CacheServer) CacheResult(ctx context.Context, req *pb.CacheRequest) (*pb.CacheResponse, error) {
 	if req.CircuitHash == "" {
 		return nil, status.Error(codes.InvalidArgument, "circuit_hash required")
+	}
+	if req.Result == nil {
+		return nil, status.Error(codes.InvalidArgument, "result is required")
 	}
 
 	cacheKey := fmt.Sprintf("cache:%s", req.CircuitHash)
@@ -243,6 +247,56 @@ func toStateResponse(sr *pb.StateResult) *api.StateResponse {
 	return resp
 }
 
+// DeserializeStateVector extracts the complex state vector from a StateResponse,
+// reading from OS shared memory via pkg/ipc if shm_descriptor is present,
+// and falling back to the inline protobuf state_vector array.
+func DeserializeStateVector(ctx context.Context, resp *api.StateResponse, client api.QuantumComputeClient) ([]*api.StateResponse_ComplexNumber, error) {
+	if resp == nil {
+		return nil, nil
+	}
+
+	if resp.ShmDescriptor != "" {
+		vec, err := ipc.ReadAndAcknowledgeStateVector(ctx, resp.ShmDescriptor, client)
+		if err == nil {
+			result := make([]*api.StateResponse_ComplexNumber, len(vec))
+			for i, c := range vec {
+				result[i] = &api.StateResponse_ComplexNumber{
+					Real: real(c),
+					Imag: imag(c),
+				}
+			}
+			return result, nil
+		}
+		slog.Warn("Failed to read SHM descriptor in cache deserialization, falling back to protobuf", "err", err)
+	}
+
+	return resp.StateVector, nil
+}
+
+func RecoveryUnaryInterceptor() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("gRPC unary panic recovered", "method", info.FullMethod, "panic", r)
+				err = status.Errorf(codes.Internal, "panic recovered: %v", r)
+			}
+		}()
+		return handler(ctx, req)
+	}
+}
+
+func RecoveryStreamInterceptor() grpc.StreamServerInterceptor {
+	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("gRPC stream panic recovered", "method", info.FullMethod, "panic", r)
+				err = status.Errorf(codes.Internal, "panic recovered: %v", r)
+			}
+		}()
+		return handler(srv, ss)
+	}
+}
+
 // ------------------------------------------------------------------
 // Main
 // ------------------------------------------------------------------
@@ -340,8 +394,8 @@ func main() {
 
 	grpcServer := grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
-		grpc.UnaryInterceptor(authInterceptor),
-		grpc.StreamInterceptor(streamAuthInterceptor),
+		grpc.ChainUnaryInterceptor(RecoveryUnaryInterceptor(), authInterceptor),
+		grpc.ChainStreamInterceptor(RecoveryStreamInterceptor(), streamAuthInterceptor),
 	)
 	pb.RegisterResultCacheServer(grpcServer, server)
 

@@ -60,8 +60,8 @@ TEST(SharedMemoryTest, GoCrashTimeoutCleanup) {
   std::string token = ActiveShmRegistry::instance().registerSegment(desc, ptr, size);
   EXPECT_EQ(ActiveShmRegistry::instance().activeCount(), 1);
 
-  // Sleep 3.1 seconds to allow the 3-second fallback timer to fire without Go ACK
-  std::this_thread::sleep_for(std::chrono::milliseconds(3100));
+  // Sleep 5.1 seconds to allow the 5-second fallback timer to fire without Go ACK
+  std::this_thread::sleep_for(std::chrono::milliseconds(5100));
 
   // 1. Registry Table assertion
   EXPECT_EQ(ActiveShmRegistry::instance().activeCount(), 0);
@@ -123,88 +123,7 @@ TEST(SharedMemoryTest, WorstCaseBackpressureSustainedStreaming) {
   EXPECT_EQ(ActiveShmRegistry::instance().activeCount(), 0);
 }
 
-#include <numeric>
-#include <cmath>
 
-TEST(SharedMemoryTest, EndToEndLatencyBenchmark) {
-  std::cout << "\n=== END-TO-END LATENCY STATISTICAL BENCHMARK (10 Runs per Qubit Count) ===\n";
-  std::cout << "Qubits |   Elements   | Payload (MB) | Protobuf Mean +- Std (ms) | SHM+Ack Mean +- Std (ms) | Speedup\n";
-  std::cout << "--------------------------------------------------------------------------------------------------\n";
-
-  const std::vector<int> qubit_counts = {10, 11, 12, 14, 16, 18, 20, 22, 24, 25};
-  const int NUM_RUNS = 10;
-
-  for (int n : qubit_counts) {
-    size_t elements = 1ULL << n;
-    size_t bytes = elements * sizeof(qubit_engine::Complex);
-    double size_mb = static_cast<double>(bytes) / (1024.0 * 1024.0);
-
-    std::vector<double> pb_times;
-    std::vector<double> shm_times;
-    pb_times.reserve(NUM_RUNS);
-    shm_times.reserve(NUM_RUNS);
-
-    for (int run = 0; run < NUM_RUNS; ++run) {
-      qubit_engine::QuantumRegister qreg(n);
-
-      // 1. Protobuf path latency
-      auto start_pb = std::chrono::high_resolution_clock::now();
-      qubit_engine::StateResponse pb_resp;
-      auto state_vec = qreg.getStateVector();
-      for (const auto &c : state_vec) {
-        auto *pb_c = pb_resp.add_state_vector();
-        pb_c->set_real(c.real());
-        pb_c->set_imag(c.imag());
-      }
-      auto dur_pb = std::chrono::duration<double, std::milli>(
-          std::chrono::high_resolution_clock::now() - start_pb).count();
-      pb_times.push_back(dur_pb);
-
-      // 2. SHM Zero-Copy path latency (including ACK round-trip)
-      auto start_shm = std::chrono::high_resolution_clock::now();
-      std::string shm_name = "Local\\qe_shm_bench_" + std::to_string(n) + "_" + std::to_string(run);
-#ifndef _WIN32
-      shm_name = "/qe_shm_bench_" + std::to_string(n) + "_" + std::to_string(run);
-#endif
-      void* shm_ptr = SharedMemory::createSegment(shm_name, bytes);
-      std::memcpy(shm_ptr, state_vec.data(), bytes);
-      std::string token = ActiveShmRegistry::instance().registerSegment(shm_name, shm_ptr, bytes);
-      
-      // Simulate reader mmap copy + Ack RPC round trip
-      std::vector<qubit_engine::Complex> reader_copy(elements);
-      std::memcpy(reader_copy.data(), shm_ptr, bytes);
-      ActiveShmRegistry::instance().acknowledgeAndUnlink(token);
-
-      auto dur_shm = std::chrono::duration<double, std::milli>(
-          std::chrono::high_resolution_clock::now() - start_shm).count();
-      shm_times.push_back(dur_shm);
-    }
-
-    auto calc_stats = [](const std::vector<double>& v) {
-      double mean = std::accumulate(v.begin(), v.end(), 0.0) / v.size();
-      double sq_sum = 0.0;
-      for (double x : v) sq_sum += (x - mean) * (x - mean);
-      double stddev = std::sqrt(sq_sum / v.size());
-      return std::make_pair(mean, stddev);
-    };
-
-    auto [pb_mean, pb_std] = calc_stats(pb_times);
-    auto [shm_mean, shm_std] = calc_stats(shm_times);
-    double speedup = (shm_mean > 0) ? (pb_mean / shm_mean) : 1.0;
-
-    std::stringstream ss_pb, ss_shm;
-    ss_pb << std::fixed << std::setprecision(2) << pb_mean << " +- " << std::setprecision(2) << pb_std;
-    ss_shm << std::fixed << std::setprecision(2) << shm_mean << " +- " << std::setprecision(2) << shm_std;
-
-    std::cout << std::setw(6) << n << " | "
-              << std::setw(12) << elements << " | "
-              << std::setw(12) << std::fixed << std::setprecision(3) << size_mb << " | "
-              << std::setw(25) << ss_pb.str() << " | "
-              << std::setw(24) << ss_shm.str() << " | "
-              << std::setw(7) << std::fixed << std::setprecision(2) << speedup << "x\n";
-  }
-  std::cout << "--------------------------------------------------------------------------------------------------\n\n";
-}
 
 // ============================================================================
 // VisualizeCircuit SHM Path Tests
@@ -226,6 +145,8 @@ TEST(SharedMemoryTest, EndToEndLatencyBenchmark) {
 // Helper: Read state vector from SHM descriptor JSON, then ACK+unlink
 static std::vector<qubit_engine::Complex> readStateFromShm(const std::string& desc_json) {
   auto j = nlohmann::json::parse(desc_json);
+  EXPECT_TRUE(j.contains("format_version"));
+  EXPECT_EQ(j["format_version"], 1);
   std::string segment_name = j["segment_name"];
   size_t size_bytes = j["size_bytes"];
   std::string ack_token = j["ack_token"];
@@ -350,96 +271,3 @@ TEST(VisualizeCircuitShmTest, BitIdenticalCorrectness) {
   std::cout << "\n";
 }
 
-TEST(VisualizeCircuitShmTest, PerStepLatencyBenchmark) {
-  std::cout << "\n=== VISUALIZE_CIRCUIT PER-STEP SHM LATENCY BENCHMARK ===\n";
-  std::cout << "Simulates VisualizeCircuit's per-gate-step serializeState path.\n";
-  std::cout << "Each step serializes the full state vector (use_shm=true vs false).\n\n";
-  std::cout << "Qubits |   Elements   | Payload (MB) | Protobuf/step (ms) | SHM/step (ms) | Speedup\n";
-  std::cout << "----------------------------------------------------------------------------------------\n";
-
-  const std::vector<int> qubit_counts = {10, 11, 12, 14, 16, 18, 20, 22};
-  const int NUM_STEPS = 5; // Simulate 5 gate steps per qubit count
-  const int NUM_RUNS = 5;  // Average over 5 runs
-
-  qubit_engine::services::CircuitService service;
-
-  for (int n : qubit_counts) {
-    size_t elements = 1ULL << n;
-    size_t bytes = elements * sizeof(qubit_engine::Complex);
-    double size_mb = static_cast<double>(bytes) / (1024.0 * 1024.0);
-
-    std::vector<double> pb_step_times;
-    std::vector<double> shm_step_times;
-
-    for (int run = 0; run < NUM_RUNS; ++run) {
-      // Build a circuit with NUM_STEPS Hadamard gates on different qubits
-      qubit_engine::CircuitRequest req;
-      req.set_num_qubits(n);
-      req.set_measurement_strategy(qubit_engine::CircuitRequest::FULL_STATE);
-
-      for (int s = 0; s < NUM_STEPS; ++s) {
-        auto* op = req.add_operations();
-        op->set_type(qubit_engine::GateOperation::HADAMARD);
-        op->set_target_qubit(s % n);
-      }
-
-      // Protobuf path: measure full RunCircuit (which applies all gates + serializes)
-      // Since we want per-step cost, we use the direct serializeState approach
-      qubit_engine::QuantumRegister qreg_pb(n);
-
-      auto start_pb = std::chrono::high_resolution_clock::now();
-      for (int s = 0; s < NUM_STEPS; ++s) {
-        qubit_engine::StateResponse resp;
-        auto state_vec = qreg_pb.getStateVector();
-        for (const auto& c : state_vec) {
-          auto* pb_c = resp.add_state_vector();
-          pb_c->set_real(c.real());
-          pb_c->set_imag(c.imag());
-        }
-      }
-      double pb_total = std::chrono::duration<double, std::milli>(
-          std::chrono::high_resolution_clock::now() - start_pb).count();
-      pb_step_times.push_back(pb_total / NUM_STEPS);
-
-      // SHM path: create segment, memcpy, register, simulate read + ack
-      qubit_engine::QuantumRegister qreg_shm(n);
-
-      auto start_shm = std::chrono::high_resolution_clock::now();
-      for (int s = 0; s < NUM_STEPS; ++s) {
-        std::string shm_name = "Local\\qe_viz_bench_" + std::to_string(n) + "_" + std::to_string(run) + "_" + std::to_string(s);
-#ifndef _WIN32
-        shm_name = "/qe_viz_bench_" + std::to_string(n) + "_" + std::to_string(run) + "_" + std::to_string(s);
-#endif
-        auto state_vec = qreg_shm.getStateVector();
-        void* shm_ptr = SharedMemory::createSegment(shm_name, bytes);
-        std::memcpy(shm_ptr, state_vec.data(), bytes);
-        std::string token = ActiveShmRegistry::instance().registerSegment(shm_name, shm_ptr, bytes);
-
-        // Simulate reader read + ack
-        std::vector<qubit_engine::Complex> reader_copy(elements);
-        std::memcpy(reader_copy.data(), shm_ptr, bytes);
-        ActiveShmRegistry::instance().acknowledgeAndUnlink(token);
-      }
-      double shm_total = std::chrono::duration<double, std::milli>(
-          std::chrono::high_resolution_clock::now() - start_shm).count();
-      shm_step_times.push_back(shm_total / NUM_STEPS);
-    }
-
-    auto calc_mean = [](const std::vector<double>& v) {
-      return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
-    };
-
-    double pb_mean = calc_mean(pb_step_times);
-    double shm_mean = calc_mean(shm_step_times);
-    double speedup = (shm_mean > 0) ? (pb_mean / shm_mean) : 1.0;
-
-    std::cout << std::setw(6) << n << " | "
-              << std::setw(12) << elements << " | "
-              << std::setw(12) << std::fixed << std::setprecision(3) << size_mb << " | "
-              << std::setw(18) << std::fixed << std::setprecision(2) << pb_mean << " | "
-              << std::setw(13) << std::fixed << std::setprecision(2) << shm_mean << " | "
-              << std::setw(7) << std::fixed << std::setprecision(2) << speedup << "x\n";
-  }
-  std::cout << "----------------------------------------------------------------------------------------\n";
-  std::cout << "Each row = mean of " << NUM_RUNS << " runs x " << NUM_STEPS << " gate steps per run.\n\n";
-}

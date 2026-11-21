@@ -1,9 +1,25 @@
 #include "QASMParser.hpp"
 #include <stdexcept>
 #include <cctype>
+#include <charconv>
 
 namespace qubit_engine {
 namespace parser {
+
+static int safe_parse_int(const std::string &str, const std::string &context_desc) {
+    if (str.empty()) {
+        throw std::runtime_error("QASM Parse Error: empty integer string in " + context_desc);
+    }
+    int val = 0;
+    auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), val);
+    if (ec == std::errc::result_out_of_range) {
+        throw std::runtime_error("QASM Parse Error: integer out of range in " + context_desc + ": '" + str + "'");
+    }
+    if (ec != std::errc() || ptr != str.data() + str.size()) {
+        throw std::runtime_error("QASM Parse Error: invalid integer syntax in " + context_desc + ": '" + str + "'");
+    }
+    return val;
+}
 
 QASMParser::QASMParser(const std::string& source) {
     tokenize(source);
@@ -207,7 +223,7 @@ std::shared_ptr<ASTQRegDecl> QASMParser::parseQReg() {
     if (peek().type == Token::PUNCTUATION && peek().value == "[") {
         // qubit[size] name;
         consume(Token::PUNCTUATION, "[", "Expected '['");
-        int sz = std::stoi(advance().value);
+        int sz = safe_parse_int(advance().value, "qubit register declaration");
         if (sz <= 0 || sz > 10000) {
             throw std::runtime_error("QASM Parse Error: qubit register size out of bounds (1..10000)");
         }
@@ -218,7 +234,7 @@ std::shared_ptr<ASTQRegDecl> QASMParser::parseQReg() {
         // qreg name[size];
         decl->name = advance().value;
         consume(Token::PUNCTUATION, "[", "Expected '['");
-        int sz = std::stoi(advance().value);
+        int sz = safe_parse_int(advance().value, "qubit register declaration");
         if (sz <= 0 || sz > 10000) {
             throw std::runtime_error("QASM Parse Error: qubit register size out of bounds (1..10000)");
         }
@@ -234,7 +250,7 @@ std::shared_ptr<ASTCRegDecl> QASMParser::parseCReg() {
     if (peek().type == Token::PUNCTUATION && peek().value == "[") {
         // bit[size] name;
         consume(Token::PUNCTUATION, "[", "Expected '['");
-        int sz = std::stoi(advance().value);
+        int sz = safe_parse_int(advance().value, "classical register declaration");
         if (sz <= 0 || sz > 10000) {
             throw std::runtime_error("QASM Parse Error: classical register size out of bounds (1..10000)");
         }
@@ -245,7 +261,7 @@ std::shared_ptr<ASTCRegDecl> QASMParser::parseCReg() {
         // creg name[size];
         decl->name = advance().value;
         consume(Token::PUNCTUATION, "[", "Expected '['");
-        int sz = std::stoi(advance().value);
+        int sz = safe_parse_int(advance().value, "classical register declaration");
         if (sz <= 0 || sz > 10000) {
             throw std::runtime_error("QASM Parse Error: classical register size out of bounds (1..10000)");
         }
@@ -317,16 +333,16 @@ private:
     }
 
     // Try parsing number
-    size_t end;
+    size_t end = 0;
     double val = 0.0;
     try {
       val = std::stod(text.substr(pos), &end);
       pos += end;
       skip_whitespace();
-    } catch (...) {
-      pos++;
-      skip_whitespace();
-      val = 0.0;
+    } catch (const std::out_of_range &) {
+      throw std::runtime_error("QASM Parse Error: floating point value out of range in expression: '" + text.substr(pos) + "'");
+    } catch (const std::invalid_argument &) {
+      throw std::runtime_error("QASM Parse Error: invalid numeric token in expression: '" + text.substr(pos) + "'");
     }
     return val;
   }
@@ -455,7 +471,7 @@ std::shared_ptr<ASTIfStmt> QASMParser::parseIfStmt() {
         consume(Token::PUNCTUATION, "]", "Expected ']'");
     }
     consume(Token::PUNCTUATION, "==", "Expected '=='");
-    if_stmt->condition_value = std::stoi(advance().value);
+    if_stmt->condition_value = safe_parse_int(advance().value, "if condition value");
     consume(Token::PUNCTUATION, ")", "Expected ')'");
     
     if (peek().type == Token::PUNCTUATION && peek().value == "{") {

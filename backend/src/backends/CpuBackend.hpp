@@ -13,6 +13,7 @@ namespace qubit_engine {
 class QUBIT_ENGINE_EXPORT CpuBackend : public IQuantumBackend {
 public:
   CpuBackend(size_t num_qubits, bool force_local = false);
+  CpuBackend(size_t num_qubits, int rank, int size);
   ~CpuBackend() override = default;
 
   // --- Core Gates ---
@@ -50,6 +51,11 @@ public:
   // --- Distributed Helpers ---
   int getRank() const override { return local_rank; }
   int getSize() const override { return world_size; }
+  size_t getNumQubits() const override { return num_qubits; }
+
+  // --- Noise Selection Helpers ---
+  [[nodiscard]] std::array<Complex, 4> getReducedDensityMatrix1Q(size_t target) const;
+  [[nodiscard]] std::array<Complex, 16> getReducedDensityMatrix2Q(size_t q1, size_t q2) const;
 
   std::string name() const override { return "CPU"; }
 
@@ -58,10 +64,6 @@ private:
   std::vector<Complex, HugePageAllocator<Complex>> state;
   int local_rank = 0;
   int world_size = 1;
-
-  // --- Noise Selection Helpers ---
-  [[nodiscard]] std::array<Complex, 4> getReducedDensityMatrix1Q(size_t target) const;
-  [[nodiscard]] std::array<Complex, 16> getReducedDensityMatrix2Q(size_t q1, size_t q2) const;
 };
 
 } // namespace qubit_engine

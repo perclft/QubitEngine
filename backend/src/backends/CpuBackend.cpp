@@ -1,4 +1,5 @@
 #include "CpuBackend.hpp"
+#include "../Exceptions.hpp"
 #include <algorithm>
 #include <cmath>
 #include <spdlog/spdlog.h>
@@ -60,6 +61,18 @@ CpuBackend::CpuBackend(size_t n, bool force_local) : num_qubits(n) {
   }
 #endif
 
+  size_t total_dim = 1ULL << n;
+  size_t local_dim = total_dim / world_size;
+  if (local_dim == 0)
+    local_dim = 1;
+
+  state.resize(local_dim, 0.0);
+  if (local_rank == 0)
+    state[0] = 1.0;
+}
+
+CpuBackend::CpuBackend(size_t n, int rank, int size)
+    : num_qubits(n), local_rank(rank), world_size(std::max(1, size)) {
   size_t total_dim = 1ULL << n;
   size_t local_dim = total_dim / world_size;
   if (local_dim == 0)
@@ -619,6 +632,15 @@ void CpuBackend::applyDepolarizingNoise(Precision probability) {
 }
 
 std::array<Complex, 4> CpuBackend::getReducedDensityMatrix1Q(size_t target) const {
+  if (target >= num_qubits) {
+    throw QubitOutOfRangeException("CpuBackend::getReducedDensityMatrix1Q: target qubit " +
+                                   std::to_string(target) + " out of range (num_qubits=" +
+                                   std::to_string(num_qubits) + ")");
+  }
+  if ((1ULL << target) >= state.size()) {
+    throw FeatureNotSupportedException("CpuBackend::getReducedDensityMatrix1Q: reduced density matrix on distributed/global qubits is not supported in MPI mode");
+  }
+
   size_t stride = 1ULL << target;
   Complex r00(0, 0), r01(0, 0), r11(0, 0);
 
@@ -635,6 +657,13 @@ std::array<Complex, 4> CpuBackend::getReducedDensityMatrix1Q(size_t target) cons
 }
 
 std::array<Complex, 16> CpuBackend::getReducedDensityMatrix2Q(size_t q1, size_t q2) const {
+  if (q1 >= num_qubits || q2 >= num_qubits) {
+    throw QubitOutOfRangeException("CpuBackend::getReducedDensityMatrix2Q: qubit index out of range");
+  }
+  if ((1ULL << q1) >= state.size() || (1ULL << q2) >= state.size()) {
+    throw FeatureNotSupportedException("CpuBackend::getReducedDensityMatrix2Q: reduced density matrix on distributed/global qubits is not supported in MPI mode");
+  }
+
   size_t stride1 = 1ULL << q1;
   size_t stride2 = 1ULL << q2;
   std::array<Complex, 16> rdm{};
@@ -657,6 +686,14 @@ std::array<Complex, 16> CpuBackend::getReducedDensityMatrix2Q(size_t q1, size_t 
 void CpuBackend::applyNoiseChannel1Q(const NoiseChannel1Q& channel,
                                       size_t target) {
   if (channel.operators.empty()) return;
+  if (target >= num_qubits) {
+    throw QubitOutOfRangeException("CpuBackend::applyNoiseChannel1Q: target qubit " +
+                                   std::to_string(target) + " out of range (num_qubits=" +
+                                   std::to_string(num_qubits) + ")");
+  }
+  if ((1ULL << target) >= state.size()) {
+    throw FeatureNotSupportedException("CpuBackend::applyNoiseChannel1Q: noise channel on distributed/global qubits is not supported in MPI mode");
+  }
 
   // 1. Compute Reduced Density Matrix for the target qubit
   auto rdm = getReducedDensityMatrix1Q(target);
@@ -724,6 +761,12 @@ void CpuBackend::applyNoiseChannel1Q(const NoiseChannel1Q& channel,
 void CpuBackend::applyNoiseChannel2Q(const NoiseChannel2Q& channel,
                                       size_t q1, size_t q2) {
   if (channel.operators.empty()) return;
+  if (q1 >= num_qubits || q2 >= num_qubits) {
+    throw QubitOutOfRangeException("CpuBackend::applyNoiseChannel2Q: qubit index out of range");
+  }
+  if ((1ULL << q1) >= state.size() || (1ULL << q2) >= state.size()) {
+    throw FeatureNotSupportedException("CpuBackend::applyNoiseChannel2Q: noise channel on distributed/global qubits is not supported in MPI mode");
+  }
 
   // 1. Compute Reduced Density Matrix for the qubit pair
   auto rdm = getReducedDensityMatrix2Q(q1, q2);

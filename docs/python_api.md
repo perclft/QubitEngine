@@ -364,7 +364,7 @@ optimal_params = optimizer.minimize(
 
 ## Framework Integrations
 
-### PyTorch (`torch_quantum.py`)
+### PyTorch (`python/torch_quantum.py`)
 
 QubitEngine provides a `torch.autograd.Function` for seamless integration with PyTorch's automatic differentiation.
 

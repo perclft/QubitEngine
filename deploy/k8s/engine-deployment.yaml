@@ -27,6 +27,10 @@ spec:
             - containerPort: 50051
               name: grpc-port
 
+          envFrom:
+            - secretRef:
+                name: qubit-engine-auth
+
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

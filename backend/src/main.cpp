@@ -17,6 +17,7 @@
 #include "workers/WorkerPool.hpp"
 
 #ifdef MPI_ENABLED
+#include "mpi/MpiCoordinator.hpp"
 #include <mpi.h>
 #endif
 
@@ -28,7 +29,8 @@ void signalHandler(int signal) {
 }
 
 void RunServer() {
-  std::string server_address("0.0.0.0:50051");
+  const char* port_env = std::getenv("PORT") ? std::getenv("PORT") : std::getenv("QUBIT_ENGINE_PORT");
+  std::string server_address = port_env ? ("0.0.0.0:" + std::string(port_env)) : "0.0.0.0:50051";
   QubitEngineServiceImpl service;
 
   grpc::ServerBuilder builder;
@@ -88,36 +90,57 @@ void RunServer() {
 }
 
 int main(int argc, char **argv) {
-  QuantumMetrics::Instance().Start("0.0.0.0:9090");
+  int world_rank = 0;
+  int world_size = 1;
+
+#ifdef MPI_ENABLED
+  qubit_engine::mpi::MpiCoordinator::instance().init(&argc, &argv);
+  world_rank = qubit_engine::mpi::MpiCoordinator::instance().getRank();
+  world_size = qubit_engine::mpi::MpiCoordinator::instance().getWorldSize();
+#endif
+
+  if (world_rank == 0) {
+    const char* metrics_port = std::getenv("METRICS_PORT") ? std::getenv("METRICS_PORT") : "9090";
+    QuantumMetrics::Instance().Start(std::string("0.0.0.0:") + metrics_port);
+  }
 
   const char* redis_url = std::getenv("REDIS_ADDR") ? std::getenv("REDIS_ADDR") : "tcp://redis:6379";
   int num_workers = 4;
   if (const char* env_workers = std::getenv("WORKER_COUNT")) {
-    num_workers = std::max(1, std::atoi(env_workers));
+    num_workers = std::atoi(env_workers);
+    if (num_workers < 0) num_workers = 0;
   }
 
 #ifdef MPI_ENABLED
-  MPI_Init(&argc, &argv);
-  int world_rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-  if (world_rank == 0) {
-    RunServer();
-  } else {
-    qubit_engine::workers::WorkerPool pool(redis_url, 1);
-    pool.start();
-    while (!shutdown_requested) {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+  if (world_size > 1) {
+    if (world_rank == 0) {
+      spdlog::info("Rank 0: Starting gRPC Ingress Server for MPI cluster (size={})...", world_size);
+      RunServer();
+      spdlog::info("Rank 0: Shutting down MPI cluster...");
+      qubit_engine::mpi::MpiCoordinator::instance().broadcastShutdown();
+    } else {
+      spdlog::info("Rank {}: Starting MPI worker loop...", world_rank);
+      qubit_engine::mpi::MpiCoordinator::instance().runWorkerLoop();
     }
-    pool.stop();
+    qubit_engine::mpi::MpiCoordinator::instance().finalize();
+    return 0;
   }
-  MPI_Finalize();
-#else
-  qubit_engine::workers::WorkerPool pool(redis_url, num_workers);
-  pool.start();
+#endif
+
+  std::unique_ptr<qubit_engine::workers::WorkerPool> pool;
+  if (num_workers > 0) {
+    pool = std::make_unique<qubit_engine::workers::WorkerPool>(redis_url, num_workers);
+    pool->start();
+  }
   
   RunServer();
   
-  pool.stop();
+  if (pool) {
+    pool->stop();
+  }
+
+#ifdef MPI_ENABLED
+  qubit_engine::mpi::MpiCoordinator::instance().finalize();
 #endif
 
   return 0;

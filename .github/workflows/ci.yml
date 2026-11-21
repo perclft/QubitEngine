@@ -147,6 +147,20 @@ jobs:
           cp bin/core*.so python/qubit_engine/ || echo "Warning: core.so not found in bin/"
           pytest python/tests/
 
+      - name: Setup Go for IPC Tests
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Run Multi-Process IPC Tests (POSIX SHM & OpenMPI)
+        env:
+          GOTOOLCHAIN: auto
+          QUBIT_ENGINE_SKIP_AUTH: "1"
+        run: |
+          export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/build/vcpkg_installed/x64-linux/lib:$LD_LIBRARY_PATH
+          go test -v -run "TestMultiProcessMPI" ./pkg/ipc
+          go test -v -run "TestMultiProcessSHM" ./pkg/ipc
+
   build-mac:
     runs-on: macos-14 # M1 ARM64 runner
     env:

@@ -49,7 +49,10 @@ require (
 	go.opentelemetry.io/otel v1.43.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.30.0
 	go.opentelemetry.io/otel/sdk v1.43.0
+	github.com/perclft/QubitEngine v0.0.0
 	google.golang.org/protobuf v1.36.11
 )
 
 replace github.com/perclft/QubitEngine/api => ../../api
+replace github.com/perclft/QubitEngine => ../..
+replace google.golang.org/genproto => google.golang.org/genproto v0.0.0-20240325203815-454cdb8f5daa

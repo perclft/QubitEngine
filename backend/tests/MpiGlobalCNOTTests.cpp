@@ -73,14 +73,16 @@ int main(int argc, char **argv) {
   size_t control_rank_bit = (1ULL << control_qubit) / state.size();
   size_t target_rank_bit = (1ULL << target_qubit) / state.size();
   size_t expected_target_rank = control_rank_bit | target_rank_bit;
+  size_t target_local_idx = ((1ULL << target_qubit) < state.size()) ? (1ULL << target_qubit) : 0;
+
   if (rank == 0) {
     if (!are_close(state[0], inv_sqrt2)) {
       std::cerr << "[Rank 0] FAIL: Expected state[0] = 1/sqrt(2), got " << state[0] << std::endl;
       MPI_Abort(MPI_COMM_WORLD, 1);
     }
   } else if (static_cast<size_t>(rank) == expected_target_rank) {
-    if (!are_close(state[0], inv_sqrt2)) {
-      std::cerr << "[Rank " << rank << "] FAIL: Expected state[0] = 1/sqrt(2), got " << state[0] << std::endl;
+    if (!are_close(state[target_local_idx], inv_sqrt2)) {
+      std::cerr << "[Rank " << rank << "] FAIL: Expected state[" << target_local_idx << "] = 1/sqrt(2), got " << state[target_local_idx] << std::endl;
       MPI_Abort(MPI_COMM_WORLD, 1);
     }
   } else {

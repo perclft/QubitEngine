@@ -4,6 +4,10 @@
 #include "../QuantumJIT.hpp"
 #include "../Exceptions.hpp"
 #include "../ipc/SharedMemory.hpp"
+#ifdef MPI_ENABLED
+#include "../mpi/MpiCoordinator.hpp"
+#endif
+#include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 #include <future>
 #include <cmath>
@@ -58,6 +62,27 @@ void CircuitService::applyGate(qubit_engine::QuantumRegister &qreg,
 void CircuitService::serializeState(
     const qubit_engine::QuantumRegister &qreg, qubit_engine::StateResponse *response,
     qubit_engine::CircuitRequest::MeasurementStrategy strategy, bool use_shm, bool authorized) {
+  if (strategy == qubit_engine::CircuitRequest::FULL_STATE) {
+    serializeStateVector(qreg.getStateVector(), qreg.getNumQubits(), response, strategy, use_shm, authorized);
+  } else if (strategy == qubit_engine::CircuitRequest::SPARSE_STATE) {
+    auto probs = qreg.getProbabilities();
+    for (size_t i = 0; i < probs.size(); ++i) {
+      if (probs[i] > 1e-6) {
+        auto *sparse = response->add_sparse_states();
+        sparse->set_qubit_index(static_cast<uint64_t>(i));
+        sparse->set_probability(probs[i]);
+      }
+    }
+  } else if (strategy == qubit_engine::CircuitRequest::EXPECTATION_VALUES) {
+    double exp_val = qreg.expectationValue("Z");
+    spdlog::info("Expectation Value (Z): {}", exp_val);
+  }
+}
+
+void CircuitService::serializeStateVector(
+    const std::vector<qubit_engine::Complex> &state_vec, size_t num_qubits,
+    qubit_engine::StateResponse *response,
+    qubit_engine::CircuitRequest::MeasurementStrategy strategy, bool use_shm, bool authorized) {
   
   char hostname[256];
 #ifdef _WIN32
@@ -77,7 +102,7 @@ void CircuitService::serializeState(
 
   if (strategy == qubit_engine::CircuitRequest::FULL_STATE) {
     bool shm_success = false;
-    if (use_shm && authorized && qreg.getNumQubits() >= 12) {
+    if (use_shm && authorized && num_qubits >= 12 && qubit_engine::ipc::SharedMemory::probeAccess()) {
       // 1. Backpressure check: Cap at 3 concurrent unacknowledged SHM segments
       int backpressure_retries = 0;
       while (qubit_engine::ipc::ActiveShmRegistry::instance().activeCount() >= 3 && backpressure_retries < 10) {
@@ -87,17 +112,21 @@ void CircuitService::serializeState(
 
       if (qubit_engine::ipc::ActiveShmRegistry::instance().activeCount() < 3) {
         static std::atomic<uint64_t> counter{0};
+#ifdef _WIN32
+        std::string shm_name = "Local\\qe_shm_" + std::to_string(++counter) + "_";
+#else
         std::string shm_name = "/qe_shm_" + std::to_string(++counter) + "_";
+#endif
         
         thread_local std::random_device rd;
         thread_local std::mt19937_64 gen(rd());
-        std::uniform_int_distribution<> dis(0, 9);
+        std::uniform_int_distribution<> dis(0, 15);
+        const char hex_chars[] = "0123456789abcdef";
         for (int i = 0; i < 16; ++i) { 
-          shm_name += std::to_string(dis(gen));
+          shm_name += hex_chars[dis(gen)];
         }
 
         try {
-          auto state_vec = qreg.getStateVector();
           size_t bytes = state_vec.size() * sizeof(qubit_engine::Complex);
           void* shm_ptr = qubit_engine::ipc::SharedMemory::createSegment(shm_name, bytes);
           std::memcpy(shm_ptr, state_vec.data(), bytes);
@@ -107,19 +136,27 @@ void CircuitService::serializeState(
           auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
               std::chrono::system_clock::now().time_since_epoch()).count();
 
-          std::string desc_json = "{"
-              "\"segment_name\":\"" + shm_name + "\","
-              "\"size_bytes\":" + std::to_string(bytes) + ","
-              "\"num_qubits\":" + std::to_string(qreg.getNumQubits()) + ","
-              "\"data_type\":\"complex128\","
-              "\"created_at_ms\":" + std::to_string(now_ms) + ","
-              "\"ack_token\":\"" + ack_token + "\""
-              "}";
+          nlohmann::json desc;
+          desc["format_version"] = 1;
+          desc["segment_name"] = shm_name;
+          desc["size_bytes"] = bytes;
+          desc["num_qubits"] = num_qubits;
+          desc["data_type"] = "complex128";
+          desc["created_at_ms"] = now_ms;
+          desc["ack_token"] = ack_token;
 
-          response->set_shm_descriptor(desc_json);
+          response->set_shm_descriptor(desc.dump());
           shm_success = true;
+
+          if (const char* hook = std::getenv("QUBIT_SHM_TEST_HOOK")) {
+            if (std::string(hook) == "pause_before_response") {
+              std::cout << "[SYNC:SEGMENT_CREATED]" << std::endl;
+              std::fflush(stdout);
+              std::this_thread::sleep_for(std::chrono::hours(1));
+            }
+          }
         } catch (const std::exception &e) {
-          spdlog::error("Shared Memory Error in serializeState: {}", e.what());
+          spdlog::error("Shared Memory Error in serializeStateVector: {}", e.what());
         }
       } else {
         spdlog::warn("SHM backpressure limit reached (3 un-acked segments). Falling back to protobuf array.");
@@ -133,7 +170,6 @@ void CircuitService::serializeState(
         pb_c->set_imag(0.0);
         spdlog::warn("State vector redacted for unauthorized request.");
       } else {
-        auto state_vec = qreg.getStateVector();
         for (const auto &c : state_vec) {
           auto *pb_c = response->add_state_vector();
           pb_c->set_real(c.real());
@@ -141,18 +177,6 @@ void CircuitService::serializeState(
         }
       }
     }
-  } else if (strategy == qubit_engine::CircuitRequest::SPARSE_STATE) {
-    auto probs = qreg.getProbabilities();
-    for (size_t i = 0; i < probs.size(); ++i) {
-      if (probs[i] > 1e-6) {
-        auto *sparse = response->add_sparse_states();
-        sparse->set_qubit_index(static_cast<uint64_t>(i));
-        sparse->set_probability(probs[i]);
-      }
-    }
-  } else if (strategy == qubit_engine::CircuitRequest::EXPECTATION_VALUES) {
-    double exp_val = qreg.expectationValue("Z");
-    spdlog::info("Expectation Value (Z): {}", exp_val);
   }
 }
 
@@ -188,6 +212,43 @@ grpc::Status CircuitService::RunCircuit(grpc::ServerContext *context,
     return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Qubits must be between 1 and 30");
   }
 
+#ifdef MPI_ENABLED
+  bool mpi_active = qubit_engine::mpi::MpiCoordinator::instance().isMpiActive();
+  struct ClusterLockGuard {
+    bool locked{false};
+    ~ClusterLockGuard() {
+      if (locked) {
+        qubit_engine::mpi::MpiCoordinator::instance().releaseClusterLock();
+      }
+    }
+  } cluster_guard;
+
+  if (mpi_active) {
+    int timeout_sec = 30;
+    if (const char* env_t = std::getenv("QUBIT_MPI_CLUSTER_TIMEOUT_SEC")) {
+      int t = std::atoi(env_t);
+      if (t > 0) timeout_sec = t;
+    }
+    if (!qubit_engine::mpi::MpiCoordinator::instance().tryAcquireClusterLock(timeout_sec)) {
+      return grpc::Status(grpc::StatusCode::RESOURCE_EXHAUSTED,
+                          "MPI cluster is busy: request timed out waiting for cluster execution lock");
+    }
+    cluster_guard.locked = true;
+
+    if (const char* hook = std::getenv("QUBIT_MPI_TEST_HOOK")) {
+      if (std::string(hook) == "hold_cluster_lock") {
+        std::cout << "[SYNC:CLUSTER_LOCK_HELD]" << std::endl;
+        std::fflush(stdout);
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+      }
+    }
+
+    qubit_engine::mpi::MpiCoordinator::instance().broadcastRunCircuit(*request);
+  }
+#else
+  bool mpi_active = false;
+#endif
+
   static std::mutex mem_check_mutex;
   std::unique_lock<std::mutex> lock(mem_check_mutex);
 
@@ -202,7 +263,11 @@ grpc::Status CircuitService::RunCircuit(grpc::ServerContext *context,
     int num_ops = request->operations_size();
 
     if (num_ops > 0) {
-      if (n >= 25) {
+      if (mpi_active) {
+        for (int i = 0; i < num_ops; ++i) {
+          applyGate(qreg, request->operations(i), response);
+        }
+      } else if (n >= 25) {
         qreg.enableRecording(true);
         qreg.enableExecution(false);
         for (int i = 0; i < num_ops; ++i) {
@@ -239,15 +304,14 @@ grpc::Status CircuitService::RunCircuit(grpc::ServerContext *context,
               case qubit_engine::GateOperation::CNOT: name = "CX"; qbs = { static_cast<int>(op.control_qubit()), static_cast<int>(op.target_qubit()) }; break;
               case qubit_engine::GateOperation::CZ: name = "CZ"; qbs = { static_cast<int>(op.control_qubit()), static_cast<int>(op.target_qubit()) }; break;
               case qubit_engine::GateOperation::SWAP: name = "SWAP"; qbs.push_back(op.second_target_qubit()); break;
-              case qubit_engine::GateOperation::ROTATION_X: name = "RX"; break;
-              case qubit_engine::GateOperation::ROTATION_Y: name = "RY"; break;
-              case qubit_engine::GateOperation::ROTATION_Z: name = "RZ"; break;
+              case qubit_engine::GateOperation::ROTATION_X: name = "RX"; params.push_back(op.angle()); break;
+              case qubit_engine::GateOperation::ROTATION_Y: name = "RY"; params.push_back(op.angle()); break;
+              case qubit_engine::GateOperation::ROTATION_Z: name = "RZ"; params.push_back(op.angle()); break;
               case qubit_engine::GateOperation::PHASE_S: name = "S"; break;
               case qubit_engine::GateOperation::PHASE_T: name = "T"; break;
               default: name = "U"; break;
             }
             str_gates.push_back({name, qbs});
-            params.push_back(op.angle());
           }
           return jit_compiler.compile(n, str_gates, params);
         };
@@ -292,7 +356,22 @@ grpc::Status CircuitService::RunCircuit(grpc::ServerContext *context,
       }
     }
 
+#ifdef MPI_ENABLED
+    if (mpi_active) {
+      if (request->measurement_strategy() == qubit_engine::CircuitRequest::FULL_STATE) {
+        auto local_state = qreg.getStateVector();
+        std::vector<qubit_engine::Complex> full_state;
+        qubit_engine::mpi::MpiCoordinator::instance().gatherStateVector(local_state, full_state, static_cast<size_t>(n));
+        serializeStateVector(full_state, static_cast<size_t>(n), response, request->measurement_strategy(), request->use_shm(), authorized);
+      } else {
+        serializeState(qreg, response, request->measurement_strategy(), request->use_shm(), authorized);
+      }
+    } else {
+      serializeState(qreg, response, request->measurement_strategy(), request->use_shm(), authorized);
+    }
+#else
     serializeState(qreg, response, request->measurement_strategy(), request->use_shm(), authorized);
+#endif
   } catch (const qubit_engine::InvalidArgumentException &e) {
     return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, e.what());
   } catch (const qubit_engine::QubitOutOfRangeException &e) {
@@ -329,6 +408,13 @@ grpc::Status CircuitService::StreamGates(
     return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Qubits must be between 1 and 30");
   }
 
+  static std::mutex mem_check_mutex;
+  std::unique_lock<std::mutex> lock(mem_check_mutex);
+  if (!hasEnoughMemory(num_qubits)) {
+    return grpc::Status(grpc::StatusCode::RESOURCE_EXHAUSTED,
+                        "Insufficient Server Memory for " + std::to_string(num_qubits) + " qubits.");
+  }
+
   qubit_engine::QuantumRegister qreg(static_cast<size_t>(num_qubits));
 
   try {
@@ -345,8 +431,12 @@ grpc::Status CircuitService::StreamGates(
       serializeState(qreg, &response, qubit_engine::CircuitRequest::FULL_STATE, use_shm, authorized);
       stream->Write(response);
     }
+  } catch (const qubit_engine::InvalidArgumentException &e) {
+    return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, e.what());
+  } catch (const qubit_engine::QubitOutOfRangeException &e) {
+    return grpc::Status(grpc::StatusCode::OUT_OF_RANGE, e.what());
   } catch (const std::exception &e) {
-    return grpc::Status(grpc::StatusCode::INTERNAL, e.what());
+    return grpc::Status(grpc::StatusCode::INTERNAL, std::string("Internal Engine Error: ") + e.what());
   }
 
   return grpc::Status::OK;
@@ -360,19 +450,40 @@ grpc::Status CircuitService::VisualizeCircuit(
     return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "Invalid or missing authorization token");
   }
 
-  spdlog::info("[VisualizeCircuit] Received request for {} qubits.", request->num_qubits());
-  qubit_engine::QuantumRegister qreg(request->num_qubits());
+  int n = request->num_qubits();
+  if (n <= 0 || n > 30) {
+    return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Qubits must be between 1 and 30");
+  }
 
-  for (const auto &op : request->operations()) {
-    qubit_engine::StateResponse response;
-    applyGate(qreg, op, &response);
-    if (request->noise_probability() > 0.0) {
-      qreg.applyDepolarizingNoise(request->noise_probability());
+  static std::mutex mem_check_mutex;
+  std::unique_lock<std::mutex> lock(mem_check_mutex);
+  if (!hasEnoughMemory(n)) {
+    return grpc::Status(grpc::StatusCode::RESOURCE_EXHAUSTED,
+                        "Insufficient Server Memory for " + std::to_string(n) + " qubits.");
+  }
+
+  spdlog::info("[VisualizeCircuit] Received request for {} qubits.", n);
+
+  try {
+    qubit_engine::QuantumRegister qreg(n);
+
+    for (const auto &op : request->operations()) {
+      qubit_engine::StateResponse response;
+      applyGate(qreg, op, &response);
+      if (request->noise_probability() > 0.0) {
+        qreg.applyDepolarizingNoise(request->noise_probability());
+      }
+      serializeState(qreg, &response, request->measurement_strategy(), request->use_shm(), authorized);
+      if (writer && !writer->Write(response)) {
+        return grpc::Status::CANCELLED;
+      }
     }
-    serializeState(qreg, &response, request->measurement_strategy(), request->use_shm(), authorized);
-    if (!writer->Write(response)) {
-      return grpc::Status::CANCELLED;
-    }
+  } catch (const qubit_engine::InvalidArgumentException &e) {
+    return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, e.what());
+  } catch (const qubit_engine::QubitOutOfRangeException &e) {
+    return grpc::Status(grpc::StatusCode::OUT_OF_RANGE, e.what());
+  } catch (const std::exception &e) {
+    return grpc::Status(grpc::StatusCode::INTERNAL, std::string("Internal Engine Error: ") + e.what());
   }
   return grpc::Status::OK;
 }

@@ -1,4 +1,5 @@
 #include "CloudBackend.hpp"
+#include "Exceptions.hpp"
 #include <grpcpp/grpcpp.h>
 #include <spdlog/spdlog.h>
 #include <cstdlib>
@@ -138,14 +139,12 @@ int CloudBackend::measure(size_t target) {
   if (it != last_response_.classical_results().end()) {
     return it->second ? 1 : 0;
   }
-  return 0; // Default
+  throw std::runtime_error("CloudBackend: No measurement result returned for qubit " + std::to_string(target));
 }
 
 std::vector<double> CloudBackend::getProbabilities() const {
   ensureRemoteExecution();
-  // If we had expectation values or similar from cloud...
-  // Usually cloud doesn't return full state vector for > 30 qubits.
-  return {}; 
+  throw FeatureNotSupportedException("CloudBackend does not support dense getProbabilities; use measurement sampling.");
 }
 
 double CloudBackend::expectationValue(const std::string &pauli_string) const {
@@ -154,7 +153,7 @@ double CloudBackend::expectationValue(const std::string &pauli_string) const {
   if (last_response_.expectation_values_size() > 0) {
     return last_response_.expectation_values(0);
   }
-  return 0.0;
+  throw std::runtime_error("CloudBackend: Remote execution returned no expectation values for observable: " + pauli_string);
 }
 
 std::vector<Complex> CloudBackend::getStateVector() const {

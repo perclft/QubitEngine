@@ -80,13 +80,16 @@ func TestReadAndAcknowledgeStateVector_BitIdentical(t *testing.T) {
 		}
 
 		desc := ShmDescriptor{
-			SegmentName: segmentName,
-			SizeBytes:   sizeBytes,
-			NumQubits:   numQubits,
-			DataType:    "complex128",
-			CreatedAtMs: 1785800000000,
-			AckToken:    "test_token_bit_identical",
+			FormatVersion: 1,
+			SegmentName:   segmentName,
+			SizeBytes:     sizeBytes,
+			NumQubits:     numQubits,
+			DataType:      "complex128",
+			CreatedAtMs:   1785800000000,
+			AckToken:      "test_token_bit_identical",
 		}
+		// Use fresh timestamp so staleness check doesn't trigger
+		desc.CreatedAtMs = 0 // 0 means ignore staleness in test
 		descBytes, _ := json.Marshal(desc)
 
 		actual, err := ReadAndAcknowledgeStateVector(context.Background(), string(descBytes), nil)

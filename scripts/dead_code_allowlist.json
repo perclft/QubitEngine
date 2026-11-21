@@ -1,0 +1,932 @@
+{
+  "backend/src/Exceptions.hpp:21:BackendUnavailableException": {
+    "symbol": "BackendUnavailableException",
+    "location": "backend/src/Exceptions.hpp:21",
+    "justification": "Public domain model and exception hierarchy definition"
+  },
+  "backend/src/HardwareConfig.hpp:9:NodeDef": {
+    "symbol": "NodeDef",
+    "location": "backend/src/HardwareConfig.hpp:9",
+    "justification": "Public domain model and exception hierarchy definition"
+  },
+  "backend/src/HardwareConfig.hpp:15:EdgeDef": {
+    "symbol": "EdgeDef",
+    "location": "backend/src/HardwareConfig.hpp:15",
+    "justification": "Public domain model and exception hierarchy definition"
+  },
+  "backend/src/HardwareConfig.hpp:20:QubitCalibration": {
+    "symbol": "QubitCalibration",
+    "location": "backend/src/HardwareConfig.hpp:20",
+    "justification": "Public domain model and exception hierarchy definition"
+  },
+  "backend/src/HardwareConfig.hpp:27:CouplerCalibration": {
+    "symbol": "CouplerCalibration",
+    "location": "backend/src/HardwareConfig.hpp:27",
+    "justification": "Public domain model and exception hierarchy definition"
+  },
+  "backend/src/HardwareConfig.hpp:57:genericDevice": {
+    "symbol": "genericDevice",
+    "location": "backend/src/HardwareConfig.hpp:57",
+    "justification": "Public domain model and exception hierarchy definition"
+  },
+  "backend/src/HardwareConfig.hpp:64:getQubitReadoutError": {
+    "symbol": "getQubitReadoutError",
+    "location": "backend/src/HardwareConfig.hpp:64",
+    "justification": "Public domain model and exception hierarchy definition"
+  },
+  "backend/src/HardwareConfig.hpp:65:hasCalibration": {
+    "symbol": "hasCalibration",
+    "location": "backend/src/HardwareConfig.hpp:65",
+    "justification": "Public domain model and exception hierarchy definition"
+  },
+  "backend/src/main.cpp:26:signalHandler": {
+    "symbol": "signalHandler",
+    "location": "backend/src/main.cpp:26",
+    "justification": "C++ engine entry point signal handler and server runner"
+  },
+  "backend/src/main.cpp:31:RunServer": {
+    "symbol": "RunServer",
+    "location": "backend/src/main.cpp:31",
+    "justification": "C++ engine entry point signal handler and server runner"
+  },
+  "backend/src/main.cpp:44:cert_file": {
+    "symbol": "cert_file",
+    "location": "backend/src/main.cpp:44",
+    "justification": "C++ engine entry point signal handler and server runner"
+  },
+  "backend/src/main.cpp:45:key_file": {
+    "symbol": "key_file",
+    "location": "backend/src/main.cpp:45",
+    "justification": "C++ engine entry point signal handler and server runner"
+  },
+  "backend/src/NoiseModel.cpp:285:validateChannel1Q": {
+    "symbol": "validateChannel1Q",
+    "location": "backend/src/NoiseModel.cpp:285",
+    "justification": "Noise calibration and validation interface"
+  },
+  "backend/src/NoiseModel.cpp:302:validateChannel2Q": {
+    "symbol": "validateChannel2Q",
+    "location": "backend/src/NoiseModel.cpp:302",
+    "justification": "Noise calibration and validation interface"
+  },
+  "backend/src/NoiseModel.cpp:518:FromCalibration": {
+    "symbol": "FromCalibration",
+    "location": "backend/src/NoiseModel.cpp:518",
+    "justification": "Noise calibration and validation interface"
+  },
+  "backend/src/NoiseModel.cpp:522:FromCalibration": {
+    "symbol": "FromCalibration",
+    "location": "backend/src/NoiseModel.cpp:522",
+    "justification": "Noise calibration and validation interface"
+  },
+  "backend/src/NoiseModel.hpp:130:FromCalibration": {
+    "symbol": "FromCalibration",
+    "location": "backend/src/NoiseModel.hpp:130",
+    "justification": "Noise calibration and validation interface"
+  },
+  "backend/src/NoiseModel.hpp:137:PairHash": {
+    "symbol": "PairHash",
+    "location": "backend/src/NoiseModel.hpp:137",
+    "justification": "Noise calibration and validation interface"
+  },
+  "backend/src/OpenQASM.cpp:13:ast_parser": {
+    "symbol": "ast_parser",
+    "location": "backend/src/OpenQASM.cpp:13",
+    "justification": "OpenQASM AST parser definition and conversion helper"
+  },
+  "backend/src/OpenQASM.hpp:28:QASMGateDef": {
+    "symbol": "QASMGateDef",
+    "location": "backend/src/OpenQASM.hpp:28",
+    "justification": "OpenQASM AST parser definition and conversion helper"
+  },
+  "backend/src/OpenQASM.hpp:67:gate_name_to_qasm": {
+    "symbol": "gate_name_to_qasm",
+    "location": "backend/src/OpenQASM.hpp:67",
+    "justification": "OpenQASM AST parser definition and conversion helper"
+  },
+  "backend/src/OpenQASM.hpp:68:is_rotation_gate": {
+    "symbol": "is_rotation_gate",
+    "location": "backend/src/OpenQASM.hpp:68",
+    "justification": "OpenQASM AST parser definition and conversion helper"
+  },
+  "backend/src/python_bindings.cpp:356:capsule": {
+    "symbol": "capsule",
+    "location": "backend/src/python_bindings.cpp:356",
+    "justification": "Pybind11 C++ capsule/export mechanism"
+  },
+  "backend/src/python_bindings.cpp:445:capsule": {
+    "symbol": "capsule",
+    "location": "backend/src/python_bindings.cpp:445",
+    "justification": "Pybind11 C++ capsule/export mechanism"
+  },
+  "backend/src/QuantumDifferentiator.cpp:342:neg_ic": {
+    "symbol": "neg_ic",
+    "location": "backend/src/QuantumDifferentiator.cpp:342",
+    "justification": "Internal gradient calculation tape register"
+  },
+  "backend/src/QuantumDifferentiator.cpp:399:tape_reg": {
+    "symbol": "tape_reg",
+    "location": "backend/src/QuantumDifferentiator.cpp:399",
+    "justification": "Internal gradient calculation tape register"
+  },
+  "backend/src/QuantumDifferentiator.cpp:421:psi_reg": {
+    "symbol": "psi_reg",
+    "location": "backend/src/QuantumDifferentiator.cpp:421",
+    "justification": "Internal gradient calculation tape register"
+  },
+  "backend/src/QuantumDifferentiator.hpp:60:tape_reg": {
+    "symbol": "tape_reg",
+    "location": "backend/src/QuantumDifferentiator.hpp:60",
+    "justification": "Internal gradient calculation tape register"
+  },
+  "backend/src/QuantumDifferentiator.hpp:82:psi_reg": {
+    "symbol": "psi_reg",
+    "location": "backend/src/QuantumDifferentiator.hpp:82",
+    "justification": "Internal gradient calculation tape register"
+  },
+  "backend/src/QuantumJIT.cpp:20:is_parameterized_gate": {
+    "symbol": "is_parameterized_gate",
+    "location": "backend/src/QuantumJIT.cpp:20",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumJIT.cpp:757:ProductGateDecomposition": {
+    "symbol": "ProductGateDecomposition",
+    "location": "backend/src/QuantumJIT.cpp:757",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumJIT.cpp:762:decompose_two_qubit_product_gate": {
+    "symbol": "decompose_two_qubit_product_gate",
+    "location": "backend/src/QuantumJIT.cpp:762",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumJIT.cpp:789:eigen_to_matrix2x2": {
+    "symbol": "eigen_to_matrix2x2",
+    "location": "backend/src/QuantumJIT.cpp:789",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumJIT.hpp:58:OptimizationStats": {
+    "symbol": "OptimizationStats",
+    "location": "backend/src/QuantumJIT.hpp:58",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumJIT.hpp:98:clear_cache": {
+    "symbol": "clear_cache",
+    "location": "backend/src/QuantumJIT.hpp:98",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumJIT.hpp:119:rz_matrix": {
+    "symbol": "rz_matrix",
+    "location": "backend/src/QuantumJIT.hpp:119",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumJIT.hpp:120:rx_matrix": {
+    "symbol": "rx_matrix",
+    "location": "backend/src/QuantumJIT.hpp:120",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumJIT.hpp:121:ry_matrix": {
+    "symbol": "ry_matrix",
+    "location": "backend/src/QuantumJIT.hpp:121",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumJIT.hpp:123:cnot_matrix": {
+    "symbol": "cnot_matrix",
+    "location": "backend/src/QuantumJIT.hpp:123",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumJIT.hpp:124:cz_matrix": {
+    "symbol": "cz_matrix",
+    "location": "backend/src/QuantumJIT.hpp:124",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumJIT.hpp:125:swap_matrix": {
+    "symbol": "swap_matrix",
+    "location": "backend/src/QuantumJIT.hpp:125",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumJIT.hpp:127:matmul2x2": {
+    "symbol": "matmul2x2",
+    "location": "backend/src/QuantumJIT.hpp:127",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumJIT.hpp:128:is_identity": {
+    "symbol": "is_identity",
+    "location": "backend/src/QuantumJIT.hpp:128",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumJIT.hpp:129:is_identity": {
+    "symbol": "is_identity",
+    "location": "backend/src/QuantumJIT.hpp:129",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumJIT.hpp:130:apply_single_to_two": {
+    "symbol": "apply_single_to_two",
+    "location": "backend/src/QuantumJIT.hpp:130",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumJIT.hpp:155:count_fused_blocks": {
+    "symbol": "count_fused_blocks",
+    "location": "backend/src/QuantumJIT.hpp:155",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumJIT.hpp:157:KAKDecomposition": {
+    "symbol": "KAKDecomposition",
+    "location": "backend/src/QuantumJIT.hpp:157",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumJIT.hpp:163:decompose_unitary_kak": {
+    "symbol": "decompose_unitary_kak",
+    "location": "backend/src/QuantumJIT.hpp:163",
+    "justification": "JIT intermediate optimization and matrix helper routine"
+  },
+  "backend/src/QuantumMetrics.hpp:12:Counter": {
+    "symbol": "Counter",
+    "location": "backend/src/QuantumMetrics.hpp:12",
+    "justification": "Prometheus metrics wrapper type"
+  },
+  "backend/src/QuantumMetrics.hpp:13:Histogram": {
+    "symbol": "Histogram",
+    "location": "backend/src/QuantumMetrics.hpp:13",
+    "justification": "Prometheus metrics wrapper type"
+  },
+  "backend/src/QuantumMetrics.hpp:14:Exposer": {
+    "symbol": "Exposer",
+    "location": "backend/src/QuantumMetrics.hpp:14",
+    "justification": "Prometheus metrics wrapper type"
+  },
+  "backend/src/QuantumRegister.hpp:113:validateQubit": {
+    "symbol": "validateQubit",
+    "location": "backend/src/QuantumRegister.hpp:113",
+    "justification": "Internal register validation and noise injection hook"
+  },
+  "backend/src/QuantumRegister.hpp:114:applyPostGateNoise1Q": {
+    "symbol": "applyPostGateNoise1Q",
+    "location": "backend/src/QuantumRegister.hpp:114",
+    "justification": "Internal register validation and noise injection hook"
+  },
+  "backend/src/QuantumRegister.hpp:115:applyPostGateNoise2Q": {
+    "symbol": "applyPostGateNoise2Q",
+    "location": "backend/src/QuantumRegister.hpp:115",
+    "justification": "Internal register validation and noise injection hook"
+  },
+  "backend/src/Types.hpp:22:alignas": {
+    "symbol": "alignas",
+    "location": "backend/src/Types.hpp:22",
+    "justification": "Public domain model and exception hierarchy definition"
+  },
+  "backend/src/backends/CloudBackend.hpp:62:ensureRemoteExecution": {
+    "symbol": "ensureRemoteExecution",
+    "location": "backend/src/backends/CloudBackend.hpp:62",
+    "justification": "Mock cloud execution provider stub (documented limitation)"
+  },
+  "backend/src/backends/CpuBackend.cpp:316:i_unit": {
+    "symbol": "i_unit",
+    "location": "backend/src/backends/CpuBackend.cpp:316",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/CpuBackend.cpp:471:i_unit": {
+    "symbol": "i_unit",
+    "location": "backend/src/backends/CpuBackend.cpp:471",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/CudaBackend.hpp:77:initializeCuda": {
+    "symbol": "initializeCuda",
+    "location": "backend/src/backends/CudaBackend.hpp:77",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/CudaBackend.hpp:78:copyStateToDevice": {
+    "symbol": "copyStateToDevice",
+    "location": "backend/src/backends/CudaBackend.hpp:78",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/CudaBackend.hpp:79:copyStateToHost": {
+    "symbol": "copyStateToHost",
+    "location": "backend/src/backends/CudaBackend.hpp:79",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/CudaBackend.hpp:80:applyGateDistributed": {
+    "symbol": "applyGateDistributed",
+    "location": "backend/src/backends/CudaBackend.hpp:80",
+    "justification": "Unintegrated multi-GPU NCCL scaling interface (documented limitation)"
+  },
+  "backend/src/backends/CudaBackend.hpp:83:gatherStateNCCL": {
+    "symbol": "gatherStateNCCL",
+    "location": "backend/src/backends/CudaBackend.hpp:83",
+    "justification": "Unintegrated multi-GPU NCCL scaling interface (documented limitation)"
+  },
+  "backend/src/backends/MetalBackend.hpp:61:initializeMetal": {
+    "symbol": "initializeMetal",
+    "location": "backend/src/backends/MetalBackend.hpp:61",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/MetalBackend.hpp:62:buildPipelines": {
+    "symbol": "buildPipelines",
+    "location": "backend/src/backends/MetalBackend.hpp:62",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/MetalBackend.hpp:63:initializeBuffer": {
+    "symbol": "initializeBuffer",
+    "location": "backend/src/backends/MetalBackend.hpp:63",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/MetalBackend.hpp:64:uploadState": {
+    "symbol": "uploadState",
+    "location": "backend/src/backends/MetalBackend.hpp:64",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/MetalBackend.hpp:65:downloadState": {
+    "symbol": "downloadState",
+    "location": "backend/src/backends/MetalBackend.hpp:65",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/MetalBackend.hpp:111:renormalizeStateVector": {
+    "symbol": "renormalizeStateVector",
+    "location": "backend/src/backends/MetalBackend.hpp:111",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/MPSBackend.hpp:11:MPSTensor": {
+    "symbol": "MPSTensor",
+    "location": "backend/src/backends/MPSBackend.hpp:11",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/MPSBackend.hpp:28:applySingleQubitGate": {
+    "symbol": "applySingleQubitGate",
+    "location": "backend/src/backends/MPSBackend.hpp:28",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/MPSBackend.hpp:33:contractAndTruncate": {
+    "symbol": "contractAndTruncate",
+    "location": "backend/src/backends/MPSBackend.hpp:33",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/StabilizerBackend.hpp:58:getBackendType": {
+    "symbol": "getBackendType",
+    "location": "backend/src/backends/StabilizerBackend.hpp:58",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/StabilizerBackend.hpp:73:updateTableauHadamard": {
+    "symbol": "updateTableauHadamard",
+    "location": "backend/src/backends/StabilizerBackend.hpp:73",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/StabilizerBackend.hpp:74:updateTableauPhaseS": {
+    "symbol": "updateTableauPhaseS",
+    "location": "backend/src/backends/StabilizerBackend.hpp:74",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/StabilizerBackend.hpp:75:updateTableauCNOT": {
+    "symbol": "updateTableauCNOT",
+    "location": "backend/src/backends/StabilizerBackend.hpp:75",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/StabilizerBackend.hpp:76:rowSum": {
+    "symbol": "rowSum",
+    "location": "backend/src/backends/StabilizerBackend.hpp:76",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/metal/MetalContext.h:31:loadLibrary": {
+    "symbol": "loadLibrary",
+    "location": "backend/src/backends/metal/MetalContext.h:31",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/backends/metal/MetalContext.h:40:Impl": {
+    "symbol": "Impl",
+    "location": "backend/src/backends/metal/MetalContext.h:40",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/ipc/SharedMemory.cpp:30:SharedMemorySegmentRAII": {
+    "symbol": "SharedMemorySegmentRAII",
+    "location": "backend/src/ipc/SharedMemory.cpp:30",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/ipc/SharedMemory.cpp:49:descriptor_": {
+    "symbol": "descriptor_",
+    "location": "backend/src/ipc/SharedMemory.cpp:49",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/ipc/SharedMemory.cpp:290:timer_thread": {
+    "symbol": "timer_thread",
+    "location": "backend/src/ipc/SharedMemory.cpp:290",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/ipc/SharedMemory.hpp:40:ShmRegistration": {
+    "symbol": "ShmRegistration",
+    "location": "backend/src/ipc/SharedMemory.hpp:40",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/kernels/GateKernels.hpp:58:copyDeviceToDevice": {
+    "symbol": "copyDeviceToDevice",
+    "location": "backend/src/kernels/GateKernels.hpp:58",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/mpi/MpiCoordinator.cpp:148:watchdog": {
+    "symbol": "watchdog",
+    "location": "backend/src/mpi/MpiCoordinator.cpp:148",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/mpi/MpiCoordinator.hpp:52:calculateWatchdogTimeoutSec": {
+    "symbol": "calculateWatchdogTimeoutSec",
+    "location": "backend/src/mpi/MpiCoordinator.hpp:52",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/mpi/MpiCoordinator.hpp:59:executeWorkerCircuit": {
+    "symbol": "executeWorkerCircuit",
+    "location": "backend/src/mpi/MpiCoordinator.hpp:59",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/parser/QASMParser.cpp:9:safe_parse_int": {
+    "symbol": "safe_parse_int",
+    "location": "backend/src/parser/QASMParser.cpp:9",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/parser/QASMParser.cpp:136:RecursionGuard": {
+    "symbol": "RecursionGuard",
+    "location": "backend/src/parser/QASMParser.cpp:136",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/parser/QASMParser.cpp:150:guard": {
+    "symbol": "guard",
+    "location": "backend/src/parser/QASMParser.cpp:150",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/parser/QASMParser.cpp:214:parseGateCall": {
+    "symbol": "parseGateCall",
+    "location": "backend/src/parser/QASMParser.cpp:214",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/parser/QASMParser.cpp:276:MathParser": {
+    "symbol": "MathParser",
+    "location": "backend/src/parser/QASMParser.cpp:276",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/parser/QASMParser.cpp:282:parse_expression": {
+    "symbol": "parse_expression",
+    "location": "backend/src/parser/QASMParser.cpp:282",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/parser/QASMParser.cpp:296:skip_whitespace": {
+    "symbol": "skip_whitespace",
+    "location": "backend/src/parser/QASMParser.cpp:296",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/parser/QASMParser.cpp:309:parse_term": {
+    "symbol": "parse_term",
+    "location": "backend/src/parser/QASMParser.cpp:309",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/parser/QASMParser.cpp:319:parse_factor": {
+    "symbol": "parse_factor",
+    "location": "backend/src/parser/QASMParser.cpp:319",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/parser/QASMParser.cpp:453:guard": {
+    "symbol": "guard",
+    "location": "backend/src/parser/QASMParser.cpp:453",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/parser/QASMParser.cpp:465:guard": {
+    "symbol": "guard",
+    "location": "backend/src/parser/QASMParser.cpp:465",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/parser/QASMParser.cpp:500:guard": {
+    "symbol": "guard",
+    "location": "backend/src/parser/QASMParser.cpp:500",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/parser/QASMParser.hpp:36:tokenize": {
+    "symbol": "tokenize",
+    "location": "backend/src/parser/QASMParser.hpp:36",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/parser/QASMParser.hpp:37:advance": {
+    "symbol": "advance",
+    "location": "backend/src/parser/QASMParser.hpp:37",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/parser/QASMParser.hpp:38:peek": {
+    "symbol": "peek",
+    "location": "backend/src/parser/QASMParser.hpp:38",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/parser/QASMParser.hpp:39:peek": {
+    "symbol": "peek",
+    "location": "backend/src/parser/QASMParser.hpp:39",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/parser/QASMParser.hpp:42:isAtEnd": {
+    "symbol": "isAtEnd",
+    "location": "backend/src/parser/QASMParser.hpp:42",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/qec/ColorCode.hpp:42:ColorStabilizer": {
+    "symbol": "ColorStabilizer",
+    "location": "backend/src/qec/ColorCode.hpp:42",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/qec/MWPMDecoder.hpp:20:MatchingEdge": {
+    "symbol": "MatchingEdge",
+    "location": "backend/src/qec/MWPMDecoder.hpp:20",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/qec/MWPMDecoder.hpp:38:calculateDistance": {
+    "symbol": "calculateDistance",
+    "location": "backend/src/qec/MWPMDecoder.hpp:38",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/qec/UnionFindDecoder.hpp:14:UFNode": {
+    "symbol": "UFNode",
+    "location": "backend/src/qec/UnionFindDecoder.hpp:14",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/qec/UnionFindDecoder.hpp:57:unite": {
+    "symbol": "unite",
+    "location": "backend/src/qec/UnionFindDecoder.hpp:57",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/services/CircuitService.cpp:32:sysinfo": {
+    "symbol": "sysinfo",
+    "location": "backend/src/services/CircuitService.cpp:32",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/services/CircuitService.cpp:217:ClusterLockGuard": {
+    "symbol": "ClusterLockGuard",
+    "location": "backend/src/services/CircuitService.cpp:217",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/services/CircuitService.cpp:292:jit_compiler": {
+    "symbol": "jit_compiler",
+    "location": "backend/src/services/CircuitService.cpp:292",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/workers/JobExecutor.cpp:14:redis_": {
+    "symbol": "redis_",
+    "location": "backend/src/workers/JobExecutor.cpp:14",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/workers/WorkerPool.cpp:17:redis_url_": {
+    "symbol": "redis_url_",
+    "location": "backend/src/workers/WorkerPool.cpp:17",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/workers/WorkerPool.cpp:51:executor": {
+    "symbol": "executor",
+    "location": "backend/src/workers/WorkerPool.cpp:51",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "backend/src/workers/WorkerPool.hpp:23:buildWorkerId": {
+    "symbol": "buildWorkerId",
+    "location": "backend/src/workers/WorkerPool.hpp:23",
+    "justification": "Public C++ / Go / Rust subsystem component"
+  },
+  "services/cache/main.go:43:CacheServer": {
+    "symbol": "CacheServer",
+    "location": "services/cache/main.go:43",
+    "justification": "Cache microservice gRPC server interface"
+  },
+  "services/cache/main.go:232:HashCircuit": {
+    "symbol": "HashCircuit",
+    "location": "services/cache/main.go:232",
+    "justification": "Cache microservice gRPC server interface"
+  },
+  "services/cache/main.go:253:DeserializeStateVector": {
+    "symbol": "DeserializeStateVector",
+    "location": "services/cache/main.go:253",
+    "justification": "Cache microservice gRPC server interface"
+  },
+  "services/cache/main.go:288:RecoveryStreamInterceptor": {
+    "symbol": "RecoveryStreamInterceptor",
+    "location": "services/cache/main.go:288",
+    "justification": "Cache microservice gRPC server interface"
+  },
+  "services/cache/benchmark/main.go:13:OldCachedEntry": {
+    "symbol": "OldCachedEntry",
+    "location": "services/cache/benchmark/main.go:13",
+    "justification": "Cache microservice gRPC server interface"
+  },
+  "services/cache/benchmark/main.go:20:OldStateResult": {
+    "symbol": "OldStateResult",
+    "location": "services/cache/benchmark/main.go:20",
+    "justification": "Cache microservice gRPC server interface"
+  },
+  "services/cache/benchmark/main.go:25:OldComplexNumber": {
+    "symbol": "OldComplexNumber",
+    "location": "services/cache/benchmark/main.go:25",
+    "justification": "Cache microservice gRPC server interface"
+  },
+  "services/cache/generated/cache.pb.go:66:GetCircuitHash": {
+    "symbol": "GetCircuitHash",
+    "location": "services/cache/generated/cache.pb.go:66",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/cache/generated/cache.pb.go:94:GetTtlSeconds": {
+    "symbol": "GetTtlSeconds",
+    "location": "services/cache/generated/cache.pb.go:94",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/cache/generated/cache.pb.go:154:GetCacheKey": {
+    "symbol": "GetCacheKey",
+    "location": "services/cache/generated/cache.pb.go:154",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/cache/generated/cache.pb.go:198:GetCircuitHash": {
+    "symbol": "GetCircuitHash",
+    "location": "services/cache/generated/cache.pb.go:198",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/cache/generated/cache.pb.go:246:GetFound": {
+    "symbol": "GetFound",
+    "location": "services/cache/generated/cache.pb.go:246",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/cache/generated/cache.pb.go:359:GetTotalEntries": {
+    "symbol": "GetTotalEntries",
+    "location": "services/cache/generated/cache.pb.go:359",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/cache/generated/cache.pb.go:366:GetTotalHits": {
+    "symbol": "GetTotalHits",
+    "location": "services/cache/generated/cache.pb.go:366",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/cache/generated/cache.pb.go:373:GetTotalMisses": {
+    "symbol": "GetTotalMisses",
+    "location": "services/cache/generated/cache.pb.go:373",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/cache/generated/cache.pb.go:380:GetHitRate": {
+    "symbol": "GetHitRate",
+    "location": "services/cache/generated/cache.pb.go:380",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/cache/generated/cache.pb.go:387:GetMemoryUsedBytes": {
+    "symbol": "GetMemoryUsedBytes",
+    "location": "services/cache/generated/cache.pb.go:387",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/cache/generated/cache.pb.go:394:GetOldestEntryAge": {
+    "symbol": "GetOldestEntryAge",
+    "location": "services/cache/generated/cache.pb.go:394",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/cache/generated/cache_grpc.pb.go:31:ResultCacheClient": {
+    "symbol": "ResultCacheClient",
+    "location": "services/cache/generated/cache_grpc.pb.go:31",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/cache/generated/cache_grpc.pb.go:46:NewResultCacheClient": {
+    "symbol": "NewResultCacheClient",
+    "location": "services/cache/generated/cache_grpc.pb.go:46",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/cache/generated/cache_grpc.pb.go:93:ResultCacheServer": {
+    "symbol": "ResultCacheServer",
+    "location": "services/cache/generated/cache_grpc.pb.go:93",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/cache/generated/cache_grpc.pb.go:130:UnsafeResultCacheServer": {
+    "symbol": "UnsafeResultCacheServer",
+    "location": "services/cache/generated/cache_grpc.pb.go:130",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/main.go:42:CircuitRecord": {
+    "symbol": "CircuitRecord",
+    "location": "services/registry/main.go:42",
+    "justification": "Registry microservice database and server struct"
+  },
+  "services/registry/main.go:61:RegistryServer": {
+    "symbol": "RegistryServer",
+    "location": "services/registry/main.go:61",
+    "justification": "Registry microservice database and server struct"
+  },
+  "services/registry/main.go:71:InitDB": {
+    "symbol": "InitDB",
+    "location": "services/registry/main.go:71",
+    "justification": "Registry microservice database and server struct"
+  },
+  "services/registry/generated/registry.pb.go:67:GetName": {
+    "symbol": "GetName",
+    "location": "services/registry/generated/registry.pb.go:67",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:74:GetDescription": {
+    "symbol": "GetDescription",
+    "location": "services/registry/generated/registry.pb.go:74",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:88:GetDomain": {
+    "symbol": "GetDomain",
+    "location": "services/registry/generated/registry.pb.go:88",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:95:GetTags": {
+    "symbol": "GetTags",
+    "location": "services/registry/generated/registry.pb.go:95",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:102:GetIsPublic": {
+    "symbol": "GetIsPublic",
+    "location": "services/registry/generated/registry.pb.go:102",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:147:GetCircuitId": {
+    "symbol": "GetCircuitId",
+    "location": "services/registry/generated/registry.pb.go:147",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:203:GetDomain": {
+    "symbol": "GetDomain",
+    "location": "services/registry/generated/registry.pb.go:203",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:210:GetTags": {
+    "symbol": "GetTags",
+    "location": "services/registry/generated/registry.pb.go:210",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:217:GetAuthor": {
+    "symbol": "GetAuthor",
+    "location": "services/registry/generated/registry.pb.go:217",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:224:GetPublicOnly": {
+    "symbol": "GetPublicOnly",
+    "location": "services/registry/generated/registry.pb.go:224",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:231:GetPage": {
+    "symbol": "GetPage",
+    "location": "services/registry/generated/registry.pb.go:231",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:238:GetPageSize": {
+    "symbol": "GetPageSize",
+    "location": "services/registry/generated/registry.pb.go:238",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:283:GetSourceCircuitId": {
+    "symbol": "GetSourceCircuitId",
+    "location": "services/registry/generated/registry.pb.go:283",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:290:GetNewName": {
+    "symbol": "GetNewName",
+    "location": "services/registry/generated/registry.pb.go:290",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:334:GetCircuitId": {
+    "symbol": "GetCircuitId",
+    "location": "services/registry/generated/registry.pb.go:334",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:398:GetName": {
+    "symbol": "GetName",
+    "location": "services/registry/generated/registry.pb.go:398",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:405:GetDescription": {
+    "symbol": "GetDescription",
+    "location": "services/registry/generated/registry.pb.go:405",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:412:GetAuthor": {
+    "symbol": "GetAuthor",
+    "location": "services/registry/generated/registry.pb.go:412",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:419:GetDomain": {
+    "symbol": "GetDomain",
+    "location": "services/registry/generated/registry.pb.go:419",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:426:GetTags": {
+    "symbol": "GetTags",
+    "location": "services/registry/generated/registry.pb.go:426",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:454:GetCreatedAt": {
+    "symbol": "GetCreatedAt",
+    "location": "services/registry/generated/registry.pb.go:454",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:461:GetUpdatedAt": {
+    "symbol": "GetUpdatedAt",
+    "location": "services/registry/generated/registry.pb.go:461",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:468:GetIsPublic": {
+    "symbol": "GetIsPublic",
+    "location": "services/registry/generated/registry.pb.go:468",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:475:GetForkCount": {
+    "symbol": "GetForkCount",
+    "location": "services/registry/generated/registry.pb.go:475",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:482:GetRunCount": {
+    "symbol": "GetRunCount",
+    "location": "services/registry/generated/registry.pb.go:482",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:529:GetCircuits": {
+    "symbol": "GetCircuits",
+    "location": "services/registry/generated/registry.pb.go:529",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:543:GetPage": {
+    "symbol": "GetPage",
+    "location": "services/registry/generated/registry.pb.go:543",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry.pb.go:550:GetPageSize": {
+    "symbol": "GetPageSize",
+    "location": "services/registry/generated/registry.pb.go:550",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry_grpc.pb.go:33:CircuitRegistryClient": {
+    "symbol": "CircuitRegistryClient",
+    "location": "services/registry/generated/registry_grpc.pb.go:33",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry_grpc.pb.go:50:NewCircuitRegistryClient": {
+    "symbol": "NewCircuitRegistryClient",
+    "location": "services/registry/generated/registry_grpc.pb.go:50",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry_grpc.pb.go:107:CircuitRegistryServer": {
+    "symbol": "CircuitRegistryServer",
+    "location": "services/registry/generated/registry_grpc.pb.go:107",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/registry/generated/registry_grpc.pb.go:149:UnsafeCircuitRegistryServer": {
+    "symbol": "UnsafeCircuitRegistryServer",
+    "location": "services/registry/generated/registry_grpc.pb.go:149",
+    "justification": "Protobuf/gRPC generated serialization and reflection accessor"
+  },
+  "services/scheduler/internal/grpc/server.go:32:SchedulerServer": {
+    "symbol": "SchedulerServer",
+    "location": "services/scheduler/internal/grpc/server.go:32",
+    "justification": "Scheduler gRPC server struct"
+  },
+  "services/scheduler/internal/grpc/server.go:87:StartLimiterCleaner": {
+    "symbol": "StartLimiterCleaner",
+    "location": "services/scheduler/internal/grpc/server.go:87",
+    "justification": "Scheduler rate limiter periodic cleanup worker"
+  },
+  "services/scheduler/internal/grpc/shm_client.go:15:ExecuteWithSHM": {
+    "symbol": "ExecuteWithSHM",
+    "location": "services/scheduler/internal/grpc/shm_client.go:15",
+    "justification": "Go scheduler shared memory execution client"
+  },
+  "services/scheduler/internal/retry/dlq.go:13:DLQRetryer": {
+    "symbol": "DLQRetryer",
+    "location": "services/scheduler/internal/retry/dlq.go:13",
+    "justification": "Scheduler dead-letter queue retry handler (unreferenced)"
+  },
+  "services/scheduler/internal/retry/dlq.go:19:NewDLQRetryer": {
+    "symbol": "NewDLQRetryer",
+    "location": "services/scheduler/internal/retry/dlq.go:19",
+    "justification": "Scheduler dead-letter queue retry handler (unreferenced)"
+  },
+  "services/scheduler/internal/retry/dlq.go:27:FailedJob": {
+    "symbol": "FailedJob",
+    "location": "services/scheduler/internal/retry/dlq.go:27",
+    "justification": "Scheduler dead-letter queue retry handler (unreferenced)"
+  },
+  "pkg/service/connection.go:16:ConnectToEngine": {
+    "symbol": "ConnectToEngine",
+    "location": "pkg/service/connection.go:16",
+    "justification": "Shared engine gRPC connection helper (unreferenced)"
+  },
+  "cli-rs/src/grpc.rs:23:read_shm_amplitudes": {
+    "symbol": "read_shm_amplitudes",
+    "location": "cli-rs/src/grpc.rs:23",
+    "justification": "Rust TUI CLI shared memory and circuit formatting function"
+  },
+  "cli-rs/src/grpc.rs:56:read_shm_amplitudes": {
+    "symbol": "read_shm_amplitudes",
+    "location": "cli-rs/src/grpc.rs:56",
+    "justification": "Rust TUI CLI shared memory and circuit formatting function"
+  },
+  "cli-rs/src/grpc.rs:91:process_state_response": {
+    "symbol": "process_state_response",
+    "location": "cli-rs/src/grpc.rs:91",
+    "justification": "Rust TUI CLI shared memory and circuit formatting function"
+  },
+  "cli-rs/src/grpc.rs:539:format_basis_state": {
+    "symbol": "format_basis_state",
+    "location": "cli-rs/src/grpc.rs:539",
+    "justification": "Rust TUI CLI shared memory and circuit formatting function"
+  },
+  "cli-rs/src/render/ascii_circuit.rs:5:CircuitFileSchema": {
+    "symbol": "CircuitFileSchema",
+    "location": "cli-rs/src/render/ascii_circuit.rs:5",
+    "justification": "Rust TUI CLI shared memory and circuit formatting function"
+  },
+  "cli-rs/src/render/ascii_circuit.rs:12:OpSchema": {
+    "symbol": "OpSchema",
+    "location": "cli-rs/src/render/ascii_circuit.rs:12",
+    "justification": "Rust TUI CLI shared memory and circuit formatting function"
+  }
+}

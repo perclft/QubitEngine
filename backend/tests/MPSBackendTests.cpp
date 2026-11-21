@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "backends/MPSBackend.hpp"
 #include "NoiseModel.hpp"
+#include "Exceptions.hpp"
 #include <stdexcept>
 
 using namespace qubit_engine;
@@ -129,4 +130,24 @@ TEST(MPSBackendTest, IdenticalControlAndTargetThrows) {
     MPSBackend mps(2);
     EXPECT_THROW(mps.applyCNOT(0, 0), std::invalid_argument);
 }
+
+TEST(MPSBackendTest, ExpectationValueThrowsFeatureNotSupported) {
+    MPSBackend mps(2);
+    EXPECT_THROW(mps.expectationValue("Z"), FeatureNotSupportedException);
+}
+
+TEST(MPSBackendTest, GetProbabilitiesNormalizedBeyond100States) {
+    // 7-qubit equal superposition: 2^7 = 128 states
+    int n = 7;
+    MPSBackend mps(n);
+    for (int i = 0; i < n; ++i) {
+        mps.applyHadamard(i);
+    }
+    auto probs = mps.getProbabilities();
+    ASSERT_EQ(probs.size(), 128u);
+    double sum = 0.0;
+    for (double p : probs) sum += p;
+    EXPECT_NEAR(sum, 1.0, 1e-6);
+}
+
 

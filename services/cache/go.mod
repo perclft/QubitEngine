@@ -3,10 +3,12 @@ module github.com/perclft/QubitEngine/services/cache
 go 1.25.12
 
 replace github.com/perclft/QubitEngine/api => ../../api
+replace github.com/perclft/QubitEngine => ../..
 
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/go-redis/redis/v8 v8.11.5
+	github.com/perclft/QubitEngine v0.0.0-00010101000000-000000000000
 	github.com/perclft/QubitEngine/api v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.55.0
 	go.opentelemetry.io/otel v1.43.0

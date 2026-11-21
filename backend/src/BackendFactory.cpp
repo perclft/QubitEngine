@@ -11,11 +11,30 @@
 #include "backends/CloudBackend.hpp"
 #include <spdlog/spdlog.h>
 
+#ifdef MPI_ENABLED
+#include <mpi.h>
+#endif
+
 namespace qubit_engine {
 
 std::unique_ptr<IQuantumBackend> BackendFactory::create(size_t num_qubits,
                                                          bool force_local) {
   bool use_local = force_local || ConfigManager::Instance().forceLocalExecution();
+
+#ifdef MPI_ENABLED
+  if (!use_local) {
+    int mpi_init = 0;
+    MPI_Initialized(&mpi_init);
+    if (mpi_init) {
+      int mpi_world_size = 1;
+      MPI_Comm_size(MPI_COMM_WORLD, &mpi_world_size);
+      if (mpi_world_size > 1) {
+        spdlog::info("BackendFactory: Distributed MPI cluster active (world_size={}). Selecting SPMD CpuBackend.", mpi_world_size);
+        return std::make_unique<CpuBackend>(num_qubits, false);
+      }
+    }
+  }
+#endif
 
   // Priority 1: Cloud Offloading
   auto cloud_url = ConfigManager::Instance().getCloudUrl();

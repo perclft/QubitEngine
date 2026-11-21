@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include "../Types.hpp"
 #include "qubit_engine_export.h"
 
 namespace qubit_engine {
@@ -48,6 +49,13 @@ private:
                       qubit_engine::CircuitRequest::MeasurementStrategy
                           strategy = qubit_engine::CircuitRequest::FULL_STATE,
                       bool use_shm = false, bool authorized = true);
+
+  void serializeStateVector(const std::vector<qubit_engine::Complex> &state_vec,
+                            size_t num_qubits,
+                            qubit_engine::StateResponse *response,
+                            qubit_engine::CircuitRequest::MeasurementStrategy
+                                strategy = qubit_engine::CircuitRequest::FULL_STATE,
+                            bool use_shm = false, bool authorized = true);
 };
 
 } // namespace services

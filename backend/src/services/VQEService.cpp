@@ -1,12 +1,18 @@
 #include "VQEService.hpp"
+#include "CircuitService.hpp"
 #include "../QuantumRegister.hpp"
 #include "../QuantumDifferentiator.hpp"
 #include "../HardwareConfig.hpp"
+#include "../Exceptions.hpp"
 #include <spdlog/spdlog.h>
 #define _USE_MATH_DEFINES
 #include <cmath>
 #include <random>
 #include <limits>
+
+#ifdef MPI_ENABLED
+#include <mpi.h>
+#endif
 
 namespace qubit_engine {
 namespace services {
@@ -19,6 +25,19 @@ using AnsatzFunction = std::function<void(const std::vector<double> &, QuantumRe
 grpc::Status VQEService::RunVQE(
     grpc::ServerContext *context, const qubit_engine::VQERequest *request,
     grpc::ServerWriter<qubit_engine::VQEResponse> *writer) {
+
+#ifdef MPI_ENABLED
+  int mpi_init = 0;
+  MPI_Initialized(&mpi_init);
+  if (mpi_init) {
+    int mpi_size = 1;
+    MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
+    if (mpi_size > 1) {
+      return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
+                          "Distributed multi-node VQE optimization is not integrated in Phase 4; submit VQE workloads to single-node engine instances");
+    }
+  }
+#endif
 
   spdlog::info("VQEService: Starting VQE Optimization...");
 
@@ -53,6 +72,17 @@ grpc::Status VQEService::RunVQE(
     num_qubits = MolecularHamiltonian::getNumQubits(molType);
     hamiltonian = MolecularHamiltonian::getHamiltonian(molType);
   }
+
+  if (num_qubits <= 0 || num_qubits > 30) {
+    return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Qubits must be between 1 and 30");
+  }
+
+  if (!CircuitService::hasEnoughMemory(num_qubits)) {
+    return grpc::Status(grpc::StatusCode::RESOURCE_EXHAUSTED,
+                        "Insufficient Server Memory for " + std::to_string(num_qubits) + " qubits.");
+  }
+
+  try {
 
   // --- Ansatz: Multi-layer hardware-efficient (RY + CNOT ladder) ---
   // Cap at 3 layers — the simplified Hamiltonians don't require deeper circuits,
@@ -230,6 +260,13 @@ grpc::Status VQEService::RunVQE(
   }
 
   return grpc::Status::OK;
+  } catch (const qubit_engine::InvalidArgumentException &e) {
+    return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, e.what());
+  } catch (const qubit_engine::QubitOutOfRangeException &e) {
+    return grpc::Status(grpc::StatusCode::OUT_OF_RANGE, e.what());
+  } catch (const std::exception &e) {
+    return grpc::Status(grpc::StatusCode::INTERNAL, std::string("Internal VQE Error: ") + e.what());
+  }
 }
 
 } // namespace services

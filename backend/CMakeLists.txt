@@ -329,6 +329,7 @@ add_library(qubit_engine_core STATIC
     src/services/TopologyService.cpp
     src/workers/JobExecutor.cpp
     src/workers/WorkerPool.cpp
+    src/mpi/MpiCoordinator.cpp
     ${METAL_SOURCES}
     ${GPU_SOURCES}
 )
@@ -476,6 +477,7 @@ add_executable(tests
     tests/QECTests.cpp
     tests/NoiseAwareTranspilerTests.cpp
     tests/SharedMemoryTests.cpp
+    tests/ServiceBoundaryJITPropertyTests.cpp
 )
 
 # Service tests need ServiceImpl sources
@@ -568,6 +570,17 @@ target_link_libraries(benchmark PRIVATE
     spdlog::spdlog
     ${REDIS_LIB}
     ${HIREDIS_LIB}
+)
+
+add_executable(shm_latency_benchmark tests/SharedMemoryBenchmark.cpp)
+target_include_directories(shm_latency_benchmark PRIVATE src ${GENERATED_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(shm_latency_benchmark PRIVATE
+    qubit_engine_core
+    gRPC::grpc++
+    protobuf::libprotobuf
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    spdlog::spdlog
 )
 
 # =================================================================

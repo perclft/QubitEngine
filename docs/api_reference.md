@@ -45,7 +45,7 @@ The results of a circuit execution or step.
 - `state_vector` (repeated `ComplexNumber`): The full 2^N amplitude vector.
 - `classical_results` (map<uint32, bool>): Measured bit values.
 - `server_id` (string): Metadata identifying the processing node.
-- `shm_descriptor` (string): Shared memory key for zero-copy IPC.
+- `shm_descriptor` (string): Shared memory key for zero-copy IPC (prototype; unintegrated in current clients).
 
 ### `VQERequest`
 Parameters for variational optimization.

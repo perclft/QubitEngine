@@ -28,6 +28,7 @@ public:
                            size_t sizeBytes);
   static void unlinkSegment(const std::string &descriptor);
   static void scheduleCleanup(const std::string &descriptor, void *ptr, size_t sizeBytes, int timeoutMs);
+  static bool probeAccess();
 
 private:
   std::string descriptor_;

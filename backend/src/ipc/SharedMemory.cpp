@@ -223,6 +223,50 @@ void SharedMemory::performCleanup(std::string descriptor, void *ptr, size_t size
   }
 }
 
+bool SharedMemory::probeAccess() {
+  static std::atomic<int> cached_result{-1}; // -1: unprobed, 0: failed, 1: success
+  static std::chrono::steady_clock::time_point last_probe_time{};
+  static std::mutex probe_mutex;
+
+  auto now = std::chrono::steady_clock::now();
+  std::lock_guard<std::mutex> lock(probe_mutex);
+  if (cached_result.load() != -1 &&
+      std::chrono::duration_cast<std::chrono::seconds>(now - last_probe_time).count() < 60) {
+    return cached_result.load() == 1;
+  }
+
+  bool success = false;
+  try {
+#ifdef _WIN32
+    std::string canary_name = "Local\\qe_probe_canary";
+    void* ptr = createSegment(canary_name, 4096);
+    if (ptr) {
+      char* byte_ptr = static_cast<char*>(ptr);
+      byte_ptr[0] = 0x42;
+      success = (byte_ptr[0] == 0x42);
+      closeSegment(canary_name, ptr, 4096);
+      unlinkSegment(canary_name);
+    }
+#else
+    std::string canary_name = "/.qe_probe_canary";
+    void* ptr = createSegment(canary_name, 4096);
+    if (ptr) {
+      char* byte_ptr = static_cast<char*>(ptr);
+      byte_ptr[0] = 0x42;
+      success = (byte_ptr[0] == 0x42);
+      closeSegment(canary_name, ptr, 4096);
+      unlinkSegment(canary_name);
+    }
+#endif
+  } catch (...) {
+    success = false;
+  }
+
+  cached_result.store(success ? 1 : 0);
+  last_probe_time = now;
+  return success;
+}
+
 ActiveShmRegistry& ActiveShmRegistry::instance() {
   static ActiveShmRegistry inst;
   return inst;
@@ -242,9 +286,9 @@ std::string ActiveShmRegistry::registerSegment(const std::string& segment_name, 
 
   registry_[token] = reg;
 
-  // Schedule tight 3-second safety cleanup timer
-  std::thread timer_thread([token, segment_name, ptr, size_bytes]() {
-    std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+  // Schedule 5-second safety cleanup timer (providing 2-second safety margin over client 3-second rejection window)
+  std::thread timer_thread([token]() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(5000));
     ActiveShmRegistry::instance().acknowledgeAndUnlink(token);
   });
   timer_thread.detach();
