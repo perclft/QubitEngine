@@ -10,6 +10,7 @@ COPY go.mod go.sum ./
 
 # Copy service
 COPY services/cache/ services/cache/
+COPY pkg/ pkg/
 
 WORKDIR /build/services/cache
 ENV GOTOOLCHAIN=auto
