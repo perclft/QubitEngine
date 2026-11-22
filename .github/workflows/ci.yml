@@ -180,7 +180,7 @@ jobs:
           go test -v -count=1 -timeout 300s ./pkg/ipc
 
   build-mac:
-    runs-on: macos-14 # M1 ARM64 runner
+    runs-on: macos-13 # M1 ARM64 runner
     env:
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-binary-cache,readwrite"
 
