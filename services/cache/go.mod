@@ -3,7 +3,7 @@ module github.com/perclft/QubitEngine/services/cache
 go 1.25.12
 
 
-replace github.com/perclft/QubitEngine => ../..
+
 
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
