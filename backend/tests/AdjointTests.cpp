@@ -25,7 +25,7 @@ TEST(AdjointTest, SingleRY_GradientAtPiOver2) {
   // d⟨Z⟩/dθ at θ=π/2 should be -sin(π/2) = -1.0
   int num_qubits = 1;
   std::vector<double> params = {M_PI / 2.0};
-  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "Z"}};
 
   AnsatzFunction ansatz = [](const std::vector<double> &p, QuantumRegister &q) {
     q.applyRotationY(0, static_cast<Precision>(p[0]));
@@ -42,7 +42,7 @@ TEST(AdjointTest, SingleRY_GradientAtZero) {
   // d⟨Z⟩/dθ at θ=0 for Ry gate is -sin(0) = 0.0
   int num_qubits = 1;
   std::vector<double> params = {0.0};
-  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "Z"}};
 
   AnsatzFunction ansatz = [](const std::vector<double> &p, QuantumRegister &q) {
     q.applyRotationY(0, static_cast<Precision>(p[0]));
@@ -59,7 +59,7 @@ TEST(AdjointTest, SingleRY_GradientAtPi) {
   // d⟨Z⟩/dθ at θ=π for Ry gate is -sin(π) = 0.0
   int num_qubits = 1;
   std::vector<double> params = {M_PI};
-  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "Z"}};
 
   AnsatzFunction ansatz = [](const std::vector<double> &p, QuantumRegister &q) {
     q.applyRotationY(0, static_cast<Precision>(p[0]));
@@ -81,7 +81,7 @@ TEST(AdjointTest, TwoRY_IndependentQubits) {
   // Total: grad[0] = -sin(θ0), grad[1] = -sin(θ1)
   int num_qubits = 2;
   std::vector<double> params = {M_PI / 2.0, M_PI / 4.0};
-  std::vector<PauliTerm> hamiltonian = {{1.0, "ZI"}, {1.0, "IZ"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "ZI"}, {1.0, "IZ"}};
 
   AnsatzFunction ansatz = [](const std::vector<double> &p, QuantumRegister &q) {
     q.applyRotationY(0, static_cast<Precision>(p[0]));
@@ -103,7 +103,7 @@ TEST(AdjointTest, HadamardThenRY) {
   // H|0⟩ = |+⟩, then Ry(θ)|+⟩
   int num_qubits = 1;
   std::vector<double> params = {M_PI / 2.0};
-  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "Z"}};
 
   AnsatzFunction ansatz = [](const std::vector<double> &p, QuantumRegister &q) {
     q.applyHadamard(0);
@@ -124,7 +124,7 @@ TEST(AdjointTest, EntangledCircuit_AdjointMatchesPSR) {
   // Bell-like ansatz: H(0), CNOT(0,1), Ry(θ, 0), H = ZZ
   int num_qubits = 2;
   std::vector<double> params = {0.7};
-  std::vector<PauliTerm> hamiltonian = {{1.0, "ZZ"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "ZZ"}};
 
   AnsatzFunction ansatz = [](const std::vector<double> &p, QuantumRegister &q) {
     q.applyHadamard(0);
@@ -146,7 +146,7 @@ TEST(AdjointTest, EntangledCircuit_AdjointMatchesPSR) {
 TEST(AdjointTest, EmptyHamiltonian_ReturnsZeros) {
   int num_qubits = 1;
   std::vector<double> params = {M_PI / 2.0};
-  std::vector<PauliTerm> hamiltonian = {};
+  std::vector<::PauliTerm> hamiltonian = {};
 
   AnsatzFunction ansatz = [](const std::vector<double> &p, QuantumRegister &q) {
     q.applyRotationY(0, static_cast<Precision>(p[0]));
@@ -162,7 +162,7 @@ TEST(AdjointTest, EmptyHamiltonian_ReturnsZeros) {
 TEST(AdjointTest, NoParameters_ReturnsEmpty) {
   int num_qubits = 1;
   std::vector<double> params = {};
-  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "Z"}};
 
   AnsatzFunction ansatz = [](const std::vector<double> &, QuantumRegister &q) {
     q.applyHadamard(0);
@@ -178,7 +178,7 @@ TEST(AdjointTest, NoParameters_ReturnsEmpty) {
 
 TEST(AdjointTest, CrossValidation_MultipleAngles) {
   int num_qubits = 1;
-  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "Z"}};
 
   AnsatzFunction ansatz = [](const std::vector<double> &p, QuantumRegister &q) {
     q.applyRotationY(0, static_cast<Precision>(p[0]));
@@ -207,7 +207,7 @@ TEST(AdjointTest, PhaseSandT_MatchesFiniteDifference) {
   int num_qubits = 1;
   double theta = 0.6;
   std::vector<double> params = {theta};
-  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "Z"}};
 
   AnsatzFunction ansatz = [](const std::vector<double> &p, QuantumRegister &q) {
     q.applyRotationY(0, static_cast<Precision>(p[0]));

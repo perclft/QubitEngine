@@ -137,7 +137,7 @@ TEST(QuantumTest, GradientDescentTest) {
   // But MolecularHamiltonian.hpp is included tests/QuantumTests.cpp.
   // Wait, PauliTerm is likely in MolecularHamiltonian.hpp
 
-  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "Z"}};
 
   AnsatzFunction ansatz = [](const std::vector<double> &p, QuantumRegister &q) {
     q.applyRotationY(0, static_cast<Precision>(p[0]));
@@ -156,7 +156,7 @@ TEST(QuantumTest, AdjointGradientTest) {
 
   int num_qubits = 1;
   std::vector<double> params = {M_PI / 2.0};
-  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "Z"}};
 
   AnsatzFunction ansatz = [](const std::vector<double> &p, QuantumRegister &q) {
     q.applyRotationY(0, static_cast<Precision>(p[0]));

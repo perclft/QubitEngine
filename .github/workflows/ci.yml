@@ -58,7 +58,7 @@ jobs:
             -DENABLE_SKIP_AUTH=ON
 
       - name: Build
-        run: cmake --build build --parallel $(nproc)
+        run: cmake --build build --parallel $(nproc) -- -k 0
 
       - name: Generate Golden State Vectors
         run: |

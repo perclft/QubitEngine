@@ -88,7 +88,7 @@ TEST(AdamOptimizerTest, ConvergesOnSimpleCircuit) {
 
   AdamOptimizer optimizer(config);
 
-  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "Z"}};
   std::vector<double> initial_params = {0.5}; // Start away from minimum
 
   auto result =
@@ -107,7 +107,7 @@ TEST(AdamOptimizerTest, DefaultConfigWorks) {
   // Default constructor should not crash
   AdamOptimizer optimizer;
 
-  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "Z"}};
   std::vector<double> initial_params = {1.0};
 
   auto result =
@@ -131,7 +131,7 @@ TEST(AdamOptimizerTest, MultipleParamsConverge) {
     q.applyRotationY(1, static_cast<Precision>(params[1]));
   };
 
-  std::vector<PauliTerm> hamiltonian = {{1.0, "ZI"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "ZI"}};
   std::vector<double> initial_params = {0.5, 0.5};
 
   auto result =
@@ -150,7 +150,7 @@ TEST(SPSAOptimizerTest, ConvergesOnSimpleCircuit) {
 
   SPSAOptimizer optimizer(config);
 
-  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "Z"}};
   std::vector<double> initial_params = {0.5};
 
   auto result =
@@ -169,7 +169,7 @@ TEST(SPSAOptimizerTest, ConvergesOnSimpleCircuit) {
 TEST(SPSAOptimizerTest, DefaultConfigWorks) {
   SPSAOptimizer optimizer;
 
-  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "Z"}};
   std::vector<double> initial_params = {1.0};
 
   auto result =
@@ -190,7 +190,7 @@ TEST(SPSAOptimizerTest, ReturnsCorrectParamCount) {
     q.applyRotationY(0, static_cast<Precision>(params[2]));
   };
 
-  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "Z"}};
   std::vector<double> initial_params = {0.1, 0.2, 0.3};
 
   auto result =

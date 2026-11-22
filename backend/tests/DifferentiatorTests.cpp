@@ -25,7 +25,7 @@ TEST(DifferentiatorTest, Gradient_ZeroAngle) {
     q.applyRotationY(0, p[0]);
   };
 
-  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "Z"}};
 
   auto gradients = QuantumDifferentiator::calculateGradients(
       num_qubits, params, ansatz, hamiltonian);
@@ -45,7 +45,7 @@ TEST(DifferentiatorTest, Gradient_AtPiOver2) {
     q.applyRotationY(0, p[0]);
   };
 
-  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "Z"}};
 
   auto gradients = QuantumDifferentiator::calculateGradients(
       num_qubits, params, ansatz, hamiltonian);
@@ -65,7 +65,7 @@ TEST(DifferentiatorTest, Gradient_AtPi) {
     q.applyRotationY(0, p[0]);
   };
 
-  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "Z"}};
 
   auto gradients = QuantumDifferentiator::calculateGradients(
       num_qubits, params, ansatz, hamiltonian);
@@ -86,7 +86,7 @@ TEST(DifferentiatorTest, Gradient_MultipleParams) {
   };
 
   // Only measures qubit 0
-  std::vector<PauliTerm> hamiltonian = {{1.0, "ZI"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "ZI"}};
 
   auto gradients = QuantumDifferentiator::calculateGradients(
       num_qubits, params, ansatz, hamiltonian);
@@ -108,7 +108,7 @@ TEST(DifferentiatorTest, EmptyHamiltonian) {
     q.applyRotationY(0, p[0]);
   };
 
-  std::vector<PauliTerm> hamiltonian = {}; // Empty
+  std::vector<::PauliTerm> hamiltonian = {}; // Empty
 
   auto gradients = QuantumDifferentiator::calculateGradients(
       num_qubits, params, ansatz, hamiltonian);
@@ -127,7 +127,7 @@ TEST(DifferentiatorTest, GradientSize_MatchesParams) {
     q.applyRotationY(0, p[2]);
   };
 
-  std::vector<PauliTerm> hamiltonian = {{1.0, "Z"}};
+  std::vector<::PauliTerm> hamiltonian = {{1.0, "Z"}};
 
   auto gradients = QuantumDifferentiator::calculateGradients(
       num_qubits, params, ansatz, hamiltonian);
