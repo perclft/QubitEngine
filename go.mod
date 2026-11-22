@@ -5,7 +5,7 @@ go 1.27.3
 require (
 	github.com/perclft/QubitEngine/api v0.0.0-20261122225608-b917fe819ca4
 	golang.org/x/sys v0.49.0
-	google.golang.org/grpc v1.83.1
+	google.golang.org/grpc v1.83.2
 )
 
 require (

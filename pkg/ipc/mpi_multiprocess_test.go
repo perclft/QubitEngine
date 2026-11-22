@@ -8,8 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
-	"runtime"
-	"time"
 	"time"
 
 	"github.com/perclft/QubitEngine/api/auth"
