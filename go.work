@@ -1,6 +1,6 @@
 go 1.25.12
 
-use (
+replace github.com/perclft/QubitEngine/pkg/ipc => ./pkg/ipc
 	.
 	./api
 	./services/cache
