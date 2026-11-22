@@ -9,6 +9,7 @@ use std::fs;
 use tokio::sync::mpsc;
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct ShmDescriptor {
     pub format_version: u32,
     pub segment_name: String,
@@ -88,6 +89,7 @@ pub fn read_shm_amplitudes(segment_name: &str, size_bytes: usize) -> Result<Vec<
     Ok(data)
 }
 
+#[allow(clippy::collapsible_if)]
 pub fn process_state_response(
     state_res: &crate::api::StateResponse,
     heap: &mut BinaryHeap<Reverse<(u64, usize)>>,
