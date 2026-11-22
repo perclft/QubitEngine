@@ -1,9 +1,11 @@
 go 1.25.12
 
 replace github.com/perclft/QubitEngine/pkg/ipc => ./pkg/ipc
-	.
-	./api
-	./services/cache
-	./services/registry
-	./services/scheduler
+
+use (
+    .
+    ./api
+    ./services/cache
+    ./services/registry
+    ./services/scheduler
 )

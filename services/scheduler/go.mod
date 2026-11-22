@@ -53,7 +53,5 @@ require (
 	google.golang.org/protobuf v1.36.11
 )
 
-replace github.com/perclft/QubitEngine/api => ../../api
-replace github.com/perclft/QubitEngine/pkg/ipc => ../../../pkg/ipc
-replace github.com/perclft/QubitEngine => ../..
+
 replace google.golang.org/genproto => google.golang.org/genproto v0.0.0-20240325203815-454cdb8f5daa
