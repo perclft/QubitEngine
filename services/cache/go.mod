@@ -2,7 +2,7 @@ module github.com/perclft/QubitEngine/services/cache
 
 go 1.25.12
 
-replace github.com/perclft/QubitEngine/api => ../../api
+replace github.com/perclft/QubitEngine/pkg/ipc => ../../pkg/ipc ../../api
 replace github.com/perclft/QubitEngine => ../..
 
 require (
