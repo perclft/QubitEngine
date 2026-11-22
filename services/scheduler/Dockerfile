@@ -8,6 +8,7 @@ COPY go.mod go.sum ./
 
 # Copy service
 COPY services/scheduler/ services/scheduler/
+COPY pkg/ pkg/
 
 WORKDIR /build/services/scheduler
 ENV GOTOOLCHAIN=auto
