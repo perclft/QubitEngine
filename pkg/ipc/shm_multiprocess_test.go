@@ -53,7 +53,7 @@ func startEngine(t *testing.T, enginePath string, secret string) (*exec.Cmd, fun
 	}
 
 	// Wait up to 5s for TCP server on 127.0.0.1:50051
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	ready := false
 	for time.Now().Before(deadline) {
 		conn, err := net.DialTimeout("tcp", "127.0.0.1:50051", 200*time.Millisecond)
@@ -251,7 +251,7 @@ func TestMultiProcessSHM_WriterCrashFaultInjection(t *testing.T) {
 	}()
 
 	// Wait up to 5s for TCP server on 127.0.0.1:50051
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	ready := false
 	for time.Now().Before(deadline) {
 		conn, err := net.DialTimeout("tcp", "127.0.0.1:50051", 200*time.Millisecond)

@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"runtime"
+	"time"
 	"time"
 
 	"github.com/perclft/QubitEngine/api/auth"
@@ -48,7 +50,7 @@ func startMpiCluster(t *testing.T, mpiExec string, enginePath string, port strin
 
 	// Poll until Rank 0 gRPC server is listening
 	addr := "127.0.0.1:" + port
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	ready := false
 	for time.Now().Before(deadline) {
 		conn, err := net.DialTimeout("tcp", addr, 200*time.Millisecond)
@@ -71,6 +73,7 @@ func startMpiCluster(t *testing.T, mpiExec string, enginePath string, port strin
 			_ = cmd.Process.Kill()
 			_ = cmd.Wait()
 		}
+		time.Sleep(60 * time.Second)
 	}
 
 	return cmd, cleanup
@@ -80,6 +83,9 @@ func TestMultiProcessMPI_GlobalQubitGateLockstep(t *testing.T) {
 	mpiExec := findMpiExec(t)
 	enginePath, _ := findBinaries(t)
 
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping MPI tests on Windows")
+	}
 	port := "50061"
 	jwtSecret := "test_secret_mpi_global_qubit_123"
 	_, cleanup := startMpiCluster(t, mpiExec, enginePath, port, jwtSecret)

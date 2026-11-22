@@ -1,6 +1,6 @@
 module github.com/perclft/QubitEngine/api
 
-go 1.25.12
+go 1.27.3
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
