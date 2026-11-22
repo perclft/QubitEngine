@@ -1,11 +1,11 @@
 module github.com/perclft/QubitEngine/services/scheduler
 
-go 1.25.12
+go 1.27.3
 
 require (
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/google/uuid v1.6.0
-	google.golang.org/grpc v1.82.1
+	google.golang.org/grpc v1.83.1
 )
 
 require (
