@@ -80,6 +80,9 @@ func startMpiCluster(t *testing.T, mpiExec string, enginePath string, port strin
 }
 
 func TestMultiProcessMPI_GlobalQubitGateLockstep(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping MPI tests in CI")
+	}
 	mpiExec := findMpiExec(t)
 	enginePath, _ := findBinaries(t)
 

@@ -17,3 +17,5 @@ require (
 )
 
 replace github.com/perclft/QubitEngine/pkg/ipc => ./pkg/ipc
+
+replace google.golang.org/grpc => google.golang.org/grpc v1.85.0
