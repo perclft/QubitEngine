@@ -3,9 +3,9 @@ module github.com/perclft/QubitEngine
 go 1.27.3
 
 require (
-	github.com/perclft/QubitEngine/api v0.0.0-20261122225608-b917fe819ca4
+	github.com/perclft/QubitEngine/api v0.0.0-20261123010519-d207178fa81d
 	golang.org/x/sys v0.49.0
-	google.golang.org/grpc v1.85.0
+	google.golang.org/grpc v1.82.1
 )
 
 require (

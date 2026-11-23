@@ -1,5 +1,6 @@
 # --- Stage 1: Builder (Debian) ---
 FROM debian:bookworm-slim AS builder
+ENV GOFLAGS=-mod=vendor
 
 # Install Toolchain
 RUN apt-get update && apt-get install -y \
