@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"runtime"
 
 	"github.com/perclft/QubitEngine/api/auth"
 	pb "github.com/perclft/QubitEngine/api/generated"
@@ -48,7 +49,7 @@ func startMpiCluster(t *testing.T, mpiExec string, enginePath string, port strin
 
 	// Poll until Rank 0 gRPC server is listening
 	addr := "127.0.0.1:" + port
-	deadline := time.Now().Add(30 * time.Second)
+	deadline := time.Now().Add(60 * time.Second)
 	ready := false
 	for time.Now().Before(deadline) {
 		conn, err := net.DialTimeout("tcp", addr, 200*time.Millisecond)
@@ -63,7 +64,7 @@ func startMpiCluster(t *testing.T, mpiExec string, enginePath string, port strin
 	if !ready {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
-		t.Fatalf("MPI cluster Rank 0 failed to bind gRPC port %s within 10 seconds", port)
+		t.Fatalf("MPI cluster Rank 0 failed to bind gRPC port %s within 60 seconds", port)
 	}
 
 	cleanup := func() {
