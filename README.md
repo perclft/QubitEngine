@@ -297,3 +297,6 @@ The following status accurately reflects verified capabilities vs. planned roadm
 
 This project is licensed under the MIT License.
 
+
+---
+**Note:** This repository includes a temporary vendoring stub (`vendor_stub.go`) to force inclusion of indirect dependencies required for offline Docker builds. Once CI passes, the stub can be removed and the vendor directory refreshed.
