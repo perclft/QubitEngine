@@ -1,8 +1,8 @@
 # github.com/golang-jwt/jwt/v5 v5.3.1
 ## explicit; go 1.21
 github.com/golang-jwt/jwt/v5
-# github.com/perclft/QubitEngine/api v0.0.0-20261122225608-b917fe819ca4
-## explicit; go 1.25.12
+# github.com/perclft/QubitEngine/api v0.0.0-20261123010519-d207178fa81d
+## explicit; go 1.27.3
 github.com/perclft/QubitEngine/api/auth
 github.com/perclft/QubitEngine/api/generated
 # golang.org/x/net v0.62.0
@@ -28,7 +28,7 @@ golang.org/x/text/unicode/norm
 # google.golang.org/genproto/googleapis/rpc v0.0.0-20260817212433-ac3dfec99bb1
 ## explicit; go 1.25.0
 google.golang.org/genproto/googleapis/rpc/status
-# google.golang.org/grpc v1.85.0 => google.golang.org/grpc v1.85.0
+# google.golang.org/grpc v1.82.1 => google.golang.org/grpc v1.85.0
 ## explicit; go 1.26.0
 google.golang.org/grpc
 google.golang.org/grpc/attributes
